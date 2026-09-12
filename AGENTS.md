@@ -2,17 +2,19 @@
 
 ## Project Structure & Module Organization
 
-`Sim_Maritime27/` contains the BlueBoat ArduPilot/Gazebo simulator. Treat it
+`Simulation/` contains the BlueBoat ArduPilot/Gazebo simulator. Treat it
 as the active project root when running its commands. Key areas are
 `config/` for SITL parameters, `worlds/` for Gazebo worlds, `models/` for
 vehicle and buoy assets, `scenarios/` for editable JSON layouts, and
 `ros2_ws/` for the optional ROS 2 bridge and MAVROS checks. Runtime output
 belongs in `logs/`; do not commit generated logs, rendered scenario files, or
-Python cache files. Operational documentation lives in `Sim_Maritime27/docs/`.
+Python cache files. Project-wide mission, requirements, and architecture
+documentation lives in `docs/`. Simulator setup, operation, troubleshooting,
+and maintenance documentation lives in `Simulation/docs/`.
 
 ## Build, Test, and Development Commands
 
-Run commands from `Sim_Maritime27/`:
+Run commands from `Simulation/`:
 
 ```bash
 make validate       # check scripts, assets, pinned sources, and Compose config

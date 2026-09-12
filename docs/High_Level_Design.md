@@ -19,7 +19,8 @@ than a final specification.
 ## Architectural Direction
 
 All autonomy will run onboard the real vessel using a Jetson Orin Nano. The
-planned sensing and control foundation consists of ZED X Mini stereo cameras,
+planned sensing and control foundation consists of two ZED X Mini stereo
+cameras connected through the provided capture-card hardware and MIPI cabling,
 GPS-assisted positioning, and an autopilot flight controller equipped with an
 IMU and GPS. The flight controller will provide the primary vessel-state
 estimate. MAVROS is the intended communication layer between ROS 2 and the
@@ -30,6 +31,32 @@ Their environment-facing connections change between simulated observations and
 physical sensors and between simulated and physical autopilots. Simulation
 should support development of a useful autonomy system without requiring a
 complete physical replica of the competition vessel.
+
+### Camera Deployment and Simulation Boundary
+
+The real vessel and the current simulator intentionally use different camera
+configurations:
+
+| Environment | Camera configuration | Intended use |
+|---|---|---|
+| Real vessel | Two physical ZED X Mini stereo cameras connected to the Jetson through capture-card hardware and MIPI cabling. | Supply the two real-camera observation streams used for buoy perception and depth estimation. |
+| Current simulation | One generic Gazebo RGB-D camera producing paired RGB and ideal depth. | Establish the initial perception, mapping, and navigation data path with one controlled observation source. |
+
+The simulated camera is not a digital replica of a ZED X Mini and does not
+represent the planned two-camera arrangement. It supplies a bounded RGB-D test
+source while the autonomy interfaces are developed.
+
+Perception should consume camera observations, calibration, and transforms
+through a camera-neutral boundary. Simulation bringup will provide one source;
+physical-vessel bringup will provide two independently calibrated ZED X Mini
+sources. This change in source count must not require different mapping,
+planning, or mission-management responsibilities.
+
+The current simulator's `zed2i_*` frame names are implementation identifiers
+from its initial RGB-D model. They do not identify the target flight cameras.
+Detailed interface design should either normalize those names in the simulation
+adapter or replace them with camera-neutral frame names before autonomy code
+depends on them.
 
 The initial application deployment has three containers:
 
@@ -105,7 +132,7 @@ message interfaces.
 
 ```mermaid
 flowchart TD
-    Sensors[Real or simulated camera observations] --> Perception
+    Sensors[Two physical ZED X Mini sources or one simulated RGB-D source] --> Perception
     InertialGPS[Real or simulated IMU and GPS] --> Vehicle[Real or simulated flight controller]
     Vehicle <--> MAVROS
     MAVROS -->|Flight-controller state estimate| State[State Estimation / Integration]
@@ -137,8 +164,9 @@ the buoy map or replace the observations and estimates used to navigate.
 ### Simulation Container
 
 This container owns the simulated environment and vehicle, including the
-simulated autopilot. Scenarios provide repeatable ways to exercise buoy
-detection, map construction, and navigation.
+simulated autopilot and the current single generic RGB-D camera. Scenarios
+provide repeatable ways to exercise buoy detection, map construction, and
+navigation.
 
 Its purpose is to produce meaningful development and evaluation conditions.
 Physical fidelity should be sufficient for the behavior being tested, with
@@ -196,7 +224,7 @@ Maritime_2027/
 ├── docs/
 │   ├── Project_Overview.md
 │   └── High_Level_Design.md
-├── simulation/
+├── Simulation/
 │   ├── container/
 │   ├── worlds/
 │   ├── models/

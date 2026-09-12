@@ -9,7 +9,8 @@ before making design or implementation decisions.
 
 This is a mission-level overview. It does not define the system architecture,
 select algorithms, describe software, or establish implementation standards.
-Those decisions will be developed separately in a High-Level Design (HLD).
+The architectural direction is maintained separately in the
+[High-Level Design](High_Level_Design.md).
 
 ## Competition Context
 
@@ -100,7 +101,7 @@ or yielding control for a safe return.
 
 The project begins with the following mission-level assumptions:
 
-- A ZED X Mini stereo-camera system is the planned primary source of visual and
+- Two ZED X Mini stereo cameras are the planned primary sources of visual and
   depth information for detecting, distinguishing, locating, and tracking
   buoys.
 - GPS will provide global position and progress information for the foreseeable
@@ -155,8 +156,9 @@ This overview intentionally does not define:
   available.
 
 These topics may become important, but they require their own requirements and
-design work. The future HLD will translate this mission into system boundaries,
-responsibilities, information flow, failure handling, and verification plans.
+design work. The [HLD](High_Level_Design.md) translates this mission into system
+boundaries, responsibilities, information flow, failure handling, and
+verification plans.
 
 ## Guidance for Future Work
 
