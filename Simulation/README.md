@@ -12,10 +12,11 @@ ArduPilot Rover 4.7.0 runs its real boat-control code in software-in-the-loop
 (SITL). QGroundControl runs on the Ubuntu host and connects as if this were a
 physical boat.
 
-This is a reusable ArduPilot baseline. Optional RGB-D buoy scenarios add ROS 2
-Jazzy, Gazebo-to-ROS bridges, and MAVROS without changing the boat dynamics.
-They intentionally do not include perception, mapping, navigation, autonomy,
-a GCS, payload mechanisms, or a digital twin of the competition LPV.
+This is a reusable ArduPilot baseline. Optional RGB-D buoy scenarios add one
+generic simulated RGB-D camera, ROS 2 Jazzy, Gazebo-to-ROS bridges, and MAVROS
+without changing the boat dynamics. They intentionally do not include a
+two-camera model, perception, mapping, navigation, autonomy, a GCS, payload
+mechanisms, or a digital twin of the competition LPV.
 
 ## What starts
 
@@ -41,7 +42,7 @@ QGroundControl stays outside Docker. On this workstation it is located at:
 
 1. Complete [the one-time setup](docs/SETUP.md).
 2. Start QGroundControl on the host.
-3. Open a terminal in `Boat_Sim_Docker` and run:
+3. Open a terminal in `Simulation` and run:
 
    ```bash
    make run
@@ -118,7 +119,7 @@ WIPE_PARAMS=1 make run
 ## Project layout
 
 ```text
-Boat_Sim_Docker/
+Simulation/
 ├── Dockerfile                 # Reproducible pinned simulator image
 ├── compose.yaml               # Container, networking, display, state, health
 ├── compose.gpu.yaml           # Adds /dev/dri when available

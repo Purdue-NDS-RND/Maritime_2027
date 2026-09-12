@@ -26,8 +26,9 @@ The only simulated imager is Gazebo's built-in `rgbd_camera`; it is not a
 stereo pair and no disparity is calculated. It is mounted at `(0.35, 0, 0.40)`
 metres in `base_link`, level and forward. The output is 1280×720 at 30 Hz with
 approximately 110°×70° field of view, 0.30–20 m clipping, explicit pinhole
-intrinsics, and ideal deterministic depth. The 0.30–12 m range should be
-treated as its best-use analogue to a real ZED 2i.
+intrinsics, and ideal deterministic depth. Treat it as a bounded generic RGB-D
+test source. It does not model either of the two planned ZED X Mini cameras or
+their combined physical configuration.
 
 ROS topics:
 
@@ -45,6 +46,9 @@ The TF tree is `world -> odom -> base_link -> zed2i_camera_link ->
 zed2i_left_camera_optical_frame`. Gazebo owns dynamic `odom -> base_link`.
 MAVROS's local-position TF output remains disabled to prevent a second parent.
 Buoy truth is deliberately not added to TF and is never fed into control.
+The `zed2i_*` names are retained implementation identifiers from the initial
+simulator model; they do not mean that the simulated sensor represents the
+project's target ZED X Mini hardware.
 
 ## MAVROS
 
