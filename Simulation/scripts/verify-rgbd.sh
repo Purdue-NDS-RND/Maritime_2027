@@ -23,8 +23,9 @@ wait_for_health() {
     local deadline=$((SECONDS + 150))
     while ((SECONDS < deadline)); do
         sim_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' ardupilot-blueboat-sim 2>/dev/null || true)
-        ros_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' ardupilot-blueboat-ros 2>/dev/null || true)
-        [[ $sim_health == healthy && $ros_health == healthy ]] && return 0
+        adapter_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' maritime-sim-adapter 2>/dev/null || true)
+        autonomy_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' maritime-autonomy 2>/dev/null || true)
+        [[ $sim_health == healthy && $adapter_health == healthy && $autonomy_health == healthy ]] && return 0
         kill -0 "$runner_pid" 2>/dev/null || break
         sleep 2
     done
@@ -49,6 +50,7 @@ run_case() {
         make sensor-smoke
     fi
     if [[ $scenario == one ]]; then
+        make boundary-smoke
         make mavros-smoke
     fi
     stop_run

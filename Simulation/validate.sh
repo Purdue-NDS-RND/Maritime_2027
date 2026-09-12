@@ -13,20 +13,27 @@ for script in "${scripts[@]}" smoke-test.py; do
 done
 python_sources=(
     smoke-test.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
-    ros2_ws/src/blueboat_sim_bringup/setup.py
-    ros2_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
-    ros2_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py
+    ../Adapter/ros_ws/src/blueboat_sim_bringup/setup.py
+    ../Adapter/ros_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
+    ../Adapter/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py
+    ../autonomy/ros_ws/src/maritime_bringup/setup.py
+    ../autonomy/ros_ws/src/maritime_bringup/launch/vehicle.launch.py
+    ../autonomy/ros_ws/src/maritime_bringup/maritime_bringup/*.py
+    ../tests/*.py
 )
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
 
 required=(
-    Dockerfile Dockerfile.ros compose.yaml compose.gpu.yaml Makefile
+    Dockerfile ../Adapter/container/Dockerfile ../autonomy/container/Dockerfile
+    ../deployment/compose.base.yaml ../deployment/compose.autonomy.yaml
+    compose.yaml compose.gpu.yaml Makefile
     config/blueboat.parm worlds/blueboat_waves.sdf worlds/blueboat_calm.sdf
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
     scenarios/one.json scenarios/gate.json scenarios/multi.json
     models/blueboat_rgbd/model.config models/blueboat_rgbd/camera_payload.sdf
-    ros2_ws/src/blueboat_sim_bringup/package.xml
-    ros2_ws/src/blueboat_sim_bringup/config/bridge.yaml
+    ../Adapter/ros_ws/src/blueboat_sim_bringup/package.xml
+    ../Adapter/ros_ws/src/blueboat_sim_bringup/config/bridge.yaml
+    ../autonomy/ros_ws/src/maritime_bringup/package.xml
     README.md docs/SETUP.md docs/USING_THE_SIM.md docs/TROUBLESHOOTING.md docs/DEVELOPMENT.md
 )
 for path in "${required[@]}"; do
@@ -69,7 +76,7 @@ grep -q 'type="rgbd_camera"' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<width>1280</width>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<height>720</height>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<near>0.30</near><far>20.0</far>' models/blueboat_rgbd/camera_payload.sdf
-grep -q 'udp://:14552@' ros2_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
+grep -q 'udp://:14552@' compose.yaml
 
 for scenario in one gate multi; do
     python3 scripts/render_scenario.py \
@@ -112,6 +119,7 @@ PY
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
         docker compose -f compose.yaml --profile ros config --quiet
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ../tests -v
     if docker image inspect ardupilot-blueboat:4.7.0 >/dev/null 2>&1; then
         for scenario in one gate multi; do
             cp "$tmp_dir/$scenario.sdf" "$tmp_dir/$scenario-resolved.sdf"

@@ -2,12 +2,11 @@
 <package format="3">
   <name>blueboat_sim_bringup</name>
   <version>0.1.0</version>
-  <description>ROS 2 bridges, MAVROS connection, frames, and evaluation tests for BlueBoat simulation.</description>
+  <description>Simulation-only ROS bridges, camera frames, and evaluation clients.</description>
   <maintainer email="maintainer@example.com">BlueBoat Simulation</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>cv_bridge</exec_depend>
-  <exec_depend>mavros</exec_depend>
   <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>

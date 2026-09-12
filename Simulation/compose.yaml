@@ -55,14 +55,15 @@ services:
       start_period: 45s
     restart: "no"
 
-  ros_bridge:
+  adapter:
     profiles: ["ros"]
-    image: ${ROS_IMAGE:-ardupilot-blueboat-ros:jazzy}
-    container_name: ardupilot-blueboat-ros
+    image: ${ADAPTER_IMAGE:-maritime-sim-adapter:jazzy}
+    container_name: maritime-sim-adapter
     build:
-      context: .
-      dockerfile: Dockerfile.ros
+      context: ../Adapter
+      dockerfile: container/Dockerfile
     network_mode: host
+    ipc: host
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       GZ_PARTITION: ardupilot_blueboat_starter
@@ -84,3 +85,14 @@ services:
       retries: 9
       start_period: 15s
     restart: "no"
+
+  autonomy:
+    profiles: ["ros"]
+    extends:
+      file: ../deployment/compose.base.yaml
+      service: autonomy
+    environment:
+      FCU_URL: ${FCU_URL:-udp://:14552@}
+    depends_on:
+      simulator:
+        condition: service_healthy

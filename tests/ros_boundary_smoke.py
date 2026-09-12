@@ -1,0 +1,65 @@
+"""Read-only check from autonomy: real ROS messages cross container boundaries.
+
+Run through `make boundary-smoke` in Simulation/, with a scenario running.
+Perfect pose messages must arrive only through the evaluation TF topics.
+"""
+
+import time
+
+import rclpy
+from mavros_msgs.msg import State
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from sensor_msgs.msg import Image
+from tf2_msgs.msg import TFMessage
+
+
+def main():
+    rclpy.init()
+    node = Node("container_boundary_smoke")
+    received = {"image": False, "connected": False, "truth": False}
+    shared_frames = set()
+    static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+
+    def on_shared(message):
+        shared_frames.update(
+            (item.header.frame_id, item.child_frame_id) for item in message.transforms
+        )
+
+    subscriptions = [
+        node.create_subscription(Image, "/blueboat/camera/rgb/image_raw",
+                                 lambda _: received.update(image=True), qos_profile_sensor_data),
+        node.create_subscription(State, "/mavros/state",
+                                 lambda msg: received.update(connected=msg.connected), 10),
+        node.create_subscription(TFMessage, "/blueboat/ground_truth/tf",
+                                 lambda msg: received.update(truth=bool(msg.transforms)), 100),
+        node.create_subscription(TFMessage, "/tf", on_shared, 100),
+        node.create_subscription(TFMessage, "/tf_static", on_shared, static_qos),
+    ]
+    try:
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.1)
+        assert all(received.values()), f"missing cross-container data: {received}"
+        expected = {
+            ("base_link", "zed2i_camera_link"),
+            ("zed2i_camera_link", "zed2i_left_camera_optical_frame"),
+        }
+        # MAVROS publishes fixed ENU/NED and FLU/FRD convention conversions;
+        # these are not vessel pose estimates or simulator truth.
+        allowed = expected | {
+            ("map", "map_ned"), ("odom", "odom_ned"),
+            ("base_link", "base_link_frd"),
+        }
+        assert expected <= shared_frames, f"missing camera extrinsics: {shared_frames}"
+        assert shared_frames <= allowed, f"unexpected shared TF: {shared_frames}"
+        print("BOUNDARY PASS: camera and FCU data reach autonomy; truth TF is evaluation-only")
+    finally:
+        for subscription in subscriptions:
+            node.destroy_subscription(subscription)
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

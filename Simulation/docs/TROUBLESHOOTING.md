@@ -88,11 +88,18 @@ advancing simulation time, BlueBoat odometry, the JSON connection, Rover
 heartbeat, and meaningful MAVLink behavior.
 # RGB-D / ROS 2 checks
 
-- If `ardupilot-blueboat-ros` is unhealthy, run
-  `docker compose -f compose.yaml --profile ros logs ros_bridge` and confirm
-  `/clock`, camera topics, and `/mavros/state` appear.
+- If `maritime-sim-adapter` is unhealthy, run
+  `docker compose -f compose.yaml --profile ros logs adapter` and confirm
+  `/clock` and camera topics appear.
+- If `maritime-autonomy` is unhealthy, inspect
+  `docker compose -f compose.yaml --profile ros logs autonomy` and confirm
+  `/mavros/state` reports a connected flight controller. These are separate
+  health checks; neither alone proves end-to-end control.
 - If MAVROS never connects, ensure no stale process owns UDP 14552 and confirm
   the simulator log lists the third MAVLink output.
+- If topics appear but cross-container messages never arrive, confirm the adapter
+  and autonomy both retain `ipc: host` alongside host networking. Run
+  `make boundary-smoke` in a scenario to test actual delivery, not just discovery.
 - If camera topics are absent, inspect `gz topic -l` in the simulator and make
   sure an RGB-D scenario—not a legacy world—was selected.
 - A lower camera rate under `SOFTWARE_RENDERING=1` is a rendering-performance

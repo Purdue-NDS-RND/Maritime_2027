@@ -5,24 +5,20 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        geographiclib-tools \
         python3-opencv \
         ros-jazzy-cv-bridge \
-        ros-jazzy-mavros \
-        ros-jazzy-mavros-extras \
+        ros-jazzy-mavros-msgs \
         ros-jazzy-message-filters \
         ros-jazzy-ros-gz-bridge \
         ros-jazzy-tf2-ros \
-        wget \
-    && /opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh \
     && python3 -c "import cv2; assert hasattr(cv2, 'aruco')" \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ros2_ws/src /opt/blueboat_ws/src
+COPY ros_ws/src /opt/blueboat_ws/src
 RUN source /opt/ros/jazzy/setup.bash \
     && cd /opt/blueboat_ws \
     && colcon build --symlink-install \
-    && dpkg-query -W ros-jazzy-mavros ros-jazzy-ros-gz-bridge \
+    && dpkg-query -W ros-jazzy-ros-gz-bridge \
     && printf '%s\n' \
        'source /opt/ros/jazzy/setup.bash' \
        'source /opt/blueboat_ws/install/setup.bash' \

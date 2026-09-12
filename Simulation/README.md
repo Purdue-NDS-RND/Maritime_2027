@@ -69,7 +69,7 @@ make build     # Build/update the image without starting Gazebo
 make rebuild   # Build from scratch without Docker's build cache
 make validate  # Check scripts, assets, pins, and Compose configuration
 make smoke     # Test a running boat through MAVLink UDP 14551
-make ros-build # Build the optional ROS 2 Jazzy sidecar
+make ros-build # Build simulator, simulation adapter, and autonomy images
 make sensor-smoke # Check RGB-D, ArUco visibility, depth, timing, and TF
 make mavros-smoke # Check the FCU control path through MAVROS
 make verify-rgbd  # Run the complete scenario and control regression suite
@@ -131,10 +131,15 @@ Simulation/
 ├── worlds/                    # Mild, calm, and rough harbor worlds
 ├── models/                    # Opt-in RGB-D BlueBoat and ArUco buoys
 ├── scenarios/                 # Editable deterministic JSON layouts
-├── ros2_ws/                   # ROS bridges, MAVROS bringup, test-only checks
 ├── docs/                      # Setup, operation, troubleshooting, maintenance
 └── logs/                      # Runtime logs and persistent virtual EEPROM
 ```
+
+ROS responsibilities live in sibling project areas: [`Adapter/`](../Adapter/README.md)
+owns the Gazebo bridges and simulation-only tests; [`autonomy/`](../autonomy/README.md)
+owns MAVROS and future onboard algorithms. The simulation `ros` profile starts
+both services alongside the simulator. The autonomy service can also start
+independently through [`deployment/`](../deployment/README.md).
 
 ## Model limitation
 

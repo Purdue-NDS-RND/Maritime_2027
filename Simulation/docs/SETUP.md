@@ -71,15 +71,19 @@ SOFTWARE_RENDERING=1 make run
 ```
 # Optional ROS 2 RGB-D setup
 
-ROS 2 is containerized; do not install ROS or MAVROS on the host. Build both
-images once with:
+ROS 2 is containerized; do not install ROS or MAVROS on the host. Build the
+simulator, adapter, and autonomy images with:
 
 ```bash
 make ros-build
 ```
 
-The ROS image installs ROS 2 Jazzy, `ros_gz_bridge`, MAVROS, OpenCV's ArUco
-module for explicit smoke tests, and MAVROS's required GeographicLib datasets.
+The adapter image installs ROS 2 Jazzy, `ros_gz_bridge`, MAVROS message types,
+and OpenCV's ArUco module for explicit simulation-only smoke tests. The separate
+autonomy image installs MAVROS and its required GeographicLib datasets, without
+Gazebo dependencies. Sources live in `Adapter/` and `autonomy/` at repository root.
+Use `ADAPTER_IMAGE` and `AUTONOMY_IMAGE` to override their image names; the former
+combined `ROS_IMAGE` setting is no longer used.
 The build needs internet access and several additional gigabytes of Docker
 storage. Verify available storage with `docker system df` and `df -h` before a
 clean rebuild. Do not remove unrelated Docker data to make room.

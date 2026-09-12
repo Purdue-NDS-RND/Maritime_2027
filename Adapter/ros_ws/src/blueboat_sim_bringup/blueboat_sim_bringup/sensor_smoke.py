@@ -41,7 +41,10 @@ def rotate_inverse(q, vector):
 
 class SensorSmoke(Node):
     def __init__(self, manifest):
-        super().__init__("blueboat_sensor_smoke")
+        super().__init__("blueboat_sensor_smoke", cli_args=[
+            "--ros-args", "-r", "/tf:=/blueboat/ground_truth/tf",
+            "-r", "/tf_static:=/blueboat/ground_truth/tf_static",
+        ])
         self.manifest = manifest
         self.bridge = CvBridge()
         self.rgb = {}

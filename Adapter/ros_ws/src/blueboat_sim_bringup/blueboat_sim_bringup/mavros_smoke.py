@@ -1,4 +1,4 @@
-"""Bounded MAVROS control-path acceptance test for the simulated boat."""
+"""Simulation-only evaluation client for MAVROS running in autonomy."""
 
 from __future__ import annotations
 

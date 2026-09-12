@@ -1,4 +1,4 @@
-.PHONY: run build rebuild ros-build validate smoke sensor-smoke mavros-smoke verify-rgbd down logs
+.PHONY: run build rebuild ros-build validate smoke sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
 
 run:
 	./run.sh
@@ -19,10 +19,13 @@ smoke:
 	./smoke.sh
 
 sensor-smoke:
-	docker exec ardupilot-blueboat-ros bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup sensor_smoke'
+	docker exec maritime-sim-adapter bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup sensor_smoke'
 
 mavros-smoke:
-	docker exec ardupilot-blueboat-ros bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup mavros_smoke'
+	docker exec maritime-sim-adapter bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup mavros_smoke'
+
+boundary-smoke:
+	docker exec -i maritime-autonomy bash -lc 'source /etc/maritime_autonomy_setup.bash && python3 -' < ../tests/ros_boundary_smoke.py
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh

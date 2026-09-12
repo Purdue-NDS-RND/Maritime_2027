@@ -1,0 +1,9 @@
+name: maritime-autonomy
+
+services:
+  autonomy:
+    extends:
+      file: compose.base.yaml
+      service: autonomy
+    environment:
+      FCU_URL: ${FCU_URL:?Set FCU_URL explicitly for the intended flight controller}

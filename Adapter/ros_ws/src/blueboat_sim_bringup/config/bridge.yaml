@@ -11,7 +11,7 @@
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
   frame_id: zed2i_left_camera_optical_frame
-- ros_topic_name: /tf
+- ros_topic_name: /blueboat/ground_truth/tf
   gz_topic_name: /model/blueboat/pose
   ros_type_name: tf2_msgs/msg/TFMessage
   gz_type_name: gz.msgs.Pose_V

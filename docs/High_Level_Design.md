@@ -6,9 +6,10 @@ This document translates the [Project Overview](Project_Overview.md) into the
 major components, responsibilities, deployment boundaries, and project
 organization needed to develop autonomous buoy navigation.
 
-It records the agreed architectural direction. The folder layout below is a
-proposed organization for future work, not a description of an implemented
-system. Detailed interfaces, algorithms, control commands, and operational
+It records the agreed architectural direction. The simulator, simulation adapter,
+and minimal MAVROS autonomy bringup have separate project areas; the remaining
+autonomy packages and GCS layout below are proposed future work, not an implemented
+navigation system. Detailed interfaces, algorithms, control commands, and operational
 policies will be decided during component design.
 
 Competition-specific behavior remains subject to the release and review of the
@@ -58,11 +59,14 @@ Detailed interface design should either normalize those names in the simulation
 adapter or replace them with camera-neutral frame names before autonomy code
 depends on them.
 
-The initial application deployment has three containers:
+The target application deployment has four containers in simulation, with one
+autonomy container shared between simulation and the boat. The GCS remains future
+work; the current simulation workflow starts the first three services below:
 
 | Container | Responsibilities |
 |---|---|
 | Simulation | Water environment, simulated vessel, sensors, autopilot, scenarios, and evaluation references. |
+| Simulation Adapter | Gazebo-to-ROS translation, simulated camera extrinsics, and simulation-only evaluation tools. Runs only alongside simulation. |
 | ROS 2 / Autonomy | Sensor integration, perception, state estimation, mapping, mission management, planning/navigation, and MAVROS. |
 | GCS | Web application and backend for visualization, telemetry, and operator commands. |
 
@@ -172,6 +176,21 @@ Its purpose is to produce meaningful development and evaluation conditions.
 Physical fidelity should be sufficient for the behavior being tested, with
 limitations documented when interpreting results.
 
+### Simulation Adapter Container
+
+The adapter translates Gazebo sensor output into ROS messages consumed by
+autonomy. It owns the Gazebo bridge dependencies and simulation-only frame
+configuration and evaluation clients. ROS being present here does not make it
+part of onboard autonomy: it implements the simulated sensor boundary.
+
+The adapter is a separate service so simulator and bridge dependencies can be
+built and maintained independently. Neither it nor Gazebo is deployed on the
+real boat. Physical camera drivers supply the corresponding observations there.
+
+Evaluation truth, including perfect vessel motion transforms, stays on clearly
+identified evaluation-only topics. It must not populate the navigation TF tree.
+Autonomy must obtain vessel state through the flight-controller integration.
+
 ### ROS 2 / Autonomy Container
 
 The initial design places perception, state estimation, mapping,
@@ -188,6 +207,19 @@ the physical cameras and flight controller. In simulation it connects to the
 simulated equivalents. Sharing the autonomy components does not require the
 desktop and Jetson to use an identical binary image; platform-specific builds
 and hardware integration may be necessary.
+
+MAVROS belongs to this container in both environments: only its flight-controller
+connection changes between SITL and physical hardware. Gazebo bridges, simulator
+scenario manifests, and truth-based test tools do not belong in this image.
+The initial extracted container provides MAVROS bringup only; perception,
+mapping, navigation, mission management, and ZED integration remain future work.
+
+Shared autonomy packages consume camera-neutral observations, calibration, and
+transforms. Simulation and hardware configuration must account for source count
+and timestamp conventions without introducing separate autonomy algorithms.
+The adapter exposes simulation time; the current extracted MAVROS integration
+retains its existing time behavior. A consistent sensor/state timing policy must
+be verified before combining those streams for mapping or navigation.
 
 ### GCS Container
 
@@ -217,7 +249,8 @@ arbitration, and connection-loss behavior are separate design decisions.
 ## Proposed Project Organization
 
 Organize the repository by responsibility, with container configuration close to
-the application it deploys. The following is a proposed future structure:
+the application it deploys. The following combines the implemented container
+boundaries with the proposed future autonomy packages and GCS:
 
 ```text
 Maritime_2027/
@@ -225,11 +258,18 @@ Maritime_2027/
 │   ├── Project_Overview.md
 │   └── High_Level_Design.md
 ├── Simulation/
-│   ├── container/
+│   ├── Dockerfile
+│   ├── compose.yaml             # Current simulation stack entry point
 │   ├── worlds/
 │   ├── models/
 │   ├── scenarios/
-│   └── evaluation/
+│   ├── scripts/                 # Scenario generation and regression orchestration
+│   └── docs/
+├── Adapter/
+│   ├── container/
+│   └── ros_ws/
+│       └── src/
+│           └── blueboat_sim_bringup/ # Bridges, sim frames, evaluation clients
 ├── autonomy/
 │   ├── container/                  # Dockerfile and container startup
 │   └── ros_ws/                     # One ROS 2 workspace
@@ -272,7 +312,15 @@ are dependencies to configure and launch; they do not require a custom
 together in simulation or on the vessel. The workspace's generated `build/`,
 `install/`, and `log/` directories must be excluded from Git.
 
-Adopting this proposed layout will require a separate implementation step.
+The adapter has its own small ROS workspace because its dependencies and runtime
+purpose differ from onboard autonomy. This is not a workspace per autonomy
+component: all onboard packages still share `autonomy/ros_ws/`.
+
+Currently, `Simulation/compose.yaml` orchestrates simulation, adapter, and autonomy
+while reusing the autonomy service definition in `deployment/compose.base.yaml`.
+`deployment/compose.autonomy.yaml` starts autonomy independently with an explicit
+flight-controller connection. It is not a completed Jetson hardware deployment.
+Future deployment integration can add the GCS without changing these boundaries.
 
 ## Development and Evaluation Priorities
 

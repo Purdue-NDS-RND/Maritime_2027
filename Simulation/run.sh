@@ -63,7 +63,9 @@ VIDEO_GID=${VIDEO_GID:-$HOST_GID}
 RENDER_GID=${RENDER_GID:-$HOST_GID}
 export VIDEO_GID RENDER_GID
 export SIM_IMAGE=${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
-export ROS_IMAGE=${ROS_IMAGE:-ardupilot-blueboat-ros:jazzy}
+export ADAPTER_IMAGE=${ADAPTER_IMAGE:-maritime-sim-adapter:jazzy}
+export AUTONOMY_IMAGE=${AUTONOMY_IMAGE:-maritime-autonomy:jazzy}
+export FCU_URL=${FCU_URL:-udp://:14552@}
 
 scenario=${SCENARIO:-}
 if [[ -n $scenario && -n ${WORLD:-} ]]; then
@@ -151,8 +153,12 @@ case $build_mode in
         elif [[ $CAMERA_ENABLED == 1 ]] && ! docker run --rm --entrypoint test "$SIM_IMAGE" -f /opt/boat_sim/models/blueboat_rgbd/model.sdf; then
             need_build=1
         fi
-        if [[ $ros_enabled == 1 ]] && ! docker image inspect "$ROS_IMAGE" >/dev/null 2>&1; then
-            need_build=1
+        if [[ $ros_enabled == 1 ]]; then
+            for ros_image in "$ADAPTER_IMAGE" "$AUTONOMY_IMAGE"; do
+                if ! docker image inspect "$ros_image" >/dev/null 2>&1; then
+                    need_build=1
+                fi
+            done
         fi
         if [[ $need_build == 1 ]]; then
             echo "Building required simulator images (the first build can take several minutes)..."
@@ -235,7 +241,7 @@ echo "Host IDs: uid=$HOST_UID gid=$HOST_GID video_gid=$VIDEO_GID render_gid=$REN
 echo "World: ${WORLD:-blueboat_waves.sdf}; scenario: ${scenario:-none}; display: $DISPLAY"
 echo "MAVLink: ${MAVLINK_QGC:-udp:127.0.0.1:14550} (QGC), ${MAVLINK_API:-udp:127.0.0.1:14551} (student API)"
 if [[ $ros_enabled == 1 ]]; then
-    echo "ROS 2/MAVROS: domain ${ROS_DOMAIN_ID:-0}, FCU UDP 14552"
+    echo "ROS 2: adapter + autonomy, domain ${ROS_DOMAIN_ID:-0}, FCU $FCU_URL"
 fi
 if pgrep -f '[Q]GroundControl' >/dev/null 2>&1; then
     echo "QGroundControl is running and should auto-connect on UDP 14550."
