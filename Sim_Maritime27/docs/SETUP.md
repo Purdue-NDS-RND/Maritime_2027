@@ -1,0 +1,85 @@
+# One-time setup
+
+## Supported host
+
+This project targets a native Ubuntu Linux desktop. It uses Docker host
+networking, the host X11/Xwayland display socket, and optional direct-rendering
+devices. Docker Desktop on macOS or Windows is not supported by this V1.
+
+The tested host target is Ubuntu 24.04 with Docker Engine and Docker Compose.
+Gazebo and ArduPilot themselves are installed inside the Ubuntu 22.04 image.
+
+## 1. Verify Docker access
+
+Run:
+
+```bash
+docker info
+docker compose version
+```
+
+Both commands must succeed without `sudo`. If Docker reports permission denied,
+add your account to the `docker` group and then log out and back in:
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+Do not enter a password into a chat or save it in this project.
+
+## 2. Install the small host dependencies
+
+```bash
+sudo apt update
+sudo apt install make xauth
+```
+
+No host ROS or Gazebo installation is required.
+
+## 3. Make QGroundControl executable
+
+```bash
+chmod +x /home/ppatel/Applications/QGroundControl-v5.1.4-x86_64.AppImage
+```
+
+Launch it normally from the desktop or terminal. QGroundControl should
+automatically discover the simulated boat on UDP port `14550`.
+
+## 4. Validate and build
+
+From the project root:
+
+```bash
+make validate
+make build
+```
+
+The first build compiles ArduPilot Rover, the official ArduPilot Gazebo bridge,
+and ASV Wave Sim. It requires network access and may take several minutes.
+
+## Display and GPU notes
+
+Run `make run` from the logged-in graphical desktop session so `$DISPLAY` and
+its Xauthority cookie are available. The launcher creates a temporary
+container-only Xauthority file; it does not use the insecure `xhost +` command.
+
+When `/dev/dri` exists, the GPU Compose overlay is selected automatically. If
+direct rendering fails, use:
+
+```bash
+SOFTWARE_RENDERING=1 make run
+```
+# Optional ROS 2 RGB-D setup
+
+ROS 2 is containerized; do not install ROS or MAVROS on the host. Build both
+images once with:
+
+```bash
+make ros-build
+```
+
+The ROS image installs ROS 2 Jazzy, `ros_gz_bridge`, MAVROS, OpenCV's ArUco
+module for explicit smoke tests, and MAVROS's required GeographicLib datasets.
+The build needs internet access and several additional gigabytes of Docker
+storage. Verify available storage with `docker system df` and `df -h` before a
+clean rebuild. Do not remove unrelated Docker data to make room.

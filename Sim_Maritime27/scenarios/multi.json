@@ -1,0 +1,10 @@
+{
+  "name": "multi",
+  "description": "Four buoys with varied positions, angles, and ranges.",
+  "buoys": [
+    {"name": "buoy_0", "marker_id": 0, "pose": {"x": 5.5, "y": -1.0, "z": 0.0, "yaw_deg": 170.0}, "jitter": {"x": 0.8, "y": 0.8, "yaw_deg": 15.0}},
+    {"name": "buoy_1", "marker_id": 1, "pose": {"x": 8.0, "y": 2.0, "z": 0.0, "yaw_deg": 195.0}, "jitter": {"x": 0.8, "y": 0.8, "yaw_deg": 15.0}},
+    {"name": "buoy_2", "marker_id": 2, "pose": {"x": 11.0, "y": -3.0, "z": 0.0, "yaw_deg": 160.0}, "jitter": {"x": 1.0, "y": 1.0, "yaw_deg": 20.0}},
+    {"name": "buoy_3", "marker_id": 3, "pose": {"x": 15.0, "y": 5.0, "z": 0.0, "yaw_deg": 200.0}, "jitter": {"x": 1.0, "y": 1.0, "yaw_deg": 20.0}}
+  ]
+}

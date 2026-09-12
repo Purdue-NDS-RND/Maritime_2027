@@ -1,0 +1,86 @@
+name: ardupilot-blueboat
+
+services:
+  simulator:
+    image: ${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
+    container_name: ardupilot-blueboat-sim
+    build:
+      context: .
+      args:
+        ARDUPILOT_VERSION: ${ARDUPILOT_VERSION:-Rover-4.7.0}
+        ARDUPILOT_COMMIT: ${ARDUPILOT_COMMIT:-1511f27194f1dcc3728270883047bdf022b3fd53}
+        ARDUPILOT_GAZEBO_COMMIT: ${ARDUPILOT_GAZEBO_COMMIT:-082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5}
+        SITL_MODELS_COMMIT: ${SITL_MODELS_COMMIT:-25bc38ed8c6c0345840159a8cbc0b02781d52f3c}
+        ASV_WAVE_SIM_COMMIT: ${ASV_WAVE_SIM_COMMIT:-ca8629df4e191235753dfae92ef725d30b923364}
+    network_mode: host
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    group_add:
+      - "${VIDEO_GID:-44}"
+      - "${RENDER_GID:-109}"
+    environment:
+      DISPLAY: ${DISPLAY}
+      XAUTHORITY: /tmp/ardupilot-blueboat.xauth
+      WORLD: ${WORLD:-blueboat_waves.sdf}
+      MAVLINK_QGC: ${MAVLINK_QGC:-udp:127.0.0.1:14550}
+      MAVLINK_API: ${MAVLINK_API:-udp:127.0.0.1:14551}
+      MAVLINK_MAVROS: ${MAVLINK_MAVROS:-udp:127.0.0.1:14552}
+      ENABLE_MAVROS: ${ENABLE_MAVROS:-0}
+      CAMERA_ENABLED: ${CAMERA_ENABLED:-0}
+      SOFTWARE_RENDERING: ${SOFTWARE_RENDERING:-0}
+      LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-0}
+      WIPE_PARAMS: ${WIPE_PARAMS:-0}
+      GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-90}
+      QT_X11_NO_MITSHM: "1"
+      GZ_PARTITION: ardupilot_blueboat_starter
+    volumes:
+      - type: bind
+        source: ${XAUTH_FILE:-/tmp/ardupilot-blueboat-missing.xauth}
+        target: /tmp/ardupilot-blueboat.xauth
+        read_only: true
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix
+        read_only: true
+      - type: bind
+        source: ./logs
+        target: /sim
+    stdin_open: true
+    tty: true
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 45s
+    restart: "no"
+
+  ros_bridge:
+    profiles: ["ros"]
+    image: ${ROS_IMAGE:-ardupilot-blueboat-ros:jazzy}
+    container_name: ardupilot-blueboat-ros
+    build:
+      context: .
+      dockerfile: Dockerfile.ros
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      GZ_PARTITION: ardupilot_blueboat_starter
+      CAMERA_ENABLED: ${CAMERA_ENABLED:-1}
+      ACTIVE_BUOY_IDS: ${ACTIVE_BUOY_IDS:-}
+      SCENARIO_MANIFEST: /scenario/active.manifest.json
+    volumes:
+      - type: bind
+        source: ./logs/generated-worlds
+        target: /scenario
+        read_only: true
+    depends_on:
+      simulator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 9
+      start_period: 15s
+    restart: "no"

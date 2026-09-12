@@ -1,0 +1,7 @@
+{
+  "name": "one",
+  "description": "One centered buoy for depth and marker-range checks.",
+  "buoys": [
+    {"name": "buoy_0", "marker_id": 0, "pose": {"x": 6.5, "y": 0.0, "z": 0.0, "yaw_deg": 180.0}, "jitter": {"x": 0.5, "y": 0.4, "yaw_deg": 10.0}}
+  ]
+}

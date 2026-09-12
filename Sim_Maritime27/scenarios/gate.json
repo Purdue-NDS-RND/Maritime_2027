@@ -1,0 +1,8 @@
+{
+  "name": "gate",
+  "description": "A three-metre red/green two-buoy gate.",
+  "buoys": [
+    {"name": "buoy_1", "marker_id": 1, "pose": {"x": 7.0, "y": 1.5, "z": 0.0, "yaw_deg": 192.0}, "jitter": {"x": 0.4, "y": 0.2, "yaw_deg": 7.0}},
+    {"name": "buoy_2", "marker_id": 2, "pose": {"x": 7.0, "y": -1.5, "z": 0.0, "yaw_deg": 168.0}, "jitter": {"x": 0.4, "y": 0.2, "yaw_deg": 7.0}}
+  ]
+}

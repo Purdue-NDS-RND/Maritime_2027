@@ -1,0 +1,181 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="blueboat_harbor">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+      <background_color>0.48 0.62 0.76</background_color>
+    </plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <scene>
+      <ambient>0.58 0.60 0.64 1</ambient>
+      <background>0.48 0.62 0.76 1</background>
+      <sky/>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 20 0 0 0</pose>
+      <diffuse>0.82 0.82 0.78 1</diffuse>
+      <specular>0.45 0.45 0.45 1</specular>
+      <direction>-0.45 0.25 -0.86</direction>
+    </light>
+
+    <!-- A 0.25 m regular-wave amplitude gives a clearly rougher 0.5 m
+         peak-to-trough sea than the 0.08 m student baseline. The wave travels
+         generally toward the dock, making station keeping more demanding. -->
+    <model name="water_surface">
+      <static>true</static>
+      <plugin filename="gz-waves1-waves-model-system" name="gz::sim::systems::WavesModel">
+        <static>0</static>
+        <update_rate>30</update_rate>
+        <wave>
+          <tile_size>256</tile_size>
+          <cell_count>128</cell_count>
+          <algorithm>sinusoid</algorithm>
+          <amplitude>0.25</amplitude>
+          <period>3.0</period>
+          <direction>0.6 -0.8</direction>
+        </wave>
+      </plugin>
+      <link name="base_link">
+        <visual name="water_visual">
+          <geometry>
+            <mesh><uri>models://waves/materials/mesh_L256m_N256.dae</uri></mesh>
+          </geometry>
+          <material>
+            <ambient>0.0 0.06 0.40 0.96</ambient>
+            <diffuse>0.0 0.12 0.52 0.96</diffuse>
+            <specular>0.8 0.8 0.8 0.96</specular>
+            <pbr>
+              <metal>
+                <albedo_map>models://waves/materials/water.jpg</albedo_map>
+                <normal_map>models://waves/materials/wave_normals.dds</normal_map>
+                <environment_map>models://waves/materials/skybox_lowres.dds</environment_map>
+                <roughness>0.24</roughness>
+                <metalness>0.1</metalness>
+              </metal>
+            </pbr>
+          </material>
+          <plugin filename="gz-waves1-waves-visual-system" name="gz::sim::systems::WavesVisual">
+            <static>0</static>
+            <mesh_deformation_method>DYNAMIC_GEOMETRY</mesh_deformation_method>
+            <tiles_x>0 0</tiles_x>
+            <tiles_y>0 0</tiles_y>
+            <wave>
+              <tile_size>256</tile_size>
+              <cell_count>128</cell_count>
+              <algorithm>sinusoid</algorithm>
+              <amplitude>0.25</amplitude>
+              <period>3.0</period>
+              <direction>0.6 -0.8</direction>
+            </wave>
+            <shader language="metal">
+              <vertex>models://waves/materials/waves_vs.metal</vertex>
+              <fragment>models://waves/materials/waves_fs.metal</fragment>
+            </shader>
+          </plugin>
+        </visual>
+      </link>
+    </model>
+
+    <!-- A fixed 18 m dock, 11 m south of the boat's starting position. The
+         deck and pilings have collision geometry, while the yellow edge strips
+         provide a high-contrast target for future camera work. -->
+    <model name="dock">
+      <static>true</static>
+      <link name="dock_link">
+        <collision name="deck_collision">
+          <pose>0 -8 0.30 0 0 0</pose>
+          <geometry><box><size>18 3 0.60</size></box></geometry>
+        </collision>
+        <visual name="deck_visual">
+          <pose>0 -8 0.30 0 0 0</pose>
+          <geometry><box><size>18 3 0.60</size></box></geometry>
+          <material>
+            <ambient>0.28 0.22 0.14 1</ambient>
+            <diffuse>0.46 0.34 0.20 1</diffuse>
+            <specular>0.08 0.08 0.08 1</specular>
+          </material>
+        </visual>
+
+        <visual name="water_edge_stripe">
+          <pose>0 -6.47 0.63 0 0 0</pose>
+          <geometry><box><size>18 0.12 0.08</size></box></geometry>
+          <material>
+            <ambient>0.9 0.65 0.03 1</ambient>
+            <diffuse>1.0 0.75 0.05 1</diffuse>
+          </material>
+        </visual>
+        <visual name="outer_edge_stripe">
+          <pose>0 -9.53 0.63 0 0 0</pose>
+          <geometry><box><size>18 0.12 0.08</size></box></geometry>
+          <material>
+            <ambient>0.9 0.65 0.03 1</ambient>
+            <diffuse>1.0 0.75 0.05 1</diffuse>
+          </material>
+        </visual>
+
+        <collision name="west_piling_collision">
+          <pose>-7.5 -8 -1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.28</radius><length>4</length></cylinder></geometry>
+        </collision>
+        <visual name="west_piling_visual">
+          <pose>-7.5 -8 -1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.28</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.18 0.15 0.10 1</ambient><diffuse>0.30 0.23 0.14 1</diffuse></material>
+        </visual>
+
+        <collision name="center_piling_collision">
+          <pose>0 -8 -1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.28</radius><length>4</length></cylinder></geometry>
+        </collision>
+        <visual name="center_piling_visual">
+          <pose>0 -8 -1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.28</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.18 0.15 0.10 1</ambient><diffuse>0.30 0.23 0.14 1</diffuse></material>
+        </visual>
+
+        <collision name="east_piling_collision">
+          <pose>7.5 -8 -1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.28</radius><length>4</length></cylinder></geometry>
+        </collision>
+        <visual name="east_piling_visual">
+          <pose>7.5 -8 -1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.28</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.18 0.15 0.10 1</ambient><diffuse>0.30 0.23 0.14 1</diffuse></material>
+        </visual>
+
+        <visual name="dock_sign">
+          <pose>0 -8 1.25 0 0 0</pose>
+          <geometry><box><size>2.4 0.10 0.75</size></box></geometry>
+          <material><ambient>0.08 0.16 0.28 1</ambient><diffuse>0.10 0.25 0.48 1</diffuse></material>
+        </visual>
+        <visual name="sign_left_post">
+          <pose>-0.9 -8 0.92 0 0 0</pose>
+          <geometry><cylinder><radius>0.06</radius><length>0.65</length></cylinder></geometry>
+          <material><ambient>0.65 0.65 0.65 1</ambient><diffuse>0.8 0.8 0.8 1</diffuse></material>
+        </visual>
+        <visual name="sign_right_post">
+          <pose>0.9 -8 0.92 0 0 0</pose>
+          <geometry><cylinder><radius>0.06</radius><length>0.65</length></cylinder></geometry>
+          <material><ambient>0.65 0.65 0.65 1</ambient><diffuse>0.8 0.8 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <include>
+      <name>blueboat</name>
+      <pose>0 3 0 0 0 0</pose>
+      <uri>model://blueboat</uri>
+    </include>
+  </world>
+</sdf>

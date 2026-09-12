@@ -1,0 +1,4 @@
+services:
+  simulator:
+    devices:
+      - /dev/dri:/dev/dri

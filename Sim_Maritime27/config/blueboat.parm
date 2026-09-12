@@ -1,0 +1,5 @@
+# Official BlueBoat baseline from ArduPilot/SITL_Models.
+FRAME_CLASS       2
+CRUISE_SPEED      2.0
+CRUISE_THROTTLE   50.0
+WP_SPEED          2.0
