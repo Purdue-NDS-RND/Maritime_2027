@@ -161,15 +161,15 @@ RUN apt-get update \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
 
-COPY --chmod=0755 start-sim.sh /usr/local/bin/start-sim.sh
-COPY --chmod=0755 sitl-process-wrapper.sh /usr/local/bin/sitl-process-wrapper.sh
-COPY --chmod=0755 healthcheck.sh /usr/local/bin/healthcheck.sh
+COPY --chmod=0755 container/start-sim.sh /usr/local/bin/start-sim.sh
+COPY --chmod=0755 container/sitl-process-wrapper.sh /usr/local/bin/sitl-process-wrapper.sh
+COPY --chmod=0755 container/healthcheck.sh /usr/local/bin/healthcheck.sh
 COPY config /opt/boat_sim/config
 COPY worlds /opt/boat_sim/worlds
 COPY models /opt/boat_sim/models
 COPY scenarios /opt/boat_sim/scenarios
 COPY --chmod=0755 scripts /opt/boat_sim/scripts
-COPY smoke-test.py /opt/boat_sim/smoke-test.py
+COPY --chmod=0755 scripts/smoke-test.py /opt/boat_sim/scripts/smoke-test.py
 
 RUN python3 /opt/boat_sim/scripts/augment_blueboat_model.py \
       --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \

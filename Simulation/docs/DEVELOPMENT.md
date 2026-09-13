@@ -4,17 +4,17 @@
 
 ```text
 make run
-  -> run.sh
+  -> scripts/run.sh
   -> Docker Compose
-  -> tini -> start-sim.sh
+  -> tini -> container/start-sim.sh
   -> Gazebo world + BlueBoat + wave/hydrodynamics plugins
   -> ArduPilot Rover SITL (JSON backend)
   -> MAVProxy -> QGC 14550 and student API 14551
 ```
 
-`run.sh` owns host concerns: Docker access, UID/GID mapping, image selection,
+`scripts/run.sh` owns host concerns: Docker access, UID/GID mapping, image selection,
 GPU selection, display validation, and a temporary Xauthority file.
-`start-sim.sh` owns container process order, logs, readiness, and shutdown.
+`container/start-sim.sh` owns container process order, logs, readiness, and shutdown.
 
 ## Reproducible sources
 
@@ -28,7 +28,7 @@ The Docker build pins and verifies:
 | ASV Wave Sim | `ca8629df4e191235753dfae92ef725d30b923364` |
 
 Do not replace these with a floating branch. For an upgrade, resolve a complete
-SHA, update both `Dockerfile` and `compose.yaml`, rebuild without cache, reset
+SHA, update both `container/Dockerfile` and `container/compose.yaml`, rebuild without cache, reset
 SITL parameters once, and repeat the full smoke test.
 
 ## Environment interface

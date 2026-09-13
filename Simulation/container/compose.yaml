@@ -5,7 +5,8 @@ services:
     image: ${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
     container_name: ardupilot-blueboat-sim
     build:
-      context: .
+      context: ..
+      dockerfile: container/Dockerfile
       args:
         ARDUPILOT_VERSION: ${ARDUPILOT_VERSION:-Rover-4.7.0}
         ARDUPILOT_COMMIT: ${ARDUPILOT_COMMIT:-1511f27194f1dcc3728270883047bdf022b3fd53}
@@ -42,7 +43,7 @@ services:
         target: /tmp/.X11-unix
         read_only: true
       - type: bind
-        source: ./logs
+        source: ../logs
         target: /sim
     stdin_open: true
     tty: true
@@ -60,7 +61,7 @@ services:
     image: ${ADAPTER_IMAGE:-maritime-sim-adapter:jazzy}
     container_name: maritime-sim-adapter
     build:
-      context: ../Adapter
+      context: ../../Adapter
       dockerfile: container/Dockerfile
     network_mode: host
     ipc: host
@@ -72,7 +73,7 @@ services:
       SCENARIO_MANIFEST: /scenario/active.manifest.json
     volumes:
       - type: bind
-        source: ./logs/generated-worlds
+        source: ../logs/generated-worlds
         target: /scenario
         read_only: true
     depends_on:
@@ -89,7 +90,7 @@ services:
   autonomy:
     profiles: ["ros"]
     extends:
-      file: ../deployment/compose.base.yaml
+      file: ../../deployment/compose.base.yaml
       service: autonomy
     environment:
       FCU_URL: ${FCU_URL:-udp://:14552@}

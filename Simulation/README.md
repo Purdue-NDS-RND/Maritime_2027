@@ -120,13 +120,9 @@ WIPE_PARAMS=1 make run
 
 ```text
 Simulation/
-├── Dockerfile                 # Reproducible pinned simulator image
-├── compose.yaml               # Container, networking, display, state, health
-├── compose.gpu.yaml           # Adds /dev/dri when available
-├── run.sh                     # Host checks, image build, display authorization
-├── start-sim.sh               # Gazebo-first startup and process supervision
-├── smoke-test.py              # Guided/Hold/RTL autonomous acceptance test
 ├── Makefile                   # Student-facing command surface
+├── container/                 # Image, Compose, and in-container process files
+├── scripts/                   # Host launch, validation, and acceptance helpers
 ├── config/blueboat.parm       # Boat-specific ArduPilot parameters
 ├── worlds/                    # Mild, calm, and rough harbor worlds
 ├── models/                    # Opt-in RGB-D BlueBoat and ArUco buoys
@@ -134,6 +130,9 @@ Simulation/
 ├── docs/                      # Setup, operation, troubleshooting, maintenance
 └── logs/                      # Runtime logs and persistent virtual EEPROM
 ```
+
+Use the root Makefile for normal operation. `scripts/` is for host-side
+automation, while `container/` holds Docker and in-container startup files.
 
 ROS responsibilities live in sibling project areas: [`Adapter/`](../Adapter/README.md)
 owns the Gazebo bridges and simulation-only tests; [`autonomy/`](../autonomy/README.md)

@@ -55,7 +55,7 @@ must not run simultaneously with their default MAVLink ports.
 `make smoke` expects `make run` to remain active in another terminal. Check:
 
 ```bash
-docker compose -f compose.yaml ps
+docker compose -f container/compose.yaml ps
 make logs
 ```
 
@@ -89,10 +89,10 @@ heartbeat, and meaningful MAVLink behavior.
 # RGB-D / ROS 2 checks
 
 - If `maritime-sim-adapter` is unhealthy, run
-  `docker compose -f compose.yaml --profile ros logs adapter` and confirm
+  `docker compose -f container/compose.yaml --profile ros logs adapter` and confirm
   `/clock` and camera topics appear.
 - If `maritime-autonomy` is unhealthy, inspect
-  `docker compose -f compose.yaml --profile ros logs autonomy` and confirm
+  `docker compose -f container/compose.yaml --profile ros logs autonomy` and confirm
   `/mavros/state` reports a connected flight controller. These are separate
   health checks; neither alone proves end-to-end control.
 - If MAVROS never connects, ensure no stale process owns UDP 14552 and confirm

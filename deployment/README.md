@@ -3,7 +3,7 @@
 - `compose.base.yaml` defines the reusable autonomy service; it is a fragment
   for `extends`, not the recommended launch entry point.
 - `compose.autonomy.yaml` starts autonomy independently and requires `FCU_URL`.
-- `../Simulation/compose.yaml` extends the same base and adds SITL connectivity,
+- `../Simulation/container/compose.yaml` extends the same base and adds SITL connectivity,
   simulation, and the simulation-only adapter under its `ros` profile.
 
 Use `Simulation/` Make targets for simulated operation; they handle scenarios,

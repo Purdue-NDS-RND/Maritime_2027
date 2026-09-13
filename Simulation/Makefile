@@ -1,22 +1,22 @@
 .PHONY: run build rebuild ros-build validate smoke sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
 
 run:
-	./run.sh
+	./scripts/run.sh
 
 build:
-	./run.sh --build-only
+	./scripts/run.sh --build-only
 
 rebuild:
-	./run.sh --rebuild-only
+	./scripts/run.sh --rebuild-only
 
 ros-build:
-	ROS_SIM=1 ./run.sh --build-only
+	ROS_SIM=1 ./scripts/run.sh --build-only
 
 validate:
-	./validate.sh
+	./scripts/validate.sh
 
 smoke:
-	./smoke.sh
+	./scripts/smoke.sh
 
 sensor-smoke:
 	docker exec maritime-sim-adapter bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup sensor_smoke'
@@ -31,7 +31,7 @@ verify-rgbd:
 	./scripts/verify-rgbd.sh
 
 down:
-	./run.sh --down
+	./scripts/run.sh --down
 
 logs:
-	docker compose -f compose.yaml --profile ros logs -f
+	docker compose -f container/compose.yaml --profile ros logs -f

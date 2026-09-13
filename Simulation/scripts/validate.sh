@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$PROJECT_DIR"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 
-scripts=(run.sh start-sim.sh sitl-process-wrapper.sh healthcheck.sh validate.sh smoke.sh scripts/verify-rgbd.sh scripts/gazebo_sensor_smoke.py)
+scripts=(scripts/run.sh scripts/validate.sh scripts/smoke.sh scripts/verify-rgbd.sh scripts/gazebo_sensor_smoke.py container/start-sim.sh container/sitl-process-wrapper.sh container/healthcheck.sh)
 bash -n "${scripts[@]}"
-for script in "${scripts[@]}" smoke-test.py; do
+for script in "${scripts[@]}" scripts/smoke-test.py; do
     [[ -x $script ]] || { echo "ERROR: $script is not executable" >&2; exit 1; }
 done
 python_sources=(
-    smoke-test.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
+    scripts/smoke-test.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
     ../Adapter/ros_ws/src/blueboat_sim_bringup/setup.py
     ../Adapter/ros_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
     ../Adapter/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py
@@ -24,9 +24,9 @@ python_sources=(
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
 
 required=(
-    Dockerfile ../Adapter/container/Dockerfile ../autonomy/container/Dockerfile
+    container/Dockerfile ../Adapter/container/Dockerfile ../autonomy/container/Dockerfile
     ../deployment/compose.base.yaml ../deployment/compose.autonomy.yaml
-    compose.yaml compose.gpu.yaml Makefile
+    container/compose.yaml container/compose.gpu.yaml Makefile
     config/blueboat.parm worlds/blueboat_waves.sdf worlds/blueboat_calm.sdf
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
     scenarios/one.json scenarios/gate.json scenarios/multi.json
@@ -58,8 +58,8 @@ pins=(
     ca8629df4e191235753dfae92ef725d30b923364
 )
 for pin in "${pins[@]}"; do
-    grep -q "$pin" Dockerfile || { echo "ERROR: Dockerfile is missing source pin $pin" >&2; exit 1; }
-    grep -q "$pin" compose.yaml || { echo "ERROR: compose.yaml is missing source pin $pin" >&2; exit 1; }
+    grep -q "$pin" container/Dockerfile || { echo "ERROR: container/Dockerfile is missing source pin $pin" >&2; exit 1; }
+    grep -q "$pin" container/compose.yaml || { echo "ERROR: container/compose.yaml is missing source pin $pin" >&2; exit 1; }
 done
 
 grep -q '<uri>model://blueboat</uri>' worlds/blueboat_waves.sdf
@@ -71,12 +71,12 @@ grep -q '<amplitude>0.25</amplitude>' worlds/blueboat_harbor.sdf
 grep -q '<model name="dock">' worlds/blueboat_harbor.sdf
 grep -q '<collision name="deck_collision">' worlds/blueboat_harbor.sdf
 grep -Eq '^FRAME_CLASS[[:space:]]+2$' config/blueboat.parm
-grep -q 'fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57' Dockerfile
+grep -q 'fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57' container/Dockerfile
 grep -q 'type="rgbd_camera"' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<width>1280</width>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<height>720</height>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<near>0.30</near><far>20.0</far>' models/blueboat_rgbd/camera_payload.sdf
-grep -q 'udp://:14552@' compose.yaml
+grep -q 'udp://:14552@' container/compose.yaml
 
 for scenario in one gate multi; do
     python3 scripts/render_scenario.py \
@@ -118,7 +118,7 @@ PY
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
-        docker compose -f compose.yaml --profile ros config --quiet
+        docker compose -f container/compose.yaml --profile ros config --quiet
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ../tests -v
     if docker image inspect ardupilot-blueboat:4.7.0 >/dev/null 2>&1; then
         for scenario in one gate multi; do

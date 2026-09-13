@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$PROJECT_DIR"
 
 build_mode=if-missing
@@ -9,7 +9,9 @@ action=up
 
 usage() {
     cat <<'EOF'
-Usage: ./run.sh [--build|--build-only|--rebuild-only|--down|--help]
+Usage: make run|build|rebuild|down
+
+Internal form: scripts/run.sh [--build|--build-only|--rebuild-only|--down|--help]
 
   no option       Start the simulation, building the image if absent
   --build         Rebuild the image, then start the simulation
@@ -123,9 +125,9 @@ else
     esac
 fi
 
-compose_files=(-f compose.yaml)
+compose_files=(-f container/compose.yaml)
 if [[ -d /dev/dri ]]; then
-    compose_files+=(-f compose.gpu.yaml)
+    compose_files+=(-f container/compose.gpu.yaml)
 fi
 profile_args=()
 if [[ $ros_enabled == 1 ]]; then

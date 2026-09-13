@@ -28,7 +28,7 @@ class ContainerBoundaries(unittest.TestCase):
         return json.loads(result.stdout)["services"]
 
     def test_simulation_connects_independent_adapter_and_autonomy(self):
-        services = self.config("Simulation/compose.yaml", "--profile", "ros")
+        services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
         self.assertEqual(set(services), {"simulator", "adapter", "autonomy"})
         self.assertEqual(services["autonomy"]["environment"]["FCU_URL"], "udp://:14552@")
         contexts = set()
@@ -53,7 +53,7 @@ class ContainerBoundaries(unittest.TestCase):
         self.assertIn("FCU_URL", result.stderr)
 
     def test_simulation_provides_its_own_default_connection(self):
-        result = resolve("Simulation/compose.yaml", "--profile", "ros", fcu_url=None)
+        result = resolve("Simulation/container/compose.yaml", "--profile", "ros", fcu_url=None)
         self.assertEqual(result.returncode, 0, result.stderr)
         service = json.loads(result.stdout)["services"]["autonomy"]
         self.assertEqual(service["environment"]["FCU_URL"], "udp://:14552@")

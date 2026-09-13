@@ -10,12 +10,12 @@ stop_run() {
         # A background shell may inherit SIGINT as ignored. Bringing Compose
         # down first makes its foreground `up` exit deterministically; TERM is
         # only a final nudge for the small wrapper shell.
-        ./run.sh --down >/dev/null 2>&1 || true
+        ./scripts/run.sh --down >/dev/null 2>&1 || true
         kill -TERM "$runner_pid" 2>/dev/null || true
         wait "$runner_pid" || true
     fi
     runner_pid=
-    ./run.sh --down >/dev/null 2>&1 || true
+    ./scripts/run.sh --down >/dev/null 2>&1 || true
 }
 trap stop_run EXIT INT TERM
 
@@ -29,7 +29,7 @@ wait_for_health() {
         kill -0 "$runner_pid" 2>/dev/null || break
         sleep 2
     done
-    docker compose -f compose.yaml --profile ros logs --tail=150 >&2 || true
+    docker compose -f container/compose.yaml --profile ros logs --tail=150 >&2 || true
     return 1
 }
 
@@ -38,9 +38,9 @@ run_case() {
     local seed=${2:-}
     echo "=== Verifying RGB-D scenario: $scenario${seed:+ (seed $seed)} ==="
     if [[ -n $seed ]]; then
-        SCENARIO="$scenario" BUOY_SEED="$seed" ./run.sh >"logs/verify-$scenario.log" 2>&1 &
+        SCENARIO="$scenario" BUOY_SEED="$seed" ./scripts/run.sh >"logs/verify-$scenario.log" 2>&1 &
     else
-        SCENARIO="$scenario" ./run.sh >"logs/verify-$scenario.log" 2>&1 &
+        SCENARIO="$scenario" ./scripts/run.sh >"logs/verify-$scenario.log" 2>&1 &
     fi
     runner_pid=$!
     wait_for_health
@@ -61,7 +61,7 @@ run_case gate
 run_case multi 42
 
 echo "=== Verifying original ArduPilot behavior with the augmented boat and no buoys ==="
-ROS_SIM=1 WORLD=blueboat_rgbd_base.sdf ./run.sh >logs/verify-camera-only.log 2>&1 &
+ROS_SIM=1 WORLD=blueboat_rgbd_base.sdf ./scripts/run.sh >logs/verify-camera-only.log 2>&1 &
 runner_pid=$!
 wait_for_health
 # "ArduPilot Ready" precedes final redundant-IMU agreement on some GPU-loaded
