@@ -8,7 +8,17 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 import xml.etree.ElementTree as ET
+
+
+CATEGORY_BY_MARKER_ID = {
+    0: "white",
+    1: "red",
+    2: "green",
+    3: "blue",
+}
+ENTITY_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,15 +43,18 @@ def resolved_pose(spec: dict, rng: random.Random | None) -> dict:
 
 
 def validate_buoys(buoys: list[dict]) -> None:
-    names = [item["name"] for item in buoys]
-    marker_ids = [item["marker_id"] for item in buoys]
-    if len(names) != len(set(names)) or len(marker_ids) != len(set(marker_ids)):
-        raise SystemExit("Buoy names and marker IDs must be unique")
+    seen_names = set()
     for item in buoys:
+        name = item["name"]
+        if not ENTITY_NAME_PATTERN.fullmatch(name):
+            raise SystemExit(
+                f"Buoy entity name must match ^[a-z][a-z0-9_]*$: {name}"
+            )
+        if name in seen_names:
+            raise SystemExit(f"Duplicate buoy entity name: {name}")
+        seen_names.add(name)
         pose = item["resolved_pose"]
-        if item["name"] != f"buoy_{item['marker_id']}":
-            raise SystemExit("Buoy names must match buoy_<marker_id>")
-        if not 0 <= item["marker_id"] <= 3:
+        if item["marker_id"] not in CATEGORY_BY_MARKER_ID:
             raise SystemExit("Only marker IDs 0 through 3 are available")
         if pose["x"] < 4.0 or abs(pose["x"]) > 40.0 or abs(pose["y"]) > 20.0:
             raise SystemExit(f"Buoy {item['name']} is outside the approved test area")
@@ -75,16 +88,20 @@ def main() -> int:
     for item in buoys:
         pose = item["resolved_pose"]
         yaw = math.radians(pose["yaw_deg"])
+        model_uri = f"model://aruco_buoy_id{item['marker_id']}"
         include = ET.SubElement(world, "include")
         ET.SubElement(include, "name").text = item["name"]
         ET.SubElement(include, "pose").text = (
             f"{pose['x']:.6f} {pose['y']:.6f} {pose['z']:.6f} 0 0 {yaw:.9f}"
         )
-        ET.SubElement(include, "uri").text = f"model://aruco_buoy_id{item['marker_id']}"
+        ET.SubElement(include, "uri").text = model_uri
         manifest_buoys.append(
             {
                 "name": item["name"],
                 "marker_id": item["marker_id"],
+                "category": CATEGORY_BY_MARKER_ID[item["marker_id"]],
+                "gazebo_model_name": item["name"],
+                "model_uri": model_uri,
                 "model_pose": {**pose, "yaw_rad": yaw},
                 "marker_plane_center": {
                     "x": pose["x"] + panel_offset * math.cos(yaw),
@@ -93,6 +110,8 @@ def main() -> int:
                     "normal_x": math.cos(yaw),
                     "normal_y": math.sin(yaw),
                 },
+                "truth_topic": f"/blueboat/ground_truth/{item['name']}/odometry",
+                "evaluation_key": item["name"],
             }
         )
 
@@ -101,6 +120,7 @@ def main() -> int:
     ET.indent(tree, space="  ")
     tree.write(args.output_world, encoding="utf-8", xml_declaration=True)
     manifest = {
+        "schema_version": 1,
         "scenario": config["name"],
         "seed": args.seed,
         "world": "blueboat_rgbd",
