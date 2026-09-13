@@ -34,6 +34,13 @@ including when each item must be resolved.
 
 ### Relationship to the High-Level Design
 
+The [High-Level Design](High_Level_Design.md) defines mission-level scope,
+component responsibilities, and deployment boundaries. This document refines
+those boundaries into implementation instructions. Where both documents discuss
+the same implementation detail, the settled decision recorded here is the newer
+authority. Neither document turns a target-state design into a claim that the
+corresponding repository migration or runtime validation is already complete.
+
 ### Requirements and Design Constraints
 
 ### Assumptions and Dependencies
@@ -47,7 +54,8 @@ launch integration in `maritime_bringup`. Use OpenCV for ArUco detection,
 `cv_bridge` for image conversion, and the standard `sensor_msgs` and
 `vision_msgs` interfaces. Python with `rclpy` is the proposed initial
 implementation; confirm throughput before deciding whether C++ is needed.
-Gazebo dependencies and scenario-based evaluators remain in the Adapter.
+Gazebo bridge dependencies remain in the Simulation Adapter. Scenario-based
+evaluators belong to Simulation test tooling rather than Adapter runtime.
 
 ### ROS 2 Nodes and Execution Model
 
@@ -71,8 +79,9 @@ Draft interfaces, relative to each detector's camera namespace:
 
 No custom service or action is proposed for initial detection. For simulation,
 propose namespace `/perception/camera_0` and remap its `image` input to the
-existing `/blueboat/camera/rgb/image_raw` topic. Physical camera topic remaps
-remain open. Namespace names are configuration, not assumptions inside the
+target `/sensors/camera_0/color/image_raw` topic. The current simulator still
+publishes `/blueboat/camera/rgb/image_raw`; migration belongs to the Adapter.
+Namespace names are configuration, not assumptions inside the
 detector. Only one selected detector publishes the primary output per camera.
 
 ### Message Definitions and Data Models
@@ -126,11 +135,45 @@ Exact OpenCV version and detector tuning remain open pending image testing.
 
 ### Camera-Neutral Observation Interface
 
+Both environment-specific Adapters will expose generic camera interfaces.
+Camera identifiers describe configured mounting positions and remain stable
+across launches; camera model and serial number belong in configuration.
+
+| Interface | First-camera name |
+|---|---|
+| Color image | `/sensors/camera_0/color/image_raw` |
+| Depth registered to color | `/sensors/camera_0/depth/image_rect_raw` |
+| Color calibration | `/sensors/camera_0/color/camera_info` |
+| Camera mounting frame | `camera_0_link` |
+| Color and registered-depth optical frame | `camera_0_optical_frame` |
+
+Simulation initially supplies `camera_0`; hardware supplies `camera_0` and
+`camera_1` using the same convention. Autonomy processes configured sources
+through this common interface. Depth encoding, units, timestamp tolerances,
+and calibration compatibility still require a precise interface contract.
+
 ### Physical Camera Sources and Calibration
+
+The physical cameras are ZED X Mini cameras. Their publishing wrappers will
+live in the Hardware Adapter and expose the generic interface above. ZED 2i
+is not the selected hardware. Driver integration, calibration loading, and
+device-to-mount configuration remain implementation design work.
 
 ### Simulated RGB-D Source
 
+The current simulator supplies one generic Gazebo RGB-D camera with ideal
+depth. Its historical `zed2i_*` frame names will be replaced by the generic
+convention. This source does not model the physical two-camera arrangement
+or establish ZED X Mini performance.
+
 ### Source Synchronization and Availability
+
+Camera observations and MAVROS state must have compatible timestamps during
+normal uninterrupted operation, allowing mapping to use vessel state at image
+acquisition time. Preserve source acquisition timestamps through wrappers.
+Clock compatibility, synchronization tolerances, and stale-data thresholds
+remain to be verified. Missing or stale inputs must not be treated as fresh
+observations, even though simulation pause/resume is outside initial scope.
 
 ## Perception
 
@@ -268,7 +311,8 @@ origin conventions, and validity behavior. The map uses a fixed local frame
 established when mapping starts, based on the flight controller's local
 coordinates. Preserve full vessel orientation when transforming camera
 observations before projecting their positions into the 2D map.
-Exact frame names, geographic datum/transform, and TF ownership remain open.
+Exact frame names and geographic datum/transform remain open. The Adapter owns
+camera mounting transforms; shared state integration owns estimated motion TF.
 Only one selected provider should own each public state output at a time.
 
 Match detections to their corresponding depth images and interpolate vessel
@@ -528,25 +572,86 @@ waypoint execution must be tested for turns and overshoot near buoys.
 
 ## Simulation and Adapter
 
+### Adapter Responsibilities and Vehicle Interface
+
+The selected Adapter is a bidirectional environment-facing data layer. It owns
+camera drivers or Gazebo bridges, camera calibration and mounting transforms,
+MAVROS startup/configuration, flight-controller transport, and connection/data
+availability diagnostics. Shared autonomy owns perception, state integration,
+mapping, navigation, and mission decisions.
+
+Both Adapters expose `/mavros/...` directly for telemetry, commands, services,
+and acknowledgments. No additional command wrapper is required by this design.
+The Simulation Adapter connects MAVROS to SITL; the Hardware Adapter connects
+it to the physical flight controller. Command authority and arbitration belong
+to the later control/authority design, not to Adapter transport responsibilities.
+
+This is the agreed target boundary. The current implementation still installs
+and launches MAVROS in `autonomy/`; moving it into the selected Adapter and
+implementing the Hardware Adapter remain future work.
+
 ### Gazebo-to-ROS Bridges
 
+The Simulation Adapter translates Gazebo camera data and calibration into the
+common camera interface and exposes simulation time. Exact bridge mappings,
+QoS, and source-availability behavior remain to be specified. Vehicle traffic
+uses MAVROS connected to SITL rather than the camera bridge.
+
 ### Simulation Frames and Sensor Configuration
+
+Each Adapter publishes the fixed transform from `base_link` to each configured
+`camera_N_link` and from that mounting frame to `camera_N_optical_frame`.
+Mounting transforms reflect the simulated installation or physical calibration.
+Shared state integration owns estimated vessel-motion transforms, such as
+`odom -> base_link`; exact navigation frame names remain open.
 
 ### Scenario Configuration
 
 ### Evaluation-Only Ground Truth Interfaces
 
+Preserve the current separation of perfect vessel/buoy poses under
+`/blueboat/ground_truth/...`, including the separate evaluation topics
+`/blueboat/ground_truth/tf` and `/blueboat/ground_truth/tf_static`.
+Evaluation tools may compare perceived state and maps against these references.
+Autonomy must obtain vessel state through MAVROS and buoy locations through
+observations; perfect motion must not populate the shared navigation TF tree.
+Camera mounting transforms remain available on ordinary `/tf_static`.
+This separation is a topic contract, not an enforced access restriction.
+
 ### Simulation Limitations
+
+The initial supported workflow is one uninterrupted simulation run per mapping
+session. Pause/resume, resetting Gazebo while autonomy remains running, and
+recovery across partial stack restarts are unsupported. The operator starts
+and stops the complete stack. Timestamp compatibility and stale-data rejection
+are still required during normal operation.
+
+This excludes simulator pause/reset recovery, not the separately agreed mapping
+start/pause/reset operations or handling of a flight-controller estimator-origin
+change during a running session.
 
 ## Deployment and Runtime Lifecycle
 
 ### Container Boundaries and Dependencies
+
+The target simulation stack has Simulation, Simulation Adapter, and shared
+autonomy services. Physical deployment selects the Hardware Adapter in place
+of the Simulation Adapter. MAVROS belongs to the selected Adapter; shared
+autonomy consumes its ROS interfaces. The current deployment must be migrated
+to this boundary. GCS deployment remains later work.
 
 ### Simulation Bringup
 
 ### Physical Vessel Bringup and Hardware Access
 
 ### Startup, Readiness, and Shutdown
+
+Each fresh simulation launch starts a new mapping session with an empty map
+and empty observation buffers. This application-session policy does not require
+wiping persisted SITL parameters or deleting simulation logs. Stop the complete
+stack to end a run; no pause/resume or partial-restart recovery is required for
+the first version. Detailed startup readiness checks and shutdown sequencing
+remain to be specified.
 
 ### Software Versions and Platform Compatibility
 
@@ -683,7 +788,8 @@ milestones; bearing-based localization remains a planned priority.
 
 ## Open Design Decisions
 
-- Specify exact state/map frame names, geographic transformation, TF ownership,
+- Specify exact state/map frame names and geographic transformation under the
+  agreed ownership split (Adapter camera transforms; state integration motion TF),
   reset detection, synchronization tolerances, and state diagnostics.
 - Tune depth patch and validity thresholds, association gates, uncertainty
   weighting/floor, and tentative-record expiry using representative data.
@@ -697,7 +803,8 @@ milestones; bearing-based localization remains a planned priority.
   behavior; vessel response belongs to subsequent autonomy design.
 - Confirm OpenCV version, image encodings, detector tuning, and measurable
   performance targets using representative images and hardware.
-- Resolve physical camera remaps and Adapter frame normalization before
+- Implement physical camera remaps and Adapter frame normalization using the
+  agreed generic convention before
   depth/state integration.
 
 ## References

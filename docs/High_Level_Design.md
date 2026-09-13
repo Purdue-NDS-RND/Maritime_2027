@@ -10,7 +10,10 @@ It records the agreed architectural direction. The simulator, environment
 adapters, and shared autonomy bringup have separate project areas; the remaining
 autonomy packages and GCS layout below are proposed future work, not an implemented
 navigation system. Detailed interfaces, algorithms, control commands, and operational
-policies will be decided during component design.
+policies are recorded in the [Low-Level Design](Low_Level_Design.md) as they are
+settled. Where the documents overlap, that newer detailed design controls the
+implementation instructions; this document remains the authority for mission-level
+scope and component boundaries.
 
 Competition-specific behavior remains subject to the release and review of the
 2027 requirements. Refer to the [official AIMM ICC website](https://www.trine.edu/innovation-one/aimm/index.aspx)
@@ -25,10 +28,12 @@ cameras connected through the provided capture-card hardware and MIPI cabling,
 GPS-assisted positioning, and an autopilot flight controller equipped with an
 IMU and GPS. The flight controller will provide the primary vessel-state
 estimate. MAVROS is the intended communication layer between ROS 2 and the
-flight controller.
+flight controller and belongs to whichever environment-specific Adapter is
+selected for a deployment.
 
 The same autonomy components should operate in simulation and on the real boat.
-An Adapter layer provides the environment-facing connections for each deployment:
+A bidirectional Adapter data layer provides the environment-facing connections
+for each deployment:
 the Simulation Adapter connects Gazebo/SITL, while the Hardware Adapter wraps
 the physical cameras and flight controller. The shared autonomy components see
 the same ROS-facing sensor and vehicle interfaces in either environment.
@@ -55,20 +60,25 @@ physical-vessel bringup will provide two independently calibrated ZED X Mini
 sources. This change in source count must not require different mapping,
 planning, or mission-management responsibilities.
 
+The agreed public boundary uses `/sensors/camera_N/...` topics and
+`camera_N_link` / `camera_N_optical_frame` frames. Camera model names and serial
+numbers remain deployment configuration rather than autonomy interface names.
+
 The current simulator's `zed2i_*` frame names are implementation identifiers
 from its initial RGB-D model. They do not identify the target flight cameras.
-Detailed interface design should either normalize those names in the simulation
-adapter or replace them with camera-neutral frame names before autonomy code
-depends on them.
+The Simulation Adapter must normalize those legacy names to the agreed generic
+interface before shared autonomy depends on them.
 
-The target application deployment has four containers in simulation, with one
-autonomy container shared between simulation and the boat. The GCS remains future
-work; the current simulation workflow starts the first three services below:
+The target simulation deployment has three core services: Simulation, Simulation
+Adapter, and shared Autonomy. The future GCS adds a fourth service. On the vessel,
+the Hardware Adapter replaces the two simulation-specific services while the same
+autonomy responsibilities are retained. The rows below describe target roles, not
+the set of containers implemented or started today:
 
 | Container | Responsibilities |
 |---|---|
-| Simulation | Water environment, simulated vessel, sensors, autopilot, scenarios, and evaluation references. |
-| Simulation Adapter | Gazebo-to-ROS translation, simulated camera extrinsics, and simulation-only evaluation tools. Runs only alongside simulation. |
+| Simulation | Water environment, simulated vessel, sensors, autopilot, scenarios, evaluation references, and simulation-only evaluation tools. |
+| Simulation Adapter | Gazebo-to-ROS translation, simulated camera extrinsics, MAVROS connected to SITL, and publication of evaluation-only source interfaces. Runs only alongside simulation. |
 | Hardware Adapter | Wrappers and publishers for the physical ZED X Mini camera streams, plus MAVROS and its connection to the physical flight controller. Runs only on the vessel. |
 | ROS 2 / Autonomy | Camera-neutral perception, state integration, mapping, mission management, and planning/navigation. Shared by simulation and hardware. |
 | GCS | Web application and backend for visualization, telemetry, and operator commands. |
@@ -161,10 +171,11 @@ flowchart TD
 
 The GCS backend connects operator actions to the autonomy system's mission and
 vehicle-control capabilities. The selected Adapter provides the
-flight-controller connection: MAVROS is part of the Hardware Adapter for the
-vessel, while the Simulation Adapter provides the corresponding SITL bridge.
-The exact GCS transport, command coordination, and API belong to detailed
-design.
+flight-controller connection: its MAVROS instance exposes the standard
+`/mavros/...` topics, services, and command interfaces directly. The Hardware
+Adapter connects it to the physical controller, while the Simulation Adapter
+connects it to SITL. The exact GCS transport, command coordination, and API
+belong to detailed design.
 
 Simulation ground truth is available for evaluation only. It must not supply
 the buoy map or replace the observations and estimates used to navigate.
@@ -186,13 +197,17 @@ limitations documented when interpreting results.
 
 Exactly one environment-specific Adapter is selected for a deployment. Both
 Adapters implement the same ROS-facing boundary consumed by shared autonomy;
-they differ only in how they connect to sensors, time, and the vehicle.
+they differ only in how they connect to sensors, time, and the vehicle. The
+selected Adapter owns fixed camera mounting and optical transforms; shared state
+integration owns estimated vessel-motion transforms such as `odom -> base_link`.
 
 #### Simulation Adapter Container
 
 The Simulation Adapter translates Gazebo sensor output into ROS messages
 consumed by autonomy. It owns the Gazebo bridge dependencies, simulated camera
-extrinsics, SITL vehicle bridge, and simulation-only evaluation clients. ROS
+extrinsics, MAVROS startup and configuration for the SITL connection, and
+publication of evaluation-only source interfaces. Simulation test tooling owns
+the clients that consume truth or command the simulated vessel. ROS
 being present here does not make it part of onboard autonomy: it implements the
 simulated sensor and vehicle boundary.
 
@@ -236,10 +251,12 @@ Sharing the autonomy components does not require the
 desktop and Jetson to use an identical binary image; platform-specific builds
 and hardware integration may be necessary.
 
-MAVROS and camera drivers do not belong in this shared image; they are owned by
-the selected Adapter. The initial extracted autonomy container provides shared
-bringup and MAVROS-facing interfaces only; perception, mapping, navigation,
-mission management, and production ZED integration remain future work.
+In the target architecture, MAVROS and camera drivers do not belong in this
+shared image; they are owned by the selected Adapter. The current implementation
+has not completed that migration: `autonomy/container/` still installs MAVROS,
+and `maritime_bringup/launch/vehicle.launch.py` launches it. No shared perception,
+state-integration, mapping, navigation, or mission package is implemented yet,
+and production ZED integration also remains future work.
 
 Shared autonomy packages consume camera-neutral observations, calibration, and
 transforms. Simulation and hardware configuration must account for source count
@@ -273,30 +290,33 @@ The GCS will provide operator authority to arm and disarm the vessel and start
 and stop missions. Detailed interaction design, manual steering, command
 arbitration, and connection-loss behavior are separate design decisions.
 
-## Proposed Project Organization
+## Target Project Organization
 
 Organize the repository by responsibility, with container configuration close to
-the application it deploys. The following combines the implemented container
-boundaries with the proposed future autonomy packages and GCS:
+the application it deploys. The following is the target layout; entries marked as
+future are not claims about the current checkout:
 
 ```text
 Maritime_2027/
 ├── docs/
 │   ├── Project_Overview.md
-│   └── High_Level_Design.md
+│   ├── High_Level_Design.md
+│   └── Low_Level_Design.md
 ├── Simulation/
-│   ├── Dockerfile
-│   ├── compose.yaml             # Current simulation stack entry point
+│   ├── Makefile                 # Simulator command surface
+│   ├── container/
+│   │   ├── Dockerfile
+│   │   └── compose.yaml         # Current simulation stack entry point
 │   ├── worlds/
 │   ├── models/
 │   ├── scenarios/
 │   ├── scripts/                 # Scenario generation and regression orchestration
 │   └── docs/
 ├── Adapter/
-│   ├── simulation/                    # Selected for Gazebo/SITL deployments
+│   ├── simulation/                    # Future split; selected for Gazebo/SITL
 │   │   ├── container/
 │   │   └── ros_ws/src/blueboat_sim_bringup/
-│   └── hardware/                      # Selected for the physical vessel
+│   └── hardware/                      # Future; selected for the physical vessel
 │       ├── container/
 │       └── ros_ws/src/blueboat_hw_bringup/ # Camera wrappers/publishers and MAVROS
 ├── autonomy/
@@ -346,8 +366,15 @@ Each Adapter has its own small ROS workspace because its dependencies and runtim
 purpose differ from shared onboard autonomy. This is not a workspace per
 autonomy component: all onboard packages still share `autonomy/ros_ws/`.
 
-Currently, `Simulation/compose.yaml` orchestrates simulation, adapter, and autonomy
-while reusing the autonomy service definition in `deployment/compose.base.yaml`.
+Currently, the Simulation Adapter is still the flat `Adapter/` project rather
+than the target `Adapter/simulation/` subtree, and no `Adapter/hardware/` project
+exists. Its bridge publishes the legacy `/blueboat/camera/...` topics and
+`zed2i_*` frames. MAVROS is still installed and launched from `autonomy/`, as
+described above. These are migration gaps, not alternate interface decisions.
+
+Currently, `Simulation/container/compose.yaml` orchestrates simulation, adapter,
+and autonomy while reusing the autonomy service definition in
+`deployment/compose.base.yaml`.
 `deployment/compose.autonomy.yaml` is a transitional standalone autonomy profile;
 future vessel deployment will add the Hardware Adapter and connect it to the
 shared autonomy service. It is not a completed Jetson hardware deployment.
@@ -359,6 +386,11 @@ Development should first establish the simulation-to-autonomy connection, then
 build perception, vessel-state integration, and the perceived buoy map. Planning,
 navigation, and mission management can build on those capabilities to demonstrate
 complete buoy-navigation runs.
+
+The initial mapping workflow assumes one uninterrupted whole-stack simulation run
+per mapping session. Simulator pause/reset recovery and partial-stack restart
+recovery are outside that first implementation; mapping's own start, pause, and
+reset operations remain part of the application design.
 
 Evaluation should connect component behavior to mission outcomes: usable buoy
 observations, consistent maps, appropriate routes, and repeatable navigation
@@ -374,10 +406,12 @@ the autonomy system uses.
 
 The following remain open without blocking this component structure:
 
-- Perception methods, mapping methods, and detailed integration of
-  flight-controller state estimates.
+- Perception tuning, mapping estimation details beyond the selected depth-first
+  baseline, and detailed integration of flight-controller state estimates.
 - Selection of Nav2 or another planning/navigation approach.
-- Exact ROS interfaces, coordinate-frame conventions, and control command forms.
+- Exact state/map frame names and geographic transforms, remaining ROS interface
+  details, and control command forms. The generic camera boundary and Adapter
+  camera-transform ownership are already settled.
 - GCS hosting location, web technologies, and communication transport.
 - Detailed mission behavior, operator interaction, and response to failures or
   lost connections.
