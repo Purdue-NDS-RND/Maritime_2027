@@ -1,5 +1,6 @@
 """Behavior tests for scenario rendering and buoy category assets."""
 
+import copy
 import json
 import math
 from pathlib import Path
@@ -40,6 +41,14 @@ class ScenarioRenderingTests(unittest.TestCase):
             text=True,
         )
         return result, world_path, manifest_path
+
+    def assert_rejected_before_output(self, scenario, message):
+        result, world_path, manifest_path = self.render(scenario)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(message, result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse(world_path.exists())
+        self.assertFalse(manifest_path.exists())
 
     def test_repeated_category_entities_preserve_distinct_identity_contract(self):
         scenario = json.loads(
@@ -189,6 +198,102 @@ class ScenarioRenderingTests(unittest.TestCase):
                 self.assertGreater(green, max(red, blue))
             else:
                 self.assertGreater(blue, max(red, green))
+
+    def test_non_finite_pose_inputs_are_rejected_before_output(self):
+        baseline = {
+            "name": "invalid_pose",
+            "buoys": [
+                {
+                    "name": "red_gate_port",
+                    "marker_id": 1,
+                    "pose": {"x": 7.0, "y": 1.5, "z": 0.0, "yaw_deg": 192.0},
+                }
+            ],
+        }
+        for field in ("x", "y", "z", "yaw_deg"):
+            for value in (float("nan"), float("inf"), 10**400, "7.0", True):
+                with self.subTest(field=field, value=value):
+                    scenario = copy.deepcopy(baseline)
+                    scenario["buoys"][0]["pose"][field] = value
+                    self.assert_rejected_before_output(
+                        scenario,
+                        f"Buoy red_gate_port pose.{field} must be a finite number",
+                    )
+
+    def test_non_finite_jitter_inputs_are_rejected_before_output(self):
+        baseline = {
+            "name": "invalid_jitter",
+            "buoys": [
+                {
+                    "name": "red_gate_port",
+                    "marker_id": 1,
+                    "pose": {"x": 7.0, "y": 1.5, "z": 0.0, "yaw_deg": 192.0},
+                    "jitter": {"x": 0.1, "y": 0.1, "yaw_deg": 1.0},
+                }
+            ],
+        }
+        for field in ("x", "y", "yaw_deg"):
+            for value in (float("nan"), float("inf"), 10**400, "0.1", True):
+                with self.subTest(field=field, value=value):
+                    scenario = copy.deepcopy(baseline)
+                    scenario["buoys"][0]["jitter"][field] = value
+                    self.assert_rejected_before_output(
+                        scenario,
+                        f"Buoy red_gate_port jitter.{field} must be a finite number",
+                    )
+
+    def test_marker_id_requires_integer_source_type(self):
+        for marker_id in (1.0, "1", True):
+            with self.subTest(marker_id=marker_id):
+                scenario = {
+                    "name": "invalid_marker_id",
+                    "buoys": [
+                        {
+                            "name": "red_gate_port",
+                            "marker_id": marker_id,
+                            "pose": {"x": 7.0, "y": 1.5, "yaw_deg": 192.0},
+                        }
+                    ],
+                }
+                self.assert_rejected_before_output(
+                    scenario,
+                    "Buoy red_gate_port marker_id must be an integer",
+                )
+
+    def test_entity_name_requires_string_source_type(self):
+        scenario = {
+            "name": "invalid_entity_name_type",
+            "buoys": [
+                {
+                    "name": 7,
+                    "marker_id": 1,
+                    "pose": {"x": 7.0, "y": 1.5, "yaw_deg": 192.0},
+                }
+            ],
+        }
+
+        self.assert_rejected_before_output(
+            scenario,
+            "Buoy at index 0 name must be a string",
+        )
+
+    def test_scenario_name_requires_valid_string_identity(self):
+        for scenario_name in (7, "Repeated-Red"):
+            with self.subTest(scenario_name=scenario_name):
+                scenario = {
+                    "name": scenario_name,
+                    "buoys": [
+                        {
+                            "name": "red_gate_port",
+                            "marker_id": 1,
+                            "pose": {"x": 7.0, "y": 1.5, "yaw_deg": 192.0},
+                        }
+                    ],
+                }
+                self.assert_rejected_before_output(
+                    scenario,
+                    "Scenario name must be a string matching ^[a-z][a-z0-9_]*$",
+                )
 
 
 if __name__ == "__main__":

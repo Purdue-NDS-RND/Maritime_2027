@@ -19,6 +19,8 @@ CATEGORY_BY_MARKER_ID = {
     3: "blue",
 }
 ENTITY_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+POSE_FIELDS = ("x", "y", "yaw_deg")
+JITTER_FIELDS = ("x", "y", "yaw_deg")
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,15 +33,73 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def is_finite_number(value: object) -> bool:
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def validate_scenario_source(config: object) -> dict:
+    if not isinstance(config, dict):
+        raise SystemExit("Scenario source must be a JSON object")
+    scenario_name = config.get("name")
+    if not isinstance(scenario_name, str) or not ENTITY_NAME_PATTERN.fullmatch(
+        scenario_name
+    ):
+        raise SystemExit(
+            "Scenario name must be a string matching ^[a-z][a-z0-9_]*$"
+        )
+    buoys = config.get("buoys")
+    if not isinstance(buoys, list):
+        raise SystemExit("Scenario buoys must be an array")
+    for index, source in enumerate(buoys):
+        if not isinstance(source, dict):
+            raise SystemExit(f"Buoy at index {index} must be an object")
+        name = source.get("name")
+        if not isinstance(name, str):
+            raise SystemExit(f"Buoy at index {index} name must be a string")
+        marker_id = source.get("marker_id")
+        if type(marker_id) is not int:
+            raise SystemExit(f"Buoy {name} marker_id must be an integer")
+        pose = source.get("pose")
+        if not isinstance(pose, dict):
+            raise SystemExit(f"Buoy {name} pose must be an object")
+        for field in (*POSE_FIELDS, "z"):
+            value = pose.get(field, 0.0) if field == "z" else pose.get(field)
+            if not is_finite_number(value):
+                raise SystemExit(
+                    f"Buoy {name} pose.{field} must be a finite number"
+                )
+        jitter = source.get("jitter", {})
+        if not isinstance(jitter, dict):
+            raise SystemExit(f"Buoy {name} jitter must be an object")
+        for field in JITTER_FIELDS:
+            value = jitter.get(field, 0.0)
+            if not is_finite_number(value):
+                raise SystemExit(
+                    f"Buoy {name} jitter.{field} must be a finite number"
+                )
+    return config
+
+
 def resolved_pose(spec: dict, rng: random.Random | None) -> dict:
-    pose = dict(spec["pose"])
+    source_pose = spec["pose"]
+    pose = {field: float(source_pose[field]) for field in POSE_FIELDS}
+    pose["z"] = float(source_pose.get("z", 0.0))
     if rng is not None:
         jitter = spec.get("jitter", {})
-        for key in ("x", "y", "yaw_deg"):
+        for key in JITTER_FIELDS:
             extent = float(jitter.get(key, 0.0))
-            pose[key] = float(pose[key]) + rng.uniform(-extent, extent)
-    pose["z"] = float(pose.get("z", 0.0))
-    return {key: float(value) for key, value in pose.items()}
+            pose[key] += rng.uniform(-extent, extent)
+    for field, value in pose.items():
+        if not math.isfinite(value):
+            raise SystemExit(
+                f"Buoy {spec['name']} resolved pose.{field} must be a finite number"
+            )
+    return pose
 
 
 def validate_buoys(buoys: list[dict]) -> None:
@@ -68,12 +128,15 @@ def validate_buoys(buoys: list[dict]) -> None:
 
 def main() -> int:
     args = parse_args()
-    config = json.loads(args.scenario.read_text(encoding="utf-8"))
+    try:
+        loaded_config = json.loads(args.scenario.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"Scenario source is not valid JSON: {error.msg}") from None
+    config = validate_scenario_source(loaded_config)
     rng = random.Random(args.seed) if args.seed is not None else None
     buoys = []
     for source in config["buoys"]:
         item = dict(source)
-        item["marker_id"] = int(item["marker_id"])
         item["resolved_pose"] = resolved_pose(item, rng)
         buoys.append(item)
     validate_buoys(buoys)
@@ -115,10 +178,6 @@ def main() -> int:
             }
         )
 
-    args.output_world.parent.mkdir(parents=True, exist_ok=True)
-    args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    ET.indent(tree, space="  ")
-    tree.write(args.output_world, encoding="utf-8", xml_declaration=True)
     manifest = {
         "schema_version": 1,
         "scenario": config["name"],
@@ -128,7 +187,16 @@ def main() -> int:
         "camera_mount": {"x": 0.35, "y": 0.0, "z": 0.40},
         "buoys": manifest_buoys,
     }
-    args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    try:
+        manifest_text = json.dumps(manifest, indent=2, allow_nan=False) + "\n"
+    except ValueError:
+        raise SystemExit("Resolved manifest contains a non-finite numeric value") from None
+
+    args.output_world.parent.mkdir(parents=True, exist_ok=True)
+    args.manifest.parent.mkdir(parents=True, exist_ok=True)
+    ET.indent(tree, space="  ")
+    tree.write(args.output_world, encoding="utf-8", xml_declaration=True)
+    args.manifest.write_text(manifest_text, encoding="utf-8")
     print(f"Rendered {config['name']} with {len(buoys)} buoy(s) to {args.output_world}")
     return 0
 
