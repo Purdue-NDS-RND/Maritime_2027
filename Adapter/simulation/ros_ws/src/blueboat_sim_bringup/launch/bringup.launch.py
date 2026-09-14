@@ -57,6 +57,9 @@ def generate_launch_description():
             }],
         ),
         required_node(
+            package="blueboat_mavlink_monitor", executable="mavlink_v2_monitor", name="mavlink_v2_monitor", output="screen",
+        ),
+        required_node(
             package="mavros", executable="mavros_node", name="mavros", namespace="/", output="screen",
             parameters=[str(package_share / "config" / "mavros.yaml"), {"fcu_url": ParameterValue(fcu_url, value_type=str)}],
         ),

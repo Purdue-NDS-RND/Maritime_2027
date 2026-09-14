@@ -99,3 +99,7 @@ def validate_graph(topic_names, service_names):
         if service_names.get(name) != [expected]:
             return False, f"service_contract_mismatch:{name}"
     return True, "ready"
+
+
+def parameter_mismatches(expected, observed):
+    return [name for name, value in expected.items() if observed.get(name) != value]
