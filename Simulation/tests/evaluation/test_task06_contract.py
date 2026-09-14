@@ -122,6 +122,16 @@ class Task06ContractTests(unittest.TestCase):
         self.assertIn("camera_0_optical_frame", sources)
         self.assertIn("quiet_NaN", sources)
 
+    def test_camera_diagnostics_use_aggregate_readiness_and_exact_reasons(self):
+        source = (ADAPTER / "ros_ws" / "src" / "blueboat_camera_adapter" / "src" / "camera_boundary.cpp").read_text()
+        self.assertIn('evidence.value = aggregate_ready', source)
+        self.assertIn('return "frame_mismatch"', source)
+        self.assertIn('return "unsupported_encoding"', source)
+        self.assertIn('return "invalid_dimensions"', source)
+        self.assertIn('return "invalid_data_layout"', source)
+        self.assertNotIn('"invalid_color_content"', source)
+        self.assertNotIn('"invalid_depth_content"', source)
+
     def test_evaluator_guard_fails_without_explicit_simulation_opt_in(self):
         package = ROOT / "Simulation" / "tests" / "evaluation" / "ros_ws" / "src" / "blueboat_sim_evaluation"
         env = os.environ.copy()

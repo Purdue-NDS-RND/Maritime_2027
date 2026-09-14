@@ -81,17 +81,26 @@ class CameraBoundary final : public rclcpp::Node {
     RCLCPP_ERROR(get_logger(), "camera %s rejection: %s", component.c_str(), reason.c_str());
   }
 
-  bool valid_color(const sensor_msgs::msg::Image & message) const {
-    const bool encoding = message.encoding == "rgb8" || message.encoding == "bgr8";
-    return encoding && message.header.frame_id == kPrivateFrame && message.width > 0 &&
-           message.height > 0 && message.step == message.width * 3U &&
-           message.data.size() == static_cast<size_t>(message.step) * message.height;
+  std::string invalid_color_reason(const sensor_msgs::msg::Image & message) const {
+    if (message.header.frame_id != kPrivateFrame) return "frame_mismatch";
+    if (message.encoding != "rgb8" && message.encoding != "bgr8") return "unsupported_encoding";
+    if (message.width == 0 || message.height == 0) return "invalid_dimensions";
+    if (message.step != message.width * 3U ||
+        message.data.size() != static_cast<size_t>(message.step) * message.height) {
+      return "invalid_data_layout";
+    }
+    return "";
   }
 
-  bool valid_depth(const sensor_msgs::msg::Image & message) const {
-    return message.encoding == "32FC1" && message.header.frame_id == kPrivateFrame &&
-           message.width > 0 && message.height > 0 && message.step == message.width * 4U &&
-           message.data.size() == static_cast<size_t>(message.step) * message.height;
+  std::string invalid_depth_reason(const sensor_msgs::msg::Image & message) const {
+    if (message.header.frame_id != kPrivateFrame) return "frame_mismatch";
+    if (message.encoding != "32FC1") return "unsupported_encoding";
+    if (message.width == 0 || message.height == 0) return "invalid_dimensions";
+    if (message.step != message.width * 4U ||
+        message.data.size() != static_cast<size_t>(message.step) * message.height) {
+      return "invalid_data_layout";
+    }
+    return "";
   }
 
   bool valid_info(const sensor_msgs::msg::CameraInfo & message) const {
@@ -120,7 +129,8 @@ class CameraBoundary final : public rclcpp::Node {
     const int64_t stamp = stamp_ns(message->header.stamp);
     const auto stamp_error = invalid_stamp_reason(stamp, last_color_stamp_);
     if (!stamp_error.empty()) { reject("color", stamp_error); return; }
-    if (!valid_color(*message)) { reject("color", "invalid_color_content"); return; }
+    const auto content_error = invalid_color_reason(*message);
+    if (!content_error.empty()) { reject("color", content_error); return; }
     last_color_stamp_ = stamp;
     color_arrival_ = steady_clock_.now().nanoseconds();
     colors_.emplace(stamp, std::move(message));
@@ -132,7 +142,8 @@ class CameraBoundary final : public rclcpp::Node {
     const int64_t stamp = stamp_ns(message->header.stamp);
     const auto stamp_error = invalid_stamp_reason(stamp, last_depth_stamp_);
     if (!stamp_error.empty()) { reject("depth", stamp_error); return; }
-    if (!valid_depth(*message)) { reject("depth", "invalid_depth_content"); return; }
+    const auto content_error = invalid_depth_reason(*message);
+    if (!content_error.empty()) { reject("depth", content_error); return; }
     last_depth_stamp_ = stamp;
     depth_arrival_ = steady_clock_.now().nanoseconds();
     depths_.emplace(stamp, std::move(message));
@@ -324,6 +335,14 @@ class CameraBoundary final : public rclcpp::Node {
     for (const auto & item : array.status) {
       if (item.name == "camera_adapter/configuration") continue;
       if (item.level > aggregate) { aggregate = item.level; reason = item.message; }
+    }
+    const std::string aggregate_ready =
+        aggregate == diagnostic_msgs::msg::DiagnosticStatus::OK ? "true" : "false";
+    for (auto & item : array.status) {
+      if (item.name == "camera_adapter/configuration") continue;
+      for (auto & evidence : item.values) {
+        if (evidence.key == "source_ready") evidence.value = aggregate_ready;
+      }
     }
     array.status.push_back(component_status("source_readiness", aggregate, reason));
     diagnostics_pub_->publish(array);
