@@ -1,4 +1,4 @@
-- ros_topic_name: /blueboat/camera/depth/image_rect_raw
+- ros_topic_name: /adapter/private/camera_0/depth
   gz_topic_name: /blueboat/rgbd_camera/depth_image
   ros_type_name: sensor_msgs/msg/Image
   gz_type_name: gz.msgs.Image

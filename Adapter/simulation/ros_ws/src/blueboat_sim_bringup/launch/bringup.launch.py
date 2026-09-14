@@ -1,71 +1,83 @@
+"""One fail-fast launch chain for every required Simulation Adapter process."""
+
+import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, Shutdown
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+from blueboat_sim_bringup.manifest import load_manifest, truth_bridge_arguments
+
+
+def required_node(**kwargs):
+    name = kwargs.get("name", kwargs["executable"])
+    return Node(**kwargs, on_exit=Shutdown(reason=f"required Adapter child exited: {name}"))
+
+
+def static_transform(name, arguments, truth=False):
+    remappings = [("/tf_static", "/blueboat/ground_truth/tf_static")] if truth else []
+    return required_node(
+        package="tf2_ros", executable="static_transform_publisher", name=name,
+        output="screen", arguments=arguments, remappings=remappings,
+    )
 
 
 def generate_launch_description():
     package_share = Path(get_package_share_directory("blueboat_sim_bringup"))
-
-    bridge = Node(
-        package="ros_gz_bridge",
-        executable="parameter_bridge",
-        name="blueboat_gz_bridge",
-        output="screen",
-        parameters=[{"config_file": str(package_share / "config" / "bridge.yaml")}],
-    )
-    rgb_bridge = Node(
-        package="ros_gz_bridge",
-        executable="parameter_bridge",
-        name="blueboat_rgb_bridge",
-        output="screen",
-        parameters=[{"config_file": str(package_share / "config" / "bridge_rgb.yaml")}],
-    )
-    depth_bridge = Node(
-        package="ros_gz_bridge",
-        executable="parameter_bridge",
-        name="blueboat_depth_bridge",
-        output="screen",
-        parameters=[{"config_file": str(package_share / "config" / "bridge_depth.yaml")}],
-    )
-    static_frames = [
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="world_to_odom",
-            remappings=[("/tf_static", "/blueboat/ground_truth/tf_static")],
-            arguments=["--x", "0", "--y", "0", "--z", "0", "--roll", "0", "--pitch", "0", "--yaw", "0", "--frame-id", "world", "--child-frame-id", "odom"],
+    manifest_path = os.environ.get("SCENARIO_MANIFEST", "/scenario/active.manifest.json")
+    manifest = load_manifest(manifest_path)
+    fcu_url = LaunchConfiguration("fcu_url")
+    actions = [
+        DeclareLaunchArgument(
+            "fcu_url", default_value=EnvironmentVariable("FCU_URL", default_value="udp://:14552@"),
+            description="Simulation Adapter-owned SITL endpoint",
         ),
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="base_to_zed2i",
-            arguments=["--x", "0.35", "--y", "0", "--z", "0.40", "--roll", "0", "--pitch", "0", "--yaw", "0", "--frame-id", "base_link", "--child-frame-id", "zed2i_camera_link"],
+        required_node(
+            package="ros_gz_bridge", executable="parameter_bridge", name="blueboat_gz_bridge", output="screen",
+            parameters=[{"config_file": str(package_share / "config" / "bridge.yaml")}],
         ),
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="zed2i_to_optical",
-            arguments=["--x", "0", "--y", "0", "--z", "0", "--roll", "-1.5707963267948966", "--pitch", "0", "--yaw", "-1.5707963267948966", "--frame-id", "zed2i_camera_link", "--child-frame-id", "zed2i_left_camera_optical_frame"],
+        required_node(
+            package="ros_gz_bridge", executable="parameter_bridge", name="blueboat_rgb_bridge", output="screen",
+            parameters=[{"config_file": str(package_share / "config" / "bridge_rgb.yaml")}],
         ),
-    ]
-    # Duplicate camera extrinsics into the evaluation tree. Navigation sees only
-    # camera extrinsics, never the perfect Gazebo world/odom/base_link pose.
-    evaluation_frames = [
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="evaluation_base_to_camera",
-            arguments=["--x", "0.35", "--y", "0", "--z", "0.40", "--frame-id", "base_link", "--child-frame-id", "zed2i_camera_link"],
-            remappings=[("/tf_static", "/blueboat/ground_truth/tf_static")],
+        required_node(
+            package="ros_gz_bridge", executable="parameter_bridge", name="blueboat_depth_bridge", output="screen",
+            parameters=[{"config_file": str(package_share / "config" / "bridge_depth.yaml")}],
         ),
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            name="evaluation_camera_to_optical",
-            arguments=["--roll", "-1.5707963267948966", "--pitch", "0", "--yaw", "-1.5707963267948966", "--frame-id", "zed2i_camera_link", "--child-frame-id", "zed2i_left_camera_optical_frame"],
-            remappings=[("/tf_static", "/blueboat/ground_truth/tf_static")],
+        required_node(
+            package="blueboat_camera_adapter", executable="camera_boundary", name="camera_0_boundary", output="screen",
+            parameters=[{"use_sim_time": True}],
+        ),
+        required_node(
+            package="mavros", executable="mavros_node", name="mavros", namespace="/", output="screen",
+            parameters=[str(package_share / "config" / "mavros.yaml"), {"fcu_url": ParameterValue(fcu_url, value_type=str)}],
+        ),
+        required_node(
+            package="blueboat_sim_bringup", executable="diagnostics", name="simulation_adapter_diagnostics", output="screen",
+            parameters=[{"use_sim_time": True}],
+        ),
+        static_transform(
+            "world_to_odom",
+            ["--x", "0", "--y", "0", "--z", "0", "--roll", "0", "--pitch", "0", "--yaw", "0", "--frame-id", "world", "--child-frame-id", "odom"],
+            truth=True,
+        ),
+        static_transform(
+            "base_to_camera_0",
+            ["--x", "0.35", "--y", "0", "--z", "0.40", "--roll", "0", "--pitch", "0", "--yaw", "0", "--frame-id", "base_link", "--child-frame-id", "camera_0_link"],
+        ),
+        static_transform(
+            "camera_0_to_optical",
+            ["--x", "0", "--y", "0", "--z", "0", "--roll", "-1.5707963267948966", "--pitch", "0", "--yaw", "-1.5707963267948966", "--frame-id", "camera_0_link", "--child-frame-id", "camera_0_optical_frame"],
         ),
     ]
-    return LaunchDescription([bridge, rgb_bridge, depth_bridge, *static_frames, *evaluation_frames])
+    for key, ros_topic, bridge_argument in truth_bridge_arguments(manifest):
+        gz_topic = bridge_argument.split("@")[0]
+        actions.append(required_node(
+            package="ros_gz_bridge", executable="parameter_bridge", name=f"truth_bridge_{key}", output="screen",
+            arguments=[bridge_argument], remappings=[(gz_topic, ros_topic)],
+        ))
+    return LaunchDescription(actions)

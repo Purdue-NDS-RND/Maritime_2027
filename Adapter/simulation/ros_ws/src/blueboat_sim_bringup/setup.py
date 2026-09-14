@@ -17,13 +17,13 @@ setup(
     zip_safe=True,
     maintainer="BlueBoat Simulation",
     maintainer_email="maintainer@example.com",
-    description="BlueBoat simulation ROS bringup and evaluation checks",
+    description="BlueBoat Simulation Adapter bringup and diagnostics",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
             "healthcheck = blueboat_sim_bringup.healthcheck:main",
-            "sensor_smoke = blueboat_sim_bringup.sensor_smoke:main",
-            "mavros_smoke = blueboat_sim_bringup.mavros_smoke:main",
+            "diagnostics = blueboat_sim_bringup.diagnostics:main",
+            "readiness = blueboat_sim_bringup.readiness:main",
         ]
     },
 )

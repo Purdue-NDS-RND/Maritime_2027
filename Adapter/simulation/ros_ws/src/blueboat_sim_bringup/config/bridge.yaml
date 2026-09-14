@@ -4,7 +4,7 @@
   gz_type_name: gz.msgs.Clock
   direction: GZ_TO_ROS
   qos_profile: CLOCK
-- ros_topic_name: /blueboat/camera/camera_info
+- ros_topic_name: /adapter/private/camera_0/camera_info
   gz_topic_name: /blueboat/rgbd_camera/camera_info
   ros_type_name: sensor_msgs/msg/CameraInfo
   gz_type_name: gz.msgs.CameraInfo
@@ -18,26 +18,6 @@
   direction: GZ_TO_ROS
 - ros_topic_name: /blueboat/ground_truth/odometry
   gz_topic_name: /model/blueboat/odometry
-  ros_type_name: nav_msgs/msg/Odometry
-  gz_type_name: gz.msgs.Odometry
-  direction: GZ_TO_ROS
-- ros_topic_name: /blueboat/ground_truth/buoy_0/odometry
-  gz_topic_name: /model/buoy_0/odometry
-  ros_type_name: nav_msgs/msg/Odometry
-  gz_type_name: gz.msgs.Odometry
-  direction: GZ_TO_ROS
-- ros_topic_name: /blueboat/ground_truth/buoy_1/odometry
-  gz_topic_name: /model/buoy_1/odometry
-  ros_type_name: nav_msgs/msg/Odometry
-  gz_type_name: gz.msgs.Odometry
-  direction: GZ_TO_ROS
-- ros_topic_name: /blueboat/ground_truth/buoy_2/odometry
-  gz_topic_name: /model/buoy_2/odometry
-  ros_type_name: nav_msgs/msg/Odometry
-  gz_type_name: gz.msgs.Odometry
-  direction: GZ_TO_ROS
-- ros_topic_name: /blueboat/ground_truth/buoy_3/odometry
-  gz_topic_name: /model/buoy_3/odometry
   ros_type_name: nav_msgs/msg/Odometry
   gz_type_name: gz.msgs.Odometry
   direction: GZ_TO_ROS
