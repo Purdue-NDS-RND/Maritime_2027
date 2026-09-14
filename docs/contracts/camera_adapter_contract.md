@@ -137,6 +137,46 @@ validator hashes the exact file bytes with SHA-256 and requires equality with
 the reference. The evidence store is mounted read-only; the runtime Adapter may
 neither generate nor approve its own evidence.
 
+Trust is owned by the **Maritime_2027 Release Maintainers**, not by either
+Adapter, a deployment operator, or an evidence submitter. Their canonical
+source is the version-controlled closed JSON manifest
+`deployment/camera_evidence_trust.json` on the protected default branch. A
+manifest change is valid only through a dedicated trust-change review approved
+by two Release Maintainers other than the added, rotated, or revoked key's
+holder; it must not be combined with Adapter runtime or deployment-configuration
+changes. This repository review is the sole authority for adding trust.
+
+The Hardware Adapter release build copies the reviewed manifest to the fixed
+image path `/etc/maritime/camera_evidence_trust.json`, owned by root and mode
+`0444`, and embeds the manifest's exact SHA-256 digest and integer
+`manifest_version` in the validator. Startup hashes the installed manifest and
+requires both embedded values. The path and digest are not configuration
+fields, cannot be supplied by a volume, environment variable, command-line
+argument, evidence artifact, or network lookup, and cannot be extended at
+runtime. An image with a missing, writable, over-mounted, or differently hashed
+manifest is non-conforming and reports `trust_store_invalid` before evidence is
+examined.
+
+The trust manifest has exactly `schema_id` (string
+`maritime.camera_evidence_trust`), `schema_version` (integer `1`),
+`manifest_version` (positive monotonically increasing integer), and `keys`
+(non-empty array). Each key record has exactly `approved_by`, `approval_key_id`,
+`public_key_ed25519`, `status`, `valid_from_utc`, and `revoked_at_utc`.
+Identities and key IDs are unique non-empty strings; the public key is exactly
+64 lowercase hexadecimal characters; `status` is `active` or `revoked`;
+`valid_from_utc` is RFC 3339 UTC; and `revoked_at_utc` is null for an active key
+or RFC 3339 UTC for a revoked key. Only the person or project role named by an
+active `approved_by` entry may approve camera evidence, using that entry's
+private key outside the runtime system.
+
+Key addition creates a new active record. Rotation adds a new key ID and marks
+the old record revoked; revocation marks the record revoked without removing
+it. Each operation increments `manifest_version`, follows the separate review
+rule, and requires a new Hardware Adapter release image. Evidence signed by a
+revoked key, outside the key's validity interval, or against any other manifest
+version/hash is rejected. A deployment must install the new approved image to
+consume a trust update; it cannot patch trust into a running or existing image.
+
 The JSON object is closed: unknown or missing fields are invalid. Its top-level
 fields are exactly:
 
@@ -148,19 +188,25 @@ fields are exactly:
   objects defined below.
 
 `validation` has exactly `status`, `validator_id`, `validator_version`,
-`approved_by`, `approved_at_utc`, `approved_payload_sha256`, `approval_key_id`,
-and `approval_signature_ed25519`. `status` is exactly `approved`,
+`trust_manifest_version`, `trust_manifest_sha256`, `approved_by`,
+`approved_at_utc`, `approved_payload_sha256`, `approval_key_id`, and
+`approval_signature_ed25519`. `status` is exactly `approved`,
 `validator_id` is exactly `maritime_camera_hardware_evidence_validator`, and
 `validator_version` is exactly `1.0.0`. `approved_by` is a non-empty external
 approval identity and `approved_at_utc` is an RFC 3339 UTC timestamp.
+`trust_manifest_version` and `trust_manifest_sha256` must exactly equal the
+embedded positive integer version and `sha256:<digest>` of the installed trust
+manifest.
 `approved_payload_sha256` is a `sha256:<digest>` of the RFC 8785 canonical JSON
 object containing exactly `contract_id`, `contract_version`, `target`,
 `measurement`, and `approved_timing` from the artifact. `approval_key_id` must
-resolve in the validator's read-only deployment trust store, which is managed
-outside Adapter configuration. `approval_signature_ed25519` is the lowercase
-hex Ed25519 signature by that trusted key over the ASCII bytes of
-`approved_payload_sha256`. The validator recomputes the payload hash and
-verifies this signature. Approval is produced offline after evidence review,
+resolve to the same active trust-manifest record as `approved_by`, and
+`approved_at_utc` must fall on or after its `valid_from_utc` while the key has
+not been revoked. `approval_signature_ed25519` is the lowercase hex Ed25519
+signature by that key over the RFC 8785 canonical JSON bytes of the other nine
+`validation` fields. The validator recomputes the payload hash and verifies the
+signed identity, status, time, validator version, trust-manifest binding, and
+payload hash together. Approval is produced offline after evidence review,
 never inferred from measurements or filled by the Adapter; a user-supplied key
 or self-signed artifact is rejected.
 
@@ -223,9 +269,11 @@ Hardware validation is ordered and fail closed:
 2. Require all four per-camera evidence-reference fields to be identical and
    syntactically valid.
 3. Resolve the regular file and verify its content hash before JSON parsing.
-4. Validate the closed evidence schema and versions, recompute the approved
-   payload hash, resolve the approval key only from the read-only trust store,
-   verify its Ed25519 signature, and require external approved status.
+4. Verify the installed trust manifest against the image-embedded hash and
+   version. Then validate the closed evidence schema and versions, recompute the
+   approved payload hash, require `approved_by` and `approval_key_id` to resolve
+   to the same active in-validity trust entry, verify the signed validation
+   fields, and require external approved status.
 5. Match every target field and the canonical capture-configuration hash to the
    running deployment.
 6. Validate simultaneous measurement, counts, zero-violation fields,
@@ -239,11 +287,12 @@ reason mapping is exact:
 
 | Failure | Diagnostic `reason` |
 |---|---|
+| Image-pinned trust manifest is missing, writable, over-mounted, malformed, wrong-version, or wrong-hash | `trust_store_invalid` |
 | Required store path, reference, or evidence field is absent | `evidence_missing` |
 | File does not resolve under the path policy, is not regular/read-only, or cannot be read | `evidence_unresolved` |
 | Exact file-byte digest differs from the content reference | `evidence_hash_mismatch` |
 | Reference syntax, JSON, closed schema, field type, artifact/contract version, canonical hash format, measurement count, metric, or invariant is invalid | `evidence_schema_invalid` |
-| Approved-payload digest, approval key, or Ed25519 signature does not verify against the external trust store | `evidence_signature_invalid` |
+| Approved-payload digest, approval identity/key membership, key validity/revocation state, trust-manifest binding, or Ed25519 signature does not verify | `evidence_signature_invalid` |
 | Verified artifact status is not `approved` | `evidence_unapproved` |
 | Running target identity or capture configuration differs | `evidence_target_mismatch` |
 | Configured values differ from `approved_timing` or fail to bound a measured maximum | `evidence_timing_mismatch` |
@@ -523,12 +572,18 @@ camera:
    reference, and simulation/hardware time policy. Negative tests remove each
    hardware timing field in turn and test missing, extra, reordered, and
    duplicate roster entries; every case must be `ERROR`, source-readiness false,
-   and roster cases must report `roster_mismatch`. For hardware, also test a
-   syntactically bogus reference, unresolved digest, byte/hash mismatch,
-   malformed or unknown-field schema, payload-hash or approval-signature
-   mismatch, unknown approval key, non-approved status, target mismatch, and
-   approved/configured timing mismatch. Require the corresponding evidence
-   reason and fail-closed source readiness for each case.
+   and roster cases must report `roster_mismatch`. Reject any deployment field,
+   mount, environment variable, or command-line option that tries to supply or
+   extend the trust-manifest path, hash, version, key, or identity. For hardware,
+   separately replace the image-pinned manifest with missing, writable,
+   over-mounted, malformed, wrong-version, and wrong-hash variants and require
+   `trust_store_invalid`. Also test a syntactically bogus reference, unresolved
+   digest, byte/hash mismatch, malformed or unknown-field evidence schema,
+   payload-hash or approval-signature mismatch, `approved_by`/key disagreement,
+   unknown, not-yet-valid, or revoked approval keys, non-approved status, trust
+   manifest version/hash mismatch, target mismatch, and approved/configured
+   timing mismatch. Require the corresponding evidence reason and fail-closed
+   source readiness for each case.
 2. Capture `ros2 topic list -t` and `ros2 topic info -v`; verify all public
    names, exact message types, and sensor QoS. Reject legacy or private camera
    names as public autonomy dependencies.
