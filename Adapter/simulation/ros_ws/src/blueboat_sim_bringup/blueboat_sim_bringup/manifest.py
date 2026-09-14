@@ -51,6 +51,7 @@ def load_manifest(path: str) -> dict:
     gazebo_names = set()
     truth_topics = set()
     evaluation_keys = set()
+    positions = []
     fields = {
         "name", "marker_id", "category", "gazebo_model_name", "model_uri",
         "model_pose", "marker_plane_center", "truth_topic", "evaluation_key",
@@ -87,6 +88,21 @@ def load_manifest(path: str) -> dict:
             abs_tol=1e-8,
         ):
             raise ValueError(f"inconsistent yaw for entity {name}")
+        pose = buoy["model_pose"]
+        if pose["x"] < 4.0 or abs(pose["x"]) > 40.0 or abs(pose["y"]) > 20.0:
+            raise ValueError(f"entity {name} is outside the supported test area")
+        for other_name, other_x, other_y in positions:
+            if math.hypot(pose["x"] - other_x, pose["y"] - other_y) < 1.0:
+                raise ValueError(f"entities {other_name} and {name} are less than 1 metre apart")
+        positions.append((name, pose["x"], pose["y"]))
+        normal = buoy["marker_plane_center"]
+        if not math.isclose(math.hypot(normal["normal_x"], normal["normal_y"]), 1.0, abs_tol=1e-8):
+            raise ValueError(f"marker normal for entity {name} is not unit length")
+        if not (
+            math.isclose(normal["normal_x"], math.cos(pose["yaw_rad"]), abs_tol=1e-8)
+            and math.isclose(normal["normal_y"], math.sin(pose["yaw_rad"]), abs_tol=1e-8)
+        ):
+            raise ValueError(f"marker normal for entity {name} disagrees with yaw")
         for collection, value, label in (
             (gazebo_names, buoy["gazebo_model_name"], "gazebo_model_name"),
             (truth_topics, buoy["truth_topic"], "truth_topic"),

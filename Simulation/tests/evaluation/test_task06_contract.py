@@ -17,6 +17,8 @@ sys.path.insert(0, str(BRINGUP))
 
 from blueboat_sim_bringup.manifest import load_manifest, truth_bridge_arguments
 from blueboat_sim_bringup.camera_contract import freshness, validate_camera_info, validate_image
+from blueboat_sim_bringup.camera_readiness import CameraReadinessModel
+from blueboat_sim_bringup.mavros_readiness import PUBLIC_SERVICES, PUBLIC_TOPICS, validate_fix, validate_graph
 
 
 def manifest(buoys):
@@ -68,6 +70,25 @@ class Task06ContractTests(unittest.TestCase):
         value["schema_version"] = 2
         with self.assertRaisesRegex(ValueError, "schema_version"):
             load_manifest(self.write_manifest(value))
+
+    def test_manifest_enforces_geometry_invariants(self):
+        cases = []
+        outside = manifest([buoy("red_gate_port", 1.5)])
+        outside["buoys"][0]["model_pose"]["x"] = 3.9
+        cases.append((outside, "outside"))
+        close = manifest([buoy("red_gate_port", 0.0), buoy("red_gate_starboard", 0.5)])
+        cases.append((close, "less than 1 metre"))
+        nonunit = manifest([buoy("red_gate_port", 1.5)])
+        nonunit["buoys"][0]["marker_plane_center"]["normal_x"] = -2.0
+        cases.append((nonunit, "unit length"))
+        inconsistent = manifest([buoy("red_gate_port", 1.5)])
+        inconsistent["buoys"][0]["marker_plane_center"]["normal_x"] = 0.0
+        inconsistent["buoys"][0]["marker_plane_center"]["normal_y"] = 1.0
+        cases.append((inconsistent, "disagrees with yaw"))
+        for value, expected in cases:
+            with self.subTest(expected=expected):
+                with self.assertRaisesRegex(ValueError, expected):
+                    load_manifest(self.write_manifest(value))
         value = manifest([buoy("red_gate_port", 1.5)])
         value["buoys"][0]["truth_topic"] = "/blueboat/ground_truth/buoy_1/odometry"
         with self.assertRaisesRegex(ValueError, "truth_topic"):
@@ -145,6 +166,81 @@ class Task06ContractTests(unittest.TestCase):
             width, height, distortion_model = 1, 1, "plumb_bob"
             d, k, r, p = [0.0] * 5, [0.0] * 9, [0.0] * 9, [0.0] * 12
         self.assertEqual(validate_camera_info(Info()), "invalid_calibration")
+
+    def test_camera_matcher_queues_exact_triples_and_recovers_only_on_valid_triple(self):
+        class Stamp:
+            def __init__(self, value): self.sec, self.nanosec = divmod(value, 1_000_000_000)
+        class Header:
+            def __init__(self, value): self.stamp, self.frame_id = Stamp(value), "camera_0_optical_frame"
+        class Image:
+            def __init__(self, value, depth=False):
+                self.header, self.width, self.height = Header(value), 2, 1
+                self.encoding = "32FC1" if depth else "rgb8"
+                self.step = 8 if depth else 6
+                self.data = bytes(self.step)
+        class Info:
+            def __init__(self, value):
+                self.header, self.width, self.height = Header(value), 2, 1
+                self.distortion_model, self.d = "plumb_bob", [0.0] * 5
+                self.k = [1.0,0,0,0,1.0,0,0,0,1.0]
+                self.r = [1.0,0,0,0,1.0,0,0,0,1.0]
+                self.p = [1.0,0,0,0,0,1.0,0,0,0,0,1.0,0]
+        model = CameraReadinessModel(queue_limit=2)
+        now = 1_000_000_000
+        self.assertFalse(model.ingest("color", Image(now + 1), now, 10))
+        self.assertEqual(model.rejected_count, 1)
+        for stream, message in (("color", Image(now)), ("depth", Image(now, True)), ("info", Info(now))):
+            self.assertTrue(model.ingest(stream, message, now, 20))
+        components, evidence = model.snapshot(now + 1, 21)
+        self.assertEqual(components["source_readiness"], ("OK", "ready"))
+        self.assertEqual(evidence["rejected_count"], 1)
+        model.ingest("color", Image(now + 10), now + 20, 30)
+        model.ingest("depth", Image(now + 11, True), now + 20, 31)
+        model.ingest("info", Info(now + 11), now + 20, 32)
+        components, evidence = model.snapshot(now + 100_000_020, 40)
+        self.assertEqual(components["synchronization"][0], "ERROR")
+        self.assertGreater(evidence["unmatched_count"], 0)
+
+    def test_camera_matcher_reports_bounded_queue_overflow_with_evidence(self):
+        class Stamp:
+            def __init__(self, value): self.sec, self.nanosec = divmod(value, 1_000_000_000)
+        class Message:
+            def __init__(self, value):
+                self.header = type("Header", (), {"stamp": Stamp(value), "frame_id": "camera_0_optical_frame"})()
+                self.width, self.height, self.step, self.encoding, self.data = 1, 1, 3, "rgb8", b"abc"
+        model = CameraReadinessModel(queue_limit=2)
+        for value in (100, 101, 102):
+            model.ingest("color", Message(value), 200, value)
+        components, evidence = model.snapshot(200, 200)
+        self.assertEqual(components["synchronization"], ("ERROR", "queue_overflow"))
+        self.assertEqual(evidence["overflow_count"], 1)
+        self.assertEqual(evidence["color_header_stamp_ns"], 102)
+
+    def test_mavros_fix_validation_fails_closed_on_invalid_fix(self):
+        class Fix:
+            header = type("Header", (), {"stamp": type("Stamp", (), {"sec": 1, "nanosec": 0})()})()
+            status = type("Status", (), {"status": -1})()
+            latitude, longitude, altitude = 0.0, 0.0, 0.0
+            position_covariance = [0.0] * 9
+            position_covariance_type = 0
+        self.assertFalse(validate_fix(Fix()))
+
+    def test_mavros_graph_requires_exact_full_surface_and_types(self):
+        topics = {name: [kind] for name, kind in PUBLIC_TOPICS.items()}
+        services = {name: [kind] for name, kind in PUBLIC_SERVICES.items()}
+        self.assertEqual(validate_graph(topics, services), (True, "ready"))
+        topics["/mavros/state"] = ["example_msgs/msg/Wrong"]
+        valid, reason = validate_graph(topics, services)
+        self.assertFalse(valid)
+        self.assertEqual(reason, "topic_contract_mismatch:/mavros/state")
+
+    def test_manual_mode_requires_observed_state_transition(self):
+        package = ROOT / "Simulation" / "tests" / "evaluation" / "ros_ws" / "src" / "blueboat_sim_evaluation"
+        sys.path.insert(0, str(package))
+        from blueboat_sim_evaluation.safety import manual_mode_observed
+        self.assertFalse(manual_mode_observed(None))
+        self.assertFalse(manual_mode_observed(type("State", (), {"mode": "HOLD"})()))
+        self.assertTrue(manual_mode_observed(type("State", (), {"mode": "MANUAL"})()))
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, NavSatFix
 
 from .guard import require_explicit_simulation
+from .safety import manual_mode_observed
 
 
 class MavrosSmoke(Node):
@@ -80,6 +81,7 @@ def main():
         mode = node.call(node.mode_client, SetMode.Request(base_mode=0, custom_mode="MANUAL"))
         if not mode.mode_sent:
             raise RuntimeError("ArduPilot rejected MANUAL mode")
+        node.spin_until(lambda: manual_mode_observed(node.state), 10.0, "MANUAL mode state")
         arm = node.call(node.arm_client, CommandBool.Request(value=True))
         if not arm.success:
             raise RuntimeError(f"ArduPilot rejected arm command: {arm.result}")

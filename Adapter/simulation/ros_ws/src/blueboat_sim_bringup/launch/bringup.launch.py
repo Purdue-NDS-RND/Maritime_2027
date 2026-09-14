@@ -50,7 +50,11 @@ def generate_launch_description():
         ),
         required_node(
             package="blueboat_camera_adapter", executable="camera_boundary", name="camera_0_boundary", output="screen",
-            parameters=[{"use_sim_time": True}],
+            parameters=[{
+                "use_sim_time": True,
+                "registration_mode": "color",
+                "registration_evidence_ref": "simulation-rgbd-registration",
+            }],
         ),
         required_node(
             package="mavros", executable="mavros_node", name="mavros", namespace="/", output="screen",
