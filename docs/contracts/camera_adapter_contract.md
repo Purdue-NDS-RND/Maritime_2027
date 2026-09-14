@@ -15,7 +15,7 @@ Neither environment may expose those private names as an autonomy dependency.
 
 The public names and message semantics in this contract are fixed. Deployment
 configuration selects the environment, its camera roster, mounting transforms,
-and per-camera timing limits. Version `1.0.0` accepts exactly these fields:
+and per-camera timing limits. The complete simulation record is:
 
 ```yaml
 contract_id: maritime.camera_adapter
@@ -38,24 +38,28 @@ cameras:
       evidence_ref: simulation-camera-timing-2026-09-13
 ```
 
-The canonical enabled roster is `[camera_0]` for simulation and
-`[camera_0, camera_1]` for hardware. Roster order is stable deployment order;
-it is not a priority order. `cameras` must contain exactly the roster keys.
-Camera IDs must match `^camera_[0-9]+$`, be unique, and remain assigned to the
-same physical mounting position across launches. Consumers must enumerate
-`enabled_cameras`; they must not infer a camera count, probe sequential names,
-or branch on a camera make or model.
+For `environment: simulation`, `enabled_cameras` must equal exactly
+`[camera_0]`. For `environment: hardware`, it must equal exactly
+`[camera_0, camera_1]` in that order. A missing, extra, reordered, or duplicate
+entry is invalid. `cameras` must contain exactly the corresponding key set;
+mapping-key order has no meaning. Camera IDs must match
+`^camera_[0-9]+$`, remain assigned to the same physical mounting position
+across launches, and be enumerated by consumers from `enabled_cameras`.
+Consumers must not infer a camera count, probe sequential names, or branch on a
+camera make or model.
 
 For hardware, `environment: hardware` and `use_sim_time: false` are fixed, but
-this common contract supplies no timing values. The Hardware Adapter deployment
-must explicitly provide all three integer timing fields and a non-empty
-`evidence_ref` independently for `camera_0` and `camera_1`. There is no default,
-inheritance, environment-variable fallback, or substitution from the simulation
-values. Missing, null, non-integer, or out-of-range hardware timing fields make
+this common contract supplies no timing values. Hardware configuration adds a
+required absolute `evidence_store_path`, mounted read-only, and must explicitly
+provide all three integer timing fields independently for `camera_0` and
+`camera_1`. Both `timing.evidence_ref` values and both
+`registration_evidence_ref` values must be the same content reference for the
+one simultaneous dual-camera evidence artifact defined below. There is no
+default, inheritance, environment-variable fallback, or substitution from the
+simulation values. Missing, null, non-integer, or out-of-range fields make
 camera source readiness false and prohibit camera publication from being
 treated as conforming. Hardware remains unverified for vessel readiness until
-the referenced representative simultaneous dual-camera capture approves those
-values.
+the artifact approves those exact values.
 
 Every `cameras.camera_N` record has exactly this schema:
 
@@ -65,11 +69,11 @@ Every `cameras.camera_N` record has exactly this schema:
 | `mount_xyz_m` | Three finite numbers in metres, ordered x, y, z. |
 | `mount_rpy_rad` | Three finite numbers in radians, ordered roll, pitch, yaw. |
 | `registration_mode` | String exactly `color`. |
-| `registration_evidence_ref` | Non-empty string identifying the environment's geometric registration acceptance record. |
+| `registration_evidence_ref` | Simulation uses its named local record; hardware uses the content reference required below. |
 | `timing.rgb_depth_match_tolerance_ns` | Integer greater than or equal to zero; per-camera measured limit. |
 | `timing.max_acquisition_age_ns` | Positive integer greater than the match tolerance; per-camera measured limit. |
 | `timing.max_arrival_silence_ns` | Positive integer; per-camera measured steady-clock watchdog. |
-| `timing.evidence_ref` | Non-empty string identifying the timing measurement record. |
+| `timing.evidence_ref` | Simulation uses its named local record; hardware uses the content reference required below. |
 
 The camera deployment configuration is authoritative for the simulated mount.
 If a versioned scenario manifest repeats camera-mount data for evaluator
@@ -80,10 +84,14 @@ simulation-only scenario manifest.
 Configuration validation is fail closed:
 
 - `contract_id`, `contract_version`, `environment`, `use_sim_time`,
-  `enabled_cameras`, and `cameras` are required; fields unknown to version
-  `1.0.0` are rejected.
+  `enabled_cameras`, and `cameras` are required. `evidence_store_path` is
+  required only for hardware and forbidden for simulation. Other fields unknown
+  to version `1.0.0` are rejected.
 - `environment` is exactly `simulation` or `hardware`, and `use_sim_time` must
   match the environment rule above.
+- The selected roster must equal the environment's literal ordered list above;
+  reason `roster_mismatch` covers missing, extra, reordered, duplicate, or
+  map-key disagreement.
 - Every mount array contains exactly three finite numbers. The parent frame is
   `base_link`; no world, simulator-truth, or vendor frame is permitted.
 - `registration_mode` is exactly `color`, and
@@ -92,8 +100,9 @@ Configuration validation is fail closed:
 - `rgb_depth_match_tolerance_ns` is an integer greater than or equal to zero.
   Both freshness values are positive integers, and
   `max_acquisition_age_ns` must be greater than the match tolerance.
-- `evidence_ref` is a non-empty identifier for the measurement record that
-  justified all numerical timing limits.
+- Simulation evidence identifiers must equal the frozen values in the complete
+  record. Hardware evidence references and artifacts must pass every check in
+  the next section.
 
 An Adapter with invalid configuration may keep a supervisory process alive so
 it can publish diagnostics, but it must not report source readiness. It must
@@ -117,6 +126,132 @@ probe had wall-gap maxima of about 276 ms. Retained hardware-rendered simulator
 evidence separately recorded 120 exact pairs and approximately 30.30 Hz in
 simulated time. None of these results measures physical cameras or authorizes
 hardware timing values.
+
+### Hardware evidence artifact and validator
+
+A hardware evidence reference is exactly `sha256:<digest>`, where `<digest>` is
+64 lowercase hexadecimal characters. It resolves only to the local regular
+UTF-8 JSON file `<evidence_store_path>/<digest>.json`. Symlinks, path traversal,
+remote references, and alternate filenames are rejected. Before parsing, the
+validator hashes the exact file bytes with SHA-256 and requires equality with
+the reference. The evidence store is mounted read-only; the runtime Adapter may
+neither generate nor approve its own evidence.
+
+The JSON object is closed: unknown or missing fields are invalid. Its top-level
+fields are exactly:
+
+- `schema_id`: string exactly `maritime.camera_hardware_evidence`;
+- `schema_version`: integer exactly `1`;
+- `contract_id`: string exactly `maritime.camera_adapter`;
+- `contract_version`: string exactly `1.0.0`;
+- `validation`, `target`, `measurement`, and `approved_timing`: the closed
+  objects defined below.
+
+`validation` has exactly `status`, `validator_id`, `validator_version`,
+`approved_by`, `approved_at_utc`, `approved_payload_sha256`, `approval_key_id`,
+and `approval_signature_ed25519`. `status` is exactly `approved`,
+`validator_id` is exactly `maritime_camera_hardware_evidence_validator`, and
+`validator_version` is exactly `1.0.0`. `approved_by` is a non-empty external
+approval identity and `approved_at_utc` is an RFC 3339 UTC timestamp.
+`approved_payload_sha256` is a `sha256:<digest>` of the RFC 8785 canonical JSON
+object containing exactly `contract_id`, `contract_version`, `target`,
+`measurement`, and `approved_timing` from the artifact. `approval_key_id` must
+resolve in the validator's read-only deployment trust store, which is managed
+outside Adapter configuration. `approval_signature_ed25519` is the lowercase
+hex Ed25519 signature by that trusted key over the ASCII bytes of
+`approved_payload_sha256`. The validator recomputes the payload hash and
+verifies this signature. Approval is produced offline after evidence review,
+never inferred from measurements or filled by the Adapter; a user-supplied key
+or self-signed artifact is rejected.
+
+`target` has exactly `compute_platform_id`, `adapter_image_digest`,
+`driver_version`, `capture_topology_id`, `capture_configuration_sha256`, and
+`cameras`. The first four are non-empty deployment identifiers and
+`adapter_image_digest` is a `sha256:<digest>` reference.
+`capture_configuration_sha256` is a `sha256:<digest>` of the RFC 8785 canonical
+JSON bytes of `target.cameras`. `target.cameras` has exactly `camera_0` and
+`camera_1`. Each camera object has exactly:
+
+- `source_identity_sha256`: a `sha256:<digest>` of the private stable device
+  identity; a raw serial or model name is not exposed;
+- `physical_port`: a non-empty stable deployment port identifier;
+- `width_px` and `height_px`: positive integers;
+- `frame_rate_hz`: a positive finite number;
+- `color_encoding`: exactly `rgb8` or `bgr8`;
+- `depth_encoding`: exactly `32FC1`.
+
+The validator obtains the running compute, Adapter image, driver, topology,
+device-identity hashes, ports, and capture modes independently and requires
+exact equality with `target`; it does not trust configuration to attest to
+itself.
+
+`measurement` has exactly `simultaneous`, `camera_roster`, `started_at_utc`,
+`duration_ns`, and `per_camera`. `simultaneous` is exactly `true`,
+`camera_roster` is exactly `[camera_0, camera_1]`, `started_at_utc` is RFC 3339
+UTC, `duration_ns` is a positive integer, and `per_camera` has exactly those two
+camera keys. Each per-camera object has exactly:
+
+- positive integer `color_sample_count`, `depth_sample_count`,
+  `camera_info_sample_count`, and `matched_triple_count`, each at least 1000;
+- non-negative integer `unmatched_color_count`, `unmatched_depth_count`, and
+  `dropped_or_overflow_count`;
+- integer `camera_info_stamp_mismatch_count`, `nonmonotonic_stamp_count`,
+  `future_acquisition_count`, and `negative_arrival_silence_count`, all exactly
+  zero;
+- `rgb_depth_abs_skew_ns`, `acquisition_age_ns`, and `arrival_silence_ns`, each
+  a closed object containing non-negative integer `p50`, `p95`, `p99`, and
+  `max`, ordered `p50 <= p95 <= p99 <= max`;
+- `clock_mapping`, a closed object with non-empty `description` and
+  non-negative integer `max_mapping_error_ns`;
+- `registration`, a closed object with `status` exactly `approved`, integer
+  `sample_count` at least 1000, and finite non-negative
+  `max_alignment_error_px`;
+- `interruptions`, a closed object whose `color_stale`, `depth_stale`, and
+  `camera_info_stale` fields are all exactly `true`.
+
+`approved_timing` has exactly `camera_0` and `camera_1`; each has exactly the
+three integer timing fields from deployment configuration. Approved match
+tolerance must be at least the measured skew `max`, approved acquisition age
+must be at least the measured acquisition-age `max`, and approved arrival
+silence must be at least the measured arrival-silence `max`. The running
+configuration must equal these approved values exactly, not merely remain
+inside their bounds.
+
+Hardware validation is ordered and fail closed:
+
+1. Validate the literal roster and closed deployment schema.
+2. Require all four per-camera evidence-reference fields to be identical and
+   syntactically valid.
+3. Resolve the regular file and verify its content hash before JSON parsing.
+4. Validate the closed evidence schema and versions, recompute the approved
+   payload hash, resolve the approval key only from the read-only trust store,
+   verify its Ed25519 signature, and require external approved status.
+5. Match every target field and the canonical capture-configuration hash to the
+   running deployment.
+6. Validate simultaneous measurement, counts, zero-violation fields,
+   distributions, registration approval, and all three interruption results.
+7. Require the configured timing values to equal `approved_timing` and require
+   those values to bound the reported maxima.
+
+Any failure is a configuration `ERROR`, prevents publishers from being treated
+as conforming, and makes every hardware camera's source readiness false. The
+reason mapping is exact:
+
+| Failure | Diagnostic `reason` |
+|---|---|
+| Required store path, reference, or evidence field is absent | `evidence_missing` |
+| File does not resolve under the path policy, is not regular/read-only, or cannot be read | `evidence_unresolved` |
+| Exact file-byte digest differs from the content reference | `evidence_hash_mismatch` |
+| Reference syntax, JSON, closed schema, field type, artifact/contract version, canonical hash format, measurement count, metric, or invariant is invalid | `evidence_schema_invalid` |
+| Approved-payload digest, approval key, or Ed25519 signature does not verify against the external trust store | `evidence_signature_invalid` |
+| Verified artifact status is not `approved` | `evidence_unapproved` |
+| Running target identity or capture configuration differs | `evidence_target_mismatch` |
+| Configured values differ from `approved_timing` or fail to bound a measured maximum | `evidence_timing_mismatch` |
+
+Thus a syntactically bogus but non-empty reference, a self-authored artifact
+with invented timing values, or an approved artifact copied from another
+deployment cannot pass. No conforming hardware evidence artifact currently
+exists.
 
 ## Public ROS surface
 
@@ -238,7 +373,8 @@ Pairing is deterministic and performed independently for each camera:
    depth stamp is at least `c + rgb_depth_match_tolerance_ns`, or until that
    color becomes stale.
 3. Among unused depth messages in the inclusive interval
-   `[c - tolerance, c + tolerance]`, select the one minimizing
+   `[c - timing.rgb_depth_match_tolerance_ns,
+   c + timing.rgb_depth_match_tolerance_ns]`, select the one minimizing
    `abs(depth_stamp - c)`. A tie selects the earlier depth stamp. One depth
    message may be used once.
 4. Require a `CameraInfo` message whose stamp equals `c`. There is no separate
@@ -270,6 +406,30 @@ stream_fresh =
     0 <= acquisition_age_ns <= max_acquisition_age_ns
     and 0 <= arrival_silence_ns <= max_arrival_silence_ns
 ```
+
+Candidate samples are checked before promotion to `latest_valid_*`. If
+`acquisition_age_ns < 0`, the sample is rejected, no latest-valid header or
+arrival state is refreshed, and the stream and source-readiness diagnostics are
+`ERROR` with reason `future_acquisition_stamp`. This denotes a future stamp or
+an incompatible or backward-moving deployment clock; it is not ordinary
+latency. If `arrival_silence_ns < 0`, the sample and that readiness evaluation
+are rejected without refreshing latest-valid state, and the stream and source
+readiness are `ERROR` with reason `steady_clock_regression`. This denotes a
+non-monotonic steady clock or an arrival recorded in an incompatible clock
+domain. A duplicate or decreasing source stamp is likewise rejected without a
+refresh and reports `ERROR` reason `nonmonotonic_header_stamp`.
+
+Only non-negative deltas proceed to upper-bound freshness evaluation.
+`acquisition_age_ns > max_acquisition_age_ns` is `STALE` reason
+`acquisition_timeout`; `arrival_silence_ns > max_arrival_silence_ns` is `STALE`
+reason `arrival_timeout`. At each evaluation, state precedence is exact:
+configuration, evidence, clock-domain, negative-delta, and content violations
+produce `ERROR` first; absent/unobserved data or a positive upper-bound timeout
+produces `STALE` only if no `ERROR` applies; `OK` is possible only if neither
+applies. The aggregate severity order is `ERROR` greater than `STALE` greater
+than `OK`. A lower-severity result cannot overwrite an `ERROR` in the same
+evaluation. Recovery requires a valid configuration and clock followed by a
+newly received conforming triple; rejected data never performs the refresh.
 
 The deployment ROS clock must exist, be in the configured time domain, and be
 advancing. A missing, incompatible, backward-moving, or unavailable clock makes
@@ -309,8 +469,8 @@ Status behavior is exact:
 | Condition | Level and behavior |
 |---|---|
 | Valid configuration but no first image or calibration yet | `STALE`; process may be live, source readiness is false, and startup continues without fabricating data. |
-| Any required stream exceeds either freshness limit | That stream and source readiness are `STALE`; dependent RGB-D output is suppressed until a fresh valid triple arrives. |
-| Missing hardware timing/evidence, unsupported encoding/unit/distortion, invalid calibration/dimensions, frame mismatch, unregistered depth, non-monotonic stamp, incompatible time domain, or RGB/depth skew above tolerance | Affected check and source readiness are `ERROR`; the invalid triple is rejected. |
+| Any required stream exceeds either freshness upper limit with non-negative deltas | That stream and source readiness are `STALE` with `acquisition_timeout` or `arrival_timeout`; dependent RGB-D output is suppressed until a fresh valid triple arrives. |
+| Missing or invalid hardware timing/evidence, unsupported encoding/unit/distortion, invalid calibration/dimensions, frame mismatch, unregistered depth, non-monotonic or future stamp, negative arrival silence, incompatible time domain, or RGB/depth skew above tolerance | Affected check and source readiness are `ERROR`; the invalid sample or triple is rejected without refreshing latest-valid state. |
 | Valid current triple and all contract checks pass | Component entries and source readiness are `OK`. |
 | Queue overflow or unmatched data that expires | Synchronization is `ERROR`; record rejected count and observed skew when available. |
 
@@ -361,7 +521,14 @@ camera:
 1. Parse configuration before starting publishers; verify contract/version,
    exact environment roster, mount fields, explicit timing fields, evidence
    reference, and simulation/hardware time policy. Negative tests remove each
-   hardware timing field in turn and require fail-closed source readiness.
+   hardware timing field in turn and test missing, extra, reordered, and
+   duplicate roster entries; every case must be `ERROR`, source-readiness false,
+   and roster cases must report `roster_mismatch`. For hardware, also test a
+   syntactically bogus reference, unresolved digest, byte/hash mismatch,
+   malformed or unknown-field schema, payload-hash or approval-signature
+   mismatch, unknown approval key, non-approved status, target mismatch, and
+   approved/configured timing mismatch. Require the corresponding evidence
+   reason and fail-closed source readiness for each case.
 2. Capture `ros2 topic list -t` and `ros2 topic info -v`; verify all public
    names, exact message types, and sensor QoS. Reject legacy or private camera
    names as public autonomy dependencies.
@@ -378,7 +545,11 @@ camera:
    calibration separately and verify the specified `STALE` transitions.
 6. Inject wrong encoding, units, dimensions, calibration, frame, registration,
    non-monotonic stamps, future/incompatible timestamps, and excessive skew;
-   require `ERROR`, rejection, and no freshness reset.
+   require `ERROR`, rejection, and no freshness reset. Separately force
+   `acquisition_age_ns < 0` and `arrival_silence_ns < 0`; require respectively
+   `future_acquisition_stamp` and `steady_clock_regression`, verify no
+   latest-valid refresh, and verify `ERROR` wins even when another stream is
+   `STALE`.
 7. Confirm the initial color-only perception path uses only generic topics,
    derives raster data from `CameraInfo`, and preserves the input header exactly.
 8. Capture `/diagnostics`; compare entry names, levels, reasons, observed timing,
