@@ -131,6 +131,10 @@ class Task06ContractTests(unittest.TestCase):
         self.assertIn('return "invalid_data_layout"', source)
         self.assertNotIn('"invalid_color_content"', source)
         self.assertNotIn('"invalid_depth_content"', source)
+        info_validator = source[source.index("std::string invalid_info_reason"):source.index("template<typename Queue>")]
+        self.assertIn('message.header.frame_id != kPrivateFrame) return "frame_mismatch"', info_validator)
+        self.assertIn('message.width == 0 || message.height == 0) return "invalid_dimensions"', info_validator)
+        self.assertIn('return calibrated ? "" : "invalid_calibration"', info_validator)
 
     def test_evaluator_guard_fails_without_explicit_simulation_opt_in(self):
         package = ROOT / "Simulation" / "tests" / "evaluation" / "ros_ws" / "src" / "blueboat_sim_evaluation"

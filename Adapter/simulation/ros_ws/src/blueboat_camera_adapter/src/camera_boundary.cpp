@@ -103,16 +103,19 @@ class CameraBoundary final : public rclcpp::Node {
     return "";
   }
 
-  bool valid_info(const sensor_msgs::msg::CameraInfo & message) const {
+  std::string invalid_info_reason(const sensor_msgs::msg::CameraInfo & message) const {
+    if (message.header.frame_id != kPrivateFrame) return "frame_mismatch";
+    if (message.width == 0 || message.height == 0) return "invalid_dimensions";
     size_t expected_d = 0;
     if (message.distortion_model == "plumb_bob") expected_d = 5;
     if (message.distortion_model == "rational_polynomial") expected_d = 8;
     if (message.distortion_model == "equidistant") expected_d = 4;
-    return message.header.frame_id == kPrivateFrame && message.width > 0 && message.height > 0 &&
-           expected_d != 0 && message.d.size() == expected_d && finite_values(message.d) &&
-           finite_values(message.k) && finite_values(message.r) && finite_values(message.p) &&
-           message.k[0] > 0 && message.k[4] > 0 && message.k[8] == 1 &&
-           message.p[0] > 0 && message.p[5] > 0 && message.p[10] == 1;
+    const bool calibrated = expected_d != 0 && message.d.size() == expected_d &&
+        finite_values(message.d) && finite_values(message.k) && finite_values(message.r) &&
+        finite_values(message.p) && message.k[0] > 0 && message.k[4] > 0 &&
+        message.k[8] == 1 && message.p[0] > 0 && message.p[5] > 0 &&
+        message.p[10] == 1;
+    return calibrated ? "" : "invalid_calibration";
   }
 
   template<typename Queue>
@@ -155,7 +158,8 @@ class CameraBoundary final : public rclcpp::Node {
     const int64_t stamp = stamp_ns(message->header.stamp);
     const auto stamp_error = invalid_stamp_reason(stamp, last_info_stamp_);
     if (!stamp_error.empty()) { reject("calibration", stamp_error); return; }
-    if (!valid_info(*message)) { reject("calibration", "invalid_calibration"); return; }
+    const auto content_error = invalid_info_reason(*message);
+    if (!content_error.empty()) { reject("calibration", content_error); return; }
     last_info_stamp_ = stamp;
     info_arrival_ = steady_clock_.now().nanoseconds();
     infos_.emplace(stamp, std::move(message));
