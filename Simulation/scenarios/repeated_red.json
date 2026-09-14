@@ -1,0 +1,8 @@
+{
+  "name": "repeated_red",
+  "description": "Two distinct red-category buoys sharing marker ID 1.",
+  "buoys": [
+    {"name": "red_gate_port", "marker_id": 1, "pose": {"x": 7.0, "y": 1.5, "z": 0.0, "yaw_deg": 192.0}},
+    {"name": "red_gate_starboard", "marker_id": 1, "pose": {"x": 7.0, "y": -1.5, "z": 0.0, "yaw_deg": 168.0}}
+  ]
+}
