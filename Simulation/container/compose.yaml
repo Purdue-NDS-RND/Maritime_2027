@@ -61,7 +61,7 @@ services:
     image: ${ADAPTER_IMAGE:-maritime-sim-adapter:jazzy}
     container_name: maritime-sim-adapter
     build:
-      context: ../../Adapter
+      context: ../../Adapter/simulation
       dockerfile: container/Dockerfile
     network_mode: host
     ipc: host
@@ -69,7 +69,8 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       GZ_PARTITION: ardupilot_blueboat_starter
       CAMERA_ENABLED: ${CAMERA_ENABLED:-1}
-      ACTIVE_BUOY_IDS: ${ACTIVE_BUOY_IDS:-}
+      FCU_URL: udp://:14552@
+      ADAPTER_ENVIRONMENT: simulation
       SCENARIO_MANIFEST: /scenario/active.manifest.json
     volumes:
       - type: bind
@@ -93,7 +94,32 @@ services:
       file: ../../deployment/compose.base.yaml
       service: autonomy
     environment:
-      FCU_URL: ${FCU_URL:-udp://:14552@}
+      ADAPTER_ENVIRONMENT: simulation
+      MARITIME_PREIMPLEMENTATION_PLACEHOLDER: "1"
     depends_on:
-      simulator:
+      adapter:
         condition: service_healthy
+
+  evaluation:
+    profiles: ["evaluation"]
+    image: ${EVALUATION_IMAGE:-maritime-sim-evaluation:jazzy}
+    build:
+      context: ../tests/evaluation
+      dockerfile: container/Dockerfile
+    network_mode: host
+    ipc: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ADAPTER_ENVIRONMENT: simulation
+      SIMULATION_EVALUATION: "0"
+      FCU_URL: udp://:14552@
+      SCENARIO_MANIFEST: /scenario/active.manifest.json
+    volumes:
+      - type: bind
+        source: ../logs/generated-worlds
+        target: /scenario
+        read_only: true
+    depends_on:
+      adapter:
+        condition: service_healthy
+    restart: "no"

@@ -67,7 +67,7 @@ export VIDEO_GID RENDER_GID
 export SIM_IMAGE=${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
 export ADAPTER_IMAGE=${ADAPTER_IMAGE:-maritime-sim-adapter:jazzy}
 export AUTONOMY_IMAGE=${AUTONOMY_IMAGE:-maritime-autonomy:jazzy}
-export FCU_URL=${FCU_URL:-udp://:14552@}
+export EVALUATION_IMAGE=${EVALUATION_IMAGE:-maritime-sim-evaluation:jazzy}
 
 scenario=${SCENARIO:-}
 if [[ -n $scenario && -n ${WORLD:-} ]]; then
@@ -100,13 +100,10 @@ if [[ -n $scenario ]]; then
         render_args+=(--seed "$BUOY_SEED")
     fi
     python3 scripts/render_scenario.py "${render_args[@]}"
-    ACTIVE_BUOY_IDS=$(python3 -c 'import json; print(",".join(str(item["marker_id"]) for item in json.load(open("logs/generated-worlds/active.manifest.json", encoding="utf-8"))["buoys"]))')
-    export ACTIVE_BUOY_IDS
     export WORLD=active.sdf ROS_SIM=1 ENABLE_MAVROS=1 CAMERA_ENABLED=1
     ros_enabled=1
 else
     mkdir -p logs/generated-worlds
-    export ACTIVE_BUOY_IDS=
     case "${ROS_SIM:-0}" in
         1|true|TRUE|yes|YES|on|ON)
             export ENABLE_MAVROS=1
@@ -132,6 +129,7 @@ fi
 profile_args=()
 if [[ $ros_enabled == 1 ]]; then
     profile_args=(--profile ros)
+    export ADAPTER_ENVIRONMENT=simulation MARITIME_PREIMPLEMENTATION_PLACEHOLDER=1
 fi
 
 if [[ $action == down ]]; then
@@ -243,7 +241,7 @@ echo "Host IDs: uid=$HOST_UID gid=$HOST_GID video_gid=$VIDEO_GID render_gid=$REN
 echo "World: ${WORLD:-blueboat_waves.sdf}; scenario: ${scenario:-none}; display: $DISPLAY"
 echo "MAVLink: ${MAVLINK_QGC:-udp:127.0.0.1:14550} (QGC), ${MAVLINK_API:-udp:127.0.0.1:14551} (student API)"
 if [[ $ros_enabled == 1 ]]; then
-    echo "ROS 2: adapter + autonomy, domain ${ROS_DOMAIN_ID:-0}, FCU $FCU_URL"
+    echo "ROS 2: Simulation Adapter + pre-implementation autonomy bootstrap, domain ${ROS_DOMAIN_ID:-0}"
 fi
 if pgrep -f '[Q]GroundControl' >/dev/null 2>&1; then
     echo "QGroundControl is running and should auto-connect on UDP 14550."
