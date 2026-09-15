@@ -10,11 +10,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def resolve(path, *options, fcu_url="udp://:14552@"):
+def resolve(path, *options):
     env = {**os.environ, "DISPLAY": ":0", "XAUTH_FILE": "/dev/null"}
-    env.pop("FCU_URL", None)
-    if fcu_url is not None:
-        env["FCU_URL"] = fcu_url
     return subprocess.run(
         ["docker", "compose", "-f", str(ROOT / path), *options, "config", "--format", "json"],
         env=env, text=True, capture_output=True,
@@ -30,7 +27,10 @@ class ContainerBoundaries(unittest.TestCase):
     def test_simulation_connects_independent_adapter_and_autonomy(self):
         services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
         self.assertEqual(set(services), {"simulator", "adapter", "autonomy"})
-        self.assertEqual(services["autonomy"]["environment"]["FCU_URL"], "udp://:14552@")
+        self.assertEqual(services["adapter"]["environment"]["FCU_URL"], "udp://:14552@")
+        self.assertNotIn("FCU_URL", services["autonomy"].get("environment", {}))
+        self.assertEqual(services["autonomy"]["environment"]["ADAPTER_ENVIRONMENT"], "simulation")
+        self.assertEqual(services["autonomy"]["environment"]["MARITIME_PREIMPLEMENTATION_PLACEHOLDER"], "1")
         contexts = set()
         for service in services.values():
             build = service["build"]
@@ -38,25 +38,20 @@ class ContainerBoundaries(unittest.TestCase):
             self.assertTrue((context / build.get("dockerfile", "Dockerfile")).is_file())
             contexts.add(context)
         self.assertEqual(len(contexts), 3)
+        self.assertTrue(str(services["adapter"]["build"]["context"]).endswith("Adapter/simulation"))
         self.assertNotIn("SCENARIO_MANIFEST", services["autonomy"].get("environment", {}))
         self.assertFalse(services["autonomy"].get("volumes"))
 
-    def test_autonomy_can_be_resolved_without_simulator(self):
-        services = self.config("deployment/compose.autonomy.yaml")
-        self.assertEqual(set(services), {"autonomy"})
-        self.assertFalse(services["autonomy"].get("depends_on"))
-        self.assertFalse(services["autonomy"].get("profiles"))
+    def test_no_standalone_autonomy_transport_profile_remains(self):
+        self.assertFalse((ROOT / "deployment" / "compose.autonomy.yaml").exists())
 
-    def test_standalone_requires_explicit_vehicle_connection(self):
-        result = resolve("deployment/compose.autonomy.yaml", fcu_url=None)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("FCU_URL", result.stderr)
-
-    def test_simulation_provides_its_own_default_connection(self):
-        result = resolve("Simulation/container/compose.yaml", "--profile", "ros", fcu_url=None)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        service = json.loads(result.stdout)["services"]["autonomy"]
-        self.assertEqual(service["environment"]["FCU_URL"], "udp://:14552@")
+    def test_evaluation_is_explicit_and_simulation_guarded(self):
+        services = self.config("Simulation/container/compose.yaml", "--profile", "ros", "--profile", "evaluation")
+        evaluation = services["evaluation"]
+        self.assertEqual(evaluation["environment"]["ADAPTER_ENVIRONMENT"], "simulation")
+        self.assertEqual(evaluation["environment"]["SIMULATION_EVALUATION"], "0")
+        self.assertEqual(evaluation["environment"]["FCU_URL"], "udp://:14552@")
+        self.assertEqual(evaluation["depends_on"]["adapter"]["condition"], "service_healthy")
 
 
 if __name__ == "__main__":
