@@ -1,17 +1,19 @@
 # Task 09: Integrate Deployment, Readiness, Persistence, and Shutdown
 
-**Goal:** Perform the single-owner integration cutover so one selected Adapter
-feeds autonomy through deterministic startup and shutdown behavior.
+**Goal:** Perform the simulation-only integration cutover so the selected
+Simulation Adapter feeds autonomy through deterministic startup and shutdown
+behavior.
 
 **Source:** `Things_To_Fix_Before_Implementation.md`, the cross-file portions of
 sections 2–4 and all of section 7.
 
-**Prerequisites:** Tasks 04–08 approved and their handoffs reviewed. Task 08 and
-this task merge as one atomic cutover.
+**Prerequisites:** Tasks 04, 05, 06, and 08 approved and their handoffs
+reviewed. Task 08 and this task merge as one atomic cutover. Task 07 is deferred
+outside this milestone.
 
-**Required inputs:** The reviewed commits and handoff blocks from Tasks 04–08,
-all three files under `docs/contracts/`, and Task 06's Adapter/evaluation
-entrypoint table.
+**Required inputs:** The reviewed commits and handoff blocks from Tasks 04, 05,
+06, and 08, all three files under `docs/contracts/`, and Task 06's
+Adapter/evaluation entrypoint table.
 
 **Exclusive write scope:**
 
@@ -29,8 +31,9 @@ Do not modify root acceptance tests or operational Markdown.
 
 - Update all build contexts and paths for `Adapter/simulation/`; leave no active
   flat Adapter convention.
-- Add deployment selection for exactly one of Simulation Adapter or Hardware
-  Adapter and prevent duplicate publication of the public MAVROS/camera surface.
+- Configure the Simulation Adapter as the sole supported Adapter for this
+  milestone. Do not add a Hardware Adapter selection, placeholder profile, or
+  duplicate public MAVROS/camera publisher.
 - Remove `FCU_URL` handoff to autonomy and configure it only on the selected
   Adapter. Ensure exactly one MAVROS instance can bind SITL UDP `14552`.
 - Remove `ACTIVE_BUOY_IDS` and every marker-ID-based entity roster from
@@ -54,8 +57,9 @@ Do not modify root acceptance tests or operational Markdown.
 
 ## Acceptance
 
-- Compose resolution and static validation pass for simulation and hardware
-  selections; configurations selecting zero or two Adapters fail.
+- Compose resolution and static validation pass for the Simulation Adapter.
+  Hardware selection is deliberately unavailable and is not simulated by a
+  placeholder profile.
 - Failure injection at each handoff yields the correct readiness category,
   bounded timeout, logs, and non-zero failure.
 - Ordinary stop and failed startup leave no stack containers, orphan publishers,

@@ -104,6 +104,13 @@ only one MAVROS instance binds the SITL endpoint.
 
 ### Hardware Adapter
 
+**Deferred from the pre-implementation simulation-foundation milestone (2026-09-15).**
+The following items remain unchecked and are not a claim of vessel readiness.
+Do not create placeholder hardware packages, transports, camera settings, or
+evidence merely to satisfy this checklist. Resume this section only after the
+target platform, capture topology, real FCU transport, and supportable signed
+camera evidence have been selected.
+
 - [ ] Create the Hardware Adapter workspace/container and implement the same
   MAVROS contract there, including MAVROS packages, GeographicLib datasets,
   launch/configuration, and FCU diagnostics.

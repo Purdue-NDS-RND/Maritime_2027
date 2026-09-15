@@ -7,8 +7,8 @@ normal Adapter runtime.
 **Source:** `Things_To_Fix_Before_Implementation.md`, Simulation Adapter items
 in section 2 and all of sections 3 and 4.
 
-**Prerequisites:** Tasks 01, 02, 03, 04, and 05 approved. May run in parallel
-with Task 07.
+**Prerequisites:** Tasks 01, 02, 03, 04, and 05 approved. Task 07 is deferred
+outside this simulation-foundation milestone.
 
 **Required inputs:**
 `docs/contracts/mavros_adapter_contract.md`,

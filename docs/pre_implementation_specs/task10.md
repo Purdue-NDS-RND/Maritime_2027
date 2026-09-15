@@ -17,15 +17,17 @@ runtime scripts, or documentation.
 - Rewrite container-boundary assertions for Adapter-owned `FCU_URL`, MAVROS
   runtime/configuration/launch, GeographicLib, and FCU health, and prove autonomy
   owns none of them.
-- Replace standalone-autonomy-with-`FCU_URL` expectations with mutually exclusive
-  Simulation/Hardware Adapter deployment tests against the shared contracts.
+- Replace standalone-autonomy-with-`FCU_URL` expectations with Simulation
+  Adapter deployment tests against the shared contracts. Assert that no
+  placeholder Hardware Adapter profile is introduced in this milestone.
 - Update ROS boundary smoke for generic camera topics/frames, actual camera and
   MAVROS delivery to autonomy, and exclusion of truth from navigation inputs/TF.
 - Prove autonomy images/packages exclude Gazebo, manifests/truth, ZED drivers,
   MAVROS launch/runtime, and environment transport settings.
-- Cover configured camera rosters, `CameraInfo`-driven dimensions, encodings,
-  depth units, registration, timestamp/frame compatibility, stale input, and
-  missing-source diagnostics.
+- Cover the configured Simulation Adapter camera roster, `CameraInfo`-driven
+  dimensions, encodings, depth units, registration, timestamp/frame
+  compatibility, stale input, and missing-source diagnostics. Record the
+  Hardware Adapter roster as deferred rather than simulating it.
 - Cover two visible same-category buoys with distinct truth entities and no
   entity IDs leaking to perception/autonomy.
 - Test liveness, source readiness, FCU readiness, and application readiness as

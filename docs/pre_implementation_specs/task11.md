@@ -30,8 +30,9 @@ reports.
 
 ## Required Work
 
-- Document `Adapter/simulation/` and `Adapter/hardware/`, selected-Adapter
-  ownership of MAVROS and cameras, and shared autonomy's exclusions.
+- Document `Adapter/simulation/`, its ownership of MAVROS and cameras, and
+  shared autonomy's exclusions. Identify `Adapter/hardware/` as deferred and
+  do not document it as an available deployment option.
 - Document final image contents, startup handoffs, generic camera topics/frames,
   readiness meanings, evaluation-only truth, and simulation-only command smoke.
 - Update build, run, join, test, and shutdown commands to match the integrated

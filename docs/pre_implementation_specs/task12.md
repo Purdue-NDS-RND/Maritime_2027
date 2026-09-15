@@ -20,15 +20,16 @@ to its owning task.
 1. Record Git revision, image/package versions, selected scenario, Adapter,
    configuration, ports, and test environment.
 2. From `Simulation/`, run `make validate` before building.
-3. Build the Simulation Adapter, Hardware Adapter where the platform permits,
-   and autonomy from clean layers; inspect dependency placement and
-   GeographicLib installation.
+3. Build the Simulation Adapter and autonomy from clean layers; inspect
+   dependency placement and GeographicLib installation. Record the Hardware
+   Adapter as deferred, not built or verified.
 4. Start the ROS simulation profile and exercise UDP `14552` through the
    Simulation Adapter.
 5. Record separate evidence for process liveness, RGB/depth/`CameraInfo`, generic
    frames/topics, MAVROS connection and required telemetry, autonomy boundary,
    and truth isolation.
-6. Run `make verify-rgbd` and focused Simulation/Hardware contract tests.
+6. Run `make verify-rgbd` and focused Simulation Adapter contract tests. Record
+   Hardware Adapter contract tests as deferred.
 7. Run the simulation-only neutral command smoke and verify disarm cleanup.
 8. Run `make down`, then inspect containers, relevant processes, publishers,
    ports, logs, and retained SITL state.

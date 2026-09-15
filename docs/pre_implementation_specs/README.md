@@ -4,15 +4,32 @@
 
 Complete only the repository migrations listed in
 [`Things_To_Fix_Before_Implementation.md`](../Things_To_Fix_Before_Implementation.md).
-The outcome is a stable boundary on which perception, state, and mapping can be
-implemented: both Adapters expose the same MAVROS and camera contracts,
-simulation truth and evaluators remain outside runtime autonomy, repeated buoy
-categories work, and startup and shutdown have semantic verification.
+The outcome is a stable simulation foundation on which perception, state, and
+mapping can be implemented: the Simulation Adapter exposes the agreed MAVROS
+and camera contracts, simulation truth and evaluators remain outside runtime
+autonomy, repeated buoy categories work, and startup and shutdown have
+semantic verification. This is preparation for later implementation work, not
+a final vessel-deployment or autonomy milestone.
 
 This work does **not** implement perception, mapping, YOLO, navigation, mission
 management, autonomous control, or the GCS. The autonomy cutover in Task 08 must
 wait for a real autonomy application launch; it must not introduce a fake
 keepalive.
+
+## Milestone Scope Decision: Hardware Adapter Deferred
+
+As of 2026-09-15, Task 07 is deliberately deferred outside this
+pre-implementation simulation-foundation milestone. No `Adapter/hardware/`
+scaffold, assumed FCU transport, camera-driver selection, or invented evidence
+is an acceptable substitute for it. The MAVROS and camera contracts remain the
+future Hardware Adapter's binding interface, but this milestone makes no
+hardware or vessel-readiness claim.
+
+Deferral removes Task 07 from the simulation-only Task 08–12 dependency path;
+it does **not** authorize Task 08. Task 08 still requires a real
+environment-neutral perception, state, or mapping application. Until such an
+application exists, preserve the current MAVROS-only autonomy process and do
+not advance the cutover tasks.
 
 ## How to Use These Specs
 
@@ -34,18 +51,18 @@ on the integrated tree.
 Start:   task01  task02  task03                 contracts, parallel
                       ├─ task05 after task03
 After 01–03:        task04                    Adapter relocation
-                         ├─ task06 after task04 + task05
-                         └─ task07 after task04
-After 06 + 07:      task08                    staged autonomy cutover
-After 04–08:       task09                    integration branch and lifecycle
+                         └─ task06 after task04 + task05
+Deferred:            task07                    hardware boundary, future milestone
+After 06 + app:     task08                    staged simulation-only autonomy cutover
+After 04–06 + 08:   task09                    simulation integration and lifecycle
 After 09:           task10                    boundary/acceptance tests
 After 10:           task11                    current operational docs
 After 11:           task12                    clean builds + live verification
 ```
 
 Task 05 should start as soon as Task 03 is approved, even if Tasks 01 and 02 are
-still running. Task 07 does not wait for Task 05 or Task 06 once Tasks 01–04 are
-available. This ready-queue rule takes precedence over treating the diagram as
+still running. Task 07 is deferred and has no ready-queue position in this
+milestone. This ready-queue rule takes precedence over treating the diagram as
 fixed batch waves.
 
 Task 08 also depends on an actual environment-neutral autonomy application
@@ -61,7 +78,8 @@ commit is already merged to `main`.
 - Task 04 produces a staging commit. Task 06 branches from that commit.
 - Task 08 produces a reviewed autonomy-only staging commit.
 - Task 09 creates the integration branch, applies the reviewed Task 04/06,
-  Task 05, Task 07, and Task 08 commits, then adds the shared-file cutover.
+  Task 05, and Task 08 commits, then adds the shared-file cutover. It does not
+  add a Hardware Adapter selection or hardware deployment profile.
 - Only the complete Task 09 integration result is eligible to merge to `main`.
 
 This preserves the checklist's atomic relocation and autonomy cutover while
@@ -77,7 +95,7 @@ still allowing dependent agents to work from reviewed staging commits.
 | 04 | Adapter directory relocation only |
 | 05 | Scenario renderer, scenario fixtures, buoy model assets |
 | 06 | `Adapter/simulation/**` and a runnable evaluation environment under `Simulation/tests/**` |
-| 07 | `Adapter/hardware/**` |
+| 07 | Reserved for future `Adapter/hardware/**`; deferred in this milestone |
 | 08 | `autonomy/**` |
 | 09 | Compose, root simulation orchestration, Make targets, shared startup wiring |
 | 10 | `tests/**` and test-only files under `Simulation/tests/**` |

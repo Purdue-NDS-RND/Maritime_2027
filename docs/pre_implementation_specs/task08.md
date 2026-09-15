@@ -7,9 +7,10 @@ application launch.
 **Source:** `Things_To_Fix_Before_Implementation.md`, section 2, "Shared Autonomy
 Cleanup and Real Bringup."
 
-**Prerequisites:** Tasks 06 and 07 approved. A real perception, state, or mapping
-application launch must exist and run useful work. If it does not exist, this
-task is blocked by design.
+**Prerequisites:** Task 06 approved. A real environment-neutral perception,
+state, or mapping application launch must exist and run useful work. If it does
+not exist, this task is blocked by design. Task 07 is deferred outside the
+simulation-foundation milestone and is not a prerequisite for this cutover.
 
 **Exclusive write scope:** `autonomy/**`. Do not edit Adapter, Simulation,
 deployment YAML, root tests, or operational documentation.
@@ -34,8 +35,9 @@ deployment YAML, root tests, or operational documentation.
 
 - Image and package inspection proves all prohibited dependencies and settings
   are absent.
-- The application process runs against either Adapter's public ROS interfaces
-  without importing environment-specific packages.
+- The application process runs against the Simulation Adapter's public ROS
+  interfaces without importing environment-specific packages. Future hardware
+  compatibility remains a contract goal, not tested deployment evidence.
 - Stopping the application process makes liveness fail.
 - The container does not exit immediately and does not claim health merely
   because a placeholder process is running.
@@ -45,4 +47,3 @@ deployment YAML, root tests, or operational documentation.
 Give Task 09 the exact command, liveness probe, required public interfaces, and
 startup timeout. This commit must merge atomically with Task 09's Adapter
 selection and readiness changes.
-
