@@ -25,7 +25,7 @@ mavros-smoke:
 	docker compose -f container/compose.yaml --profile evaluation run --rm -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 
 boundary-smoke:
-	docker exec -i maritime-autonomy bash -lc 'source /etc/maritime_autonomy_setup.bash && python3 -' < ../tests/ros_boundary_smoke.py
+	docker compose -f container/compose.yaml --profile evaluation run --rm -T -e SIMULATION_EVALUATION=1 evaluation python3 - < ../tests/ros_boundary_smoke.py
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
