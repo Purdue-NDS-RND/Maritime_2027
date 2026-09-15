@@ -141,7 +141,11 @@ Compose file with `FCU_URL` is not a Hardware Adapter implementation.
 - [ ] Give the autonomy container a real application process after removing its
   current MAVROS-only `CMD`. Prefer coordinating this cutover with the first
   perception/state/system launch so the service has meaningful work and a
-  meaningful liveness check; do not add `sleep`, `tail`, or a fake keepalive.
+  meaningful liveness check. For the explicitly simulation-only
+  pre-implementation bootstrap exception, a named placeholder is permitted
+  only with explicit simulation opt-in, no command capability, and mission
+  readiness fixed false; do not use `sleep`, `tail`, or an unlabeled fake
+  keepalive.
 - [ ] Keep shared `maritime_bringup` responsible for autonomy nodes and
   environment-neutral configuration only. Adapter startup must remain outside
   that launch tree.

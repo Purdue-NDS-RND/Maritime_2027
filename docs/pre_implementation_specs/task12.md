@@ -27,7 +27,7 @@ to its owning task.
    Simulation Adapter.
 5. Record separate evidence for process liveness, RGB/depth/`CameraInfo`, generic
    frames/topics, MAVROS connection and required telemetry, autonomy boundary,
-   and truth isolation.
+   truth isolation, and the bootstrap placeholder's false mission readiness.
 6. Run `make verify-rgbd` and focused Simulation Adapter contract tests. Record
    Hardware Adapter contract tests as deferred.
 7. Run the simulation-only neutral command smoke and verify disarm cleanup.
@@ -51,6 +51,8 @@ to its owning task.
 - Intermittent RGB-D throughput below the existing 8.00 synchronized-pairs/sec
   threshold remains a failure and is recorded; the threshold is not lowered.
 - Hardware checks not run on actual hardware are labeled unverified.
+- Bootstrap-placeholder liveness is labeled as pre-implementation infrastructure,
+  not autonomy, perception, mapping, navigation, or vessel-readiness evidence.
 - Final `git status --short` and `git diff --check` are recorded, with generated
   logs and ROS cache/build output excluded from commits.
 

@@ -12,9 +12,9 @@ semantic verification. This is preparation for later implementation work, not
 a final vessel-deployment or autonomy milestone.
 
 This work does **not** implement perception, mapping, YOLO, navigation, mission
-management, autonomous control, or the GCS. The autonomy cutover in Task 08 must
-wait for a real autonomy application launch; it must not introduce a fake
-keepalive.
+management, autonomous control, or the GCS. Task 08 may use the bounded
+simulation bootstrap exception below; it is not an autonomy application and
+does not make any of those capabilities implemented.
 
 ## Milestone Scope Decision: Hardware Adapter Deferred
 
@@ -25,11 +25,24 @@ is an acceptable substitute for it. The MAVROS and camera contracts remain the
 future Hardware Adapter's binding interface, but this milestone makes no
 hardware or vessel-readiness claim.
 
-Deferral removes Task 07 from the simulation-only Task 08–12 dependency path;
-it does **not** authorize Task 08. Task 08 still requires a real
-environment-neutral perception, state, or mapping application. Until such an
-application exists, preserve the current MAVROS-only autonomy process and do
-not advance the cutover tasks.
+Deferral removes Task 07 from the simulation-only Task 08–12 dependency path.
+
+## Temporary Simulation Bootstrap Exception
+
+For this pre-implementation milestone, Task 08 may replace the MAVROS-only
+autonomy process with a deliberately named simulation bootstrap placeholder.
+It must start only when both `ADAPTER_ENVIRONMENT=simulation` and
+`MARITIME_PREIMPLEMENTATION_PLACEHOLDER=1` are set; it must fail closed for any
+other environment. It may provide process liveness and an explicit diagnostic
+reason such as `preimplementation_placeholder`, but it must publish no vehicle
+commands, invoke no command-capable MAVROS service, and report mission
+readiness as false. Liveness of this process is never application, perception,
+mapping, navigation, or vessel-readiness evidence.
+
+Task 09 must wire the explicit opt-in only for the Simulation Adapter profile;
+Task 10 must test the opt-in and fail-closed behavior; Task 12 must record the
+placeholder as a limitation. A real environment-neutral application replaces
+this exception before any autonomy or vessel capability claim.
 
 ## How to Use These Specs
 
@@ -53,7 +66,7 @@ Start:   task01  task02  task03                 contracts, parallel
 After 01–03:        task04                    Adapter relocation
                          └─ task06 after task04 + task05
 Deferred:            task07                    hardware boundary, future milestone
-After 06 + app:     task08                    staged simulation-only autonomy cutover
+After 06:           task08                    staged simulation-only autonomy bootstrap cutover
 After 04–06 + 08:   task09                    simulation integration and lifecycle
 After 09:           task10                    boundary/acceptance tests
 After 10:           task11                    current operational docs
@@ -65,9 +78,9 @@ still running. Task 07 is deferred and has no ready-queue position in this
 milestone. This ready-queue rule takes precedence over treating the diagram as
 fixed batch waves.
 
-Task 08 also depends on an actual environment-neutral autonomy application
-launch existing. If it does not exist, stop after the Adapter review and do not
-remove the current MAVROS-only process.
+Task 08 may use only the temporary simulation bootstrap exception defined
+above. A real environment-neutral autonomy application is still required before
+any autonomy capability claim or hardware deployment work.
 
 ## Staged Integration Procedure
 

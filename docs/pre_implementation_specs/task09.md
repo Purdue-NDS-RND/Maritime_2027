@@ -44,10 +44,11 @@ Do not modify root acceptance tests or operational Markdown.
   are invoked explicitly, never during normal Adapter startup or on hardware.
 - Implement the ordered launch chain: fresh scenario/manifest, advancing Gazebo
   simulation and vehicle, SITL MAVLink, selected Adapter sources and MAVROS,
-  then the autonomy application.
+  then Task 08's explicitly opted-in simulation bootstrap placeholder.
 - Gate every handoff on bounded semantic readiness with actionable error and log
   collection. Separate process liveness, camera/calibration readiness, FCU
   connection/telemetry, required state/TF freshness, and application readiness.
+  The placeholder's application/mission readiness is intentionally false.
 - Propagate required-process failures visibly and implement graceful cleanup for
   `make down`, Ctrl-C, startup failure, and verification exit.
 - Preserve logs and SITL EEPROM/parameter state across ordinary restarts and
@@ -67,7 +68,8 @@ Do not modify root acceptance tests or operational Markdown.
 - Restart preserves FCU parameter state and logs but not mapping-session state;
   `WIPE_PARAMS` creates a clean FCU state.
 - No healthy service status is used as evidence for camera, FCU, or application
-  semantic readiness unless the corresponding live probe passes.
+  semantic readiness unless the corresponding live probe passes. Placeholder
+  liveness is not application readiness and mission readiness remains false.
 
 ## Handoff
 

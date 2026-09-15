@@ -31,7 +31,8 @@ runtime scripts, or documentation.
 - Cover two visible same-category buoys with distinct truth entities and no
   entity IDs leaking to perception/autonomy.
 - Test liveness, source readiness, FCU readiness, and application readiness as
-  separate assertions.
+  separate assertions. Require the Task 08 placeholder's two simulation opt-ins,
+  its false mission readiness, and its absence of command capability.
 - Keep `make mavros-smoke` simulation-only with bounded neutral-command and
   disarm cleanup.
 
