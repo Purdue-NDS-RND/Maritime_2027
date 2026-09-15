@@ -74,7 +74,7 @@ class AdapterDiagnostics(Node):
         self.parameter_errors = {node: "parameters_unobserved" for node in PARAMETER_GROUPS}
         self.parameter_clients = {node: AsyncParameterClient(self, node) for node in PARAMETER_GROUPS}
         self.parameter_futures = {node: None for node in PARAMETER_GROUPS}
-        self.clients = {
+        self.command_clients = {
             "/mavros/cmd/arming": self.create_client(CommandBool, "/mavros/cmd/arming"),
             "/mavros/set_mode": self.create_client(SetMode, "/mavros/set_mode"),
             "/mavros/cmd/command": self.create_client(CommandLong, "/mavros/cmd/command"),
@@ -117,7 +117,7 @@ class AdapterDiagnostics(Node):
             future = self.parameter_futures[node]
             client = self.parameter_clients[node]
             if future is None:
-                if client.service_is_ready():
+                if client.services_are_ready():
                     self.parameter_futures[node] = client.get_parameters(list(expected_values))
                 continue
             if not future.done():

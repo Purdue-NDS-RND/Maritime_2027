@@ -237,6 +237,11 @@ class Task06ContractTests(unittest.TestCase):
         self.assertEqual(parameter_mismatches(expected, {"heartbeat_rate": 2.0, "disable_diag": False}), ["heartbeat_rate"])
         self.assertEqual(parameter_mismatches(expected, {"heartbeat_rate": 1.0}), ["disable_diag"])
 
+    def test_diagnostics_use_the_jazzy_parameter_client_readiness_api(self):
+        diagnostics = (ROOT / "Adapter/simulation/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/diagnostics.py").read_text()
+        self.assertIn("client.services_are_ready()", diagnostics)
+        self.assertNotIn("client.service_is_ready()", diagnostics)
+
     def test_manual_mode_requires_observed_state_transition(self):
         package = ROOT / "Simulation" / "tests" / "evaluation" / "ros_ws" / "src" / "blueboat_sim_evaluation"
         sys.path.insert(0, str(package))

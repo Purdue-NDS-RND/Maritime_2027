@@ -19,13 +19,13 @@ smoke:
 	./scripts/smoke.sh
 
 sensor-smoke:
-	docker compose -f container/compose.yaml --profile evaluation run --rm -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation sensor_smoke
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation sensor_smoke
 
 mavros-smoke:
-	docker compose -f container/compose.yaml --profile evaluation run --rm -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 
 boundary-smoke:
-	docker compose -f container/compose.yaml --profile evaluation run --rm -T -e SIMULATION_EVALUATION=1 evaluation python3 - < ../tests/ros_boundary_smoke.py
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -e SIMULATION_EVALUATION=1 evaluation python3 - < ../tests/ros_boundary_smoke.py
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
