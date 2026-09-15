@@ -6,9 +6,11 @@
 as the active project root when running its commands. Key areas are
 `config/` for SITL parameters, `worlds/` for Gazebo worlds, `models/` for
 vehicle and buoy assets, and `scenarios/` for editable JSON layouts.
-`Adapter/ros_ws/` owns simulation-only ROS bridges, frames, and evaluation
-clients. `autonomy/ros_ws/` owns shared onboard packages and MAVROS; it must not
-depend on Gazebo or simulation truth. `deployment/` holds shared service
+`Adapter/simulation/ros_ws/` owns simulation-only ROS bridges, camera frames,
+MAVROS, and Adapter diagnostics. `Simulation/tests/evaluation/` owns explicit
+simulation-only evaluators. `autonomy/ros_ws/` contains only the temporary
+simulation bootstrap and must not depend on Gazebo, simulation truth, MAVROS,
+or FCU transport. `deployment/` holds shared service
 configuration. Runtime output
 belongs in `logs/`; do not commit generated logs, rendered scenario files, or
 Python cache files. Project-wide mission, requirements, and architecture
@@ -30,8 +32,8 @@ make down           # stop containers while retaining logs and SITL state
 
 Use `SCENARIO=gate make run` for RGB-D work. Run `make validate` before a
 build and the relevant smoke test after changes. `make smoke` requires a
-running simulator; `make sensor-smoke` and `make mavros-smoke` require the
-adapter; `make mavros-smoke` also requires the autonomy service running MAVROS.
+running simulator; `make sensor-smoke` and `make mavros-smoke` run the explicit
+simulation-only evaluation image and require the running Simulation Adapter.
 
 ## Coding Style & Naming Conventions
 

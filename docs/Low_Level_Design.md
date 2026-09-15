@@ -2,6 +2,13 @@
 
 ## Purpose, Scope, and Design Status
 
+**Current migration status (2026-09-15):** the simulated public camera boundary
+is `/sensors/camera_0/...` with `camera_0_link` and
+`camera_0_optical_frame`; MAVROS and `udp://:14552@` are Simulation Adapter
+responsibilities. The Hardware Adapter and actual perception/state/mapping
+application are not implemented. Later references to legacy runtime ownership
+are historical design context, not current operation.
+
 The goal of this design effort is to establish the base autonomy functionality
 on which later missions can be built. The intended result is a vessel that can
 perceive its surroundings, obtain a vessel-state estimate, map the surrounding
@@ -79,8 +86,9 @@ Draft interfaces, relative to each detector's camera namespace:
 
 No custom service or action is proposed for initial detection. For simulation,
 propose namespace `/perception/camera_0` and remap its `image` input to the
-target `/sensors/camera_0/color/image_raw` topic. The current simulator still
-publishes `/blueboat/camera/rgb/image_raw`; migration belongs to the Adapter.
+target `/sensors/camera_0/color/image_raw` topic. The Simulation Adapter now
+normalizes its public camera boundary to that topic; legacy Gazebo names remain
+private implementation details.
 Namespace names are configuration, not assumptions inside the
 detector. Only one selected detector publishes the primary output per camera.
 

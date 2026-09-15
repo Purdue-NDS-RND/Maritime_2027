@@ -78,10 +78,11 @@ simulator, adapter, and autonomy images with:
 make ros-build
 ```
 
-The adapter image installs ROS 2 Jazzy, `ros_gz_bridge`, MAVROS message types,
-and OpenCV's ArUco module for explicit simulation-only smoke tests. The separate
-autonomy image installs MAVROS and its required GeographicLib datasets, without
-Gazebo dependencies. Sources live in `Adapter/` and `autonomy/` at repository root.
+The Adapter image at `Adapter/simulation/` installs ROS 2 Jazzy, `ros_gz_bridge`,
+MAVROS, and GeographicLib datasets. The separate evaluation image installs
+OpenCV's ArUco module and MAVROS message types for explicit simulation-only
+smoke tests. The autonomy image has none of those environment-facing runtime
+dependencies.
 Use `ADAPTER_IMAGE` and `AUTONOMY_IMAGE` to override their image names; the former
 combined `ROS_IMAGE` setting is no longer used.
 The build needs internet access and several additional gigabytes of Docker

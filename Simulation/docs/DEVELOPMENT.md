@@ -73,10 +73,11 @@ preserving this known-good ArduPilot/Gazebo foundation.
 - Scenario JSON is source; rendered SDF and manifests are disposable output.
 - Keep `ros_gz_bridge` directions `GZ_TO_ROS`. MAVROS is the only ROS-side FCU
   command path.
-- Maintain bridges and simulation-only evaluations in `Adapter/ros_ws/`; maintain
-  MAVROS and onboard packages in `autonomy/ros_ws/`. The latter must build without
-  Gazebo dependencies or scenario manifests. Use the shared service definition in
-  `deployment/compose.base.yaml` for both simulation and independent startup.
+- Maintain bridges, MAVROS, and Adapter diagnostics in
+  `Adapter/simulation/ros_ws/`; maintain explicit evaluators in
+  `Simulation/tests/evaluation/`. `autonomy/ros_ws/` must build without Gazebo,
+  MAVROS, FCU transport, scenario manifests, or evaluation dependencies. The
+  current bootstrap is simulation-only and not an independent startup service.
 - Keep perfect motion TF on `/blueboat/ground_truth/tf` and its evaluation-only
   static companion. Do not feed it into the shared navigation TF tree.
 - OpenCV ArUco logic belongs only in `sensor_smoke.py`, never in bringup.
