@@ -1,10 +1,11 @@
-"""Command-capable semantic test guarded against non-simulation execution."""
+"""Velocity-setpoint semantic test guarded against non-simulation execution."""
 
 import math
 import time
 
 import rclpy
-from mavros_msgs.msg import OverrideRCIn, State
+from geometry_msgs.msg import TwistStamped
+from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -12,7 +13,7 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, NavSatFix
 
 from .guard import require_explicit_simulation
-from .safety import manual_mode_observed
+from .safety import guided_mode_observed
 
 
 class MavrosSmoke(Node):
@@ -28,7 +29,9 @@ class MavrosSmoke(Node):
         self.create_subscription(Odometry, "/blueboat/ground_truth/odometry", lambda msg: setattr(self, "truth", msg), 20)
         self.arm_client = self.create_client(CommandBool, "/mavros/cmd/arming")
         self.mode_client = self.create_client(SetMode, "/mavros/set_mode")
-        self.override = self.create_publisher(OverrideRCIn, "/mavros/rc/override", 10)
+        self.velocity_setpoint = self.create_publisher(
+            TwistStamped, "/mavros/setpoint_velocity/cmd_vel", 10
+        )
 
     def spin_until(self, predicate, timeout, description):
         deadline = time.monotonic() + timeout
@@ -45,17 +48,34 @@ class MavrosSmoke(Node):
         self.spin_until(future.done, timeout, client.srv_name)
         return future.result()
 
-    def rc(self, value):
-        message = OverrideRCIn()
-        message.channels = [value] * 18
-        self.override.publish(message)
+    def velocity(self, forward_m_s):
+        message = TwistStamped()
+        message.header.stamp = self.get_clock().now().to_msg()
+        # MAVROS converts this ROS ENU velocity setpoint for the FCU.  Keeping
+        # yaw rate zero makes this a bounded translation-only command.
+        message.twist.linear.x = forward_m_s
+        message.twist.angular.z = 0.0
+        self.velocity_setpoint.publish(message)
 
-    def controlled_rc(self, throttle):
-        message = OverrideRCIn()
-        message.channels = [OverrideRCIn.CHAN_NOCHANGE] * 18
-        message.channels[0] = 1500
-        message.channels[2] = throttle
-        self.override.publish(message)
+    def publish_velocity_for(self, forward_m_s, duration_s):
+        deadline = time.monotonic() + duration_s
+        while time.monotonic() < deadline:
+            self.velocity(forward_m_s)
+            rclpy.spin_once(self, timeout_sec=0.05)
+
+    def arm_when_ready(self, timeout_s=60.0):
+        deadline = time.monotonic() + timeout_s
+        last_result = None
+        while time.monotonic() < deadline:
+            arm = self.call(self.arm_client, CommandBool.Request(value=True), timeout=5.0)
+            if arm.success:
+                return
+            last_result = arm.result
+            retry_deadline = min(time.monotonic() + 2.0, deadline)
+            while time.monotonic() < retry_deadline:
+                self.velocity(0.0)
+                rclpy.spin_once(self, timeout_sec=0.05)
+        raise RuntimeError(f"ArduPilot did not become armable within {timeout_s:.0f}s; last result: {last_result}")
 
     def position(self):
         point = self.truth.pose.pose.position
@@ -78,39 +98,36 @@ def main():
         )
         if node.state.armed:
             raise RuntimeError("refusing command test because vehicle was already armed")
-        mode = node.call(node.mode_client, SetMode.Request(base_mode=0, custom_mode="MANUAL"))
+        mode = node.call(node.mode_client, SetMode.Request(base_mode=0, custom_mode="GUIDED"))
         if not mode.mode_sent:
-            raise RuntimeError("ArduPilot rejected MANUAL mode")
-        node.spin_until(lambda: manual_mode_observed(node.state), 10.0, "MANUAL mode state")
-        arm = node.call(node.arm_client, CommandBool.Request(value=True))
-        if not arm.success:
-            raise RuntimeError(f"ArduPilot rejected arm command: {arm.result}")
+            raise RuntimeError("ArduPilot rejected GUIDED mode")
+        node.spin_until(lambda: guided_mode_observed(node.state), 10.0, "GUIDED mode state")
+        # ArduRover requires a recently received Guided target.  A zero-velocity
+        # warmup is non-moving and gives both MAVROS and SITL time to establish
+        # that setpoint path before the command-capable phase begins.
+        node.publish_velocity_for(0.0, 3.0)
+        node.arm_when_ready()
         armed_by_test = True
         node.spin_until(lambda: node.state.armed, 10.0, "armed state")
         start = node.position()
-        pulse_end = time.monotonic() + 0.5
-        while time.monotonic() < pulse_end:
-            node.controlled_rc(2000)
-            rclpy.spin_once(node, timeout_sec=0.05)
-        neutral_end = time.monotonic() + 0.5
-        while time.monotonic() < neutral_end:
-            node.controlled_rc(1500)
-            rclpy.spin_once(node, timeout_sec=0.05)
+        node.publish_velocity_for(0.5, 3.0)
+        node.publish_velocity_for(0.0, 1.0)
         node.spin_until(lambda: math.dist(node.position(), start) >= 0.10, 8.0, "0.10 m ground-truth movement")
         node.spin_until(lambda: node.speed() <= 0.10, 20.0, "ground-truth speed to settle")
+        hold = node.call(node.mode_client, SetMode.Request(base_mode=0, custom_mode="HOLD"))
+        if not hold.mode_sent:
+            raise RuntimeError("ArduPilot rejected HOLD mode")
+        node.spin_until(lambda: node.state is not None and node.state.mode == "HOLD", 10.0, "HOLD mode state")
         disarm = node.call(node.arm_client, CommandBool.Request(value=False), timeout=5.0)
         if not disarm.success:
             raise RuntimeError(f"ArduPilot rejected disarm command: {disarm.result}")
         node.spin_until(lambda: not node.state.armed, 5.0, "disarmed state")
         armed_by_test = False
-        print("MAVROS PASS: connected telemetry, acknowledgments, bounded command, neutral/release, motion, and disarm verified")
+        print("MAVROS PASS: connected telemetry, GUIDED velocity command, zero-velocity stop, motion, HOLD, and disarm verified")
     finally:
-        # Bounded neutralization followed by release is attempted on every exit.
+        # A bounded zero-velocity command is attempted on every exit.
         for _ in range(10):
-            node.controlled_rc(1500)
-            rclpy.spin_once(node, timeout_sec=0.03)
-        for _ in range(3):
-            node.rc(OverrideRCIn.CHAN_RELEASE)
+            node.velocity(0.0)
             rclpy.spin_once(node, timeout_sec=0.03)
         if armed_by_test:
             try:

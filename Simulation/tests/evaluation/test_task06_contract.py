@@ -242,13 +242,13 @@ class Task06ContractTests(unittest.TestCase):
         self.assertIn("client.services_are_ready()", diagnostics)
         self.assertNotIn("client.service_is_ready()", diagnostics)
 
-    def test_manual_mode_requires_observed_state_transition(self):
+    def test_guided_mode_requires_observed_state_transition(self):
         package = ROOT / "Simulation" / "tests" / "evaluation" / "ros_ws" / "src" / "blueboat_sim_evaluation"
         sys.path.insert(0, str(package))
-        from blueboat_sim_evaluation.safety import manual_mode_observed
-        self.assertFalse(manual_mode_observed(None))
-        self.assertFalse(manual_mode_observed(type("State", (), {"mode": "HOLD"})()))
-        self.assertTrue(manual_mode_observed(type("State", (), {"mode": "MANUAL"})()))
+        from blueboat_sim_evaluation.safety import guided_mode_observed
+        self.assertFalse(guided_mode_observed(None))
+        self.assertFalse(guided_mode_observed(type("State", (), {"mode": "HOLD"})()))
+        self.assertTrue(guided_mode_observed(type("State", (), {"mode": "GUIDED"})()))
 
 
 if __name__ == "__main__":

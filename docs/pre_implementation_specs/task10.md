@@ -33,8 +33,8 @@ runtime scripts, or documentation.
 - Test liveness, source readiness, FCU readiness, and application readiness as
   separate assertions. Require the Task 08 placeholder's two simulation opt-ins,
   its false mission readiness, and its absence of command capability.
-- Keep `make mavros-smoke` simulation-only with bounded neutral-command and
-  disarm cleanup.
+- Keep `make mavros-smoke` simulation-only with bounded zero-velocity-command
+  and disarm cleanup.
 
 ## Acceptance
 

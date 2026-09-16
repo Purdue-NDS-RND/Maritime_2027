@@ -284,7 +284,7 @@ startup and shutdown must be deterministic.
 - [ ] Split liveness, source-readiness, FCU-readiness, and mission-readiness
   assertions so a healthy container cannot be reported as semantic success.
 - [ ] Keep `make mavros-smoke` explicitly simulation-only, move its execution to
-  the evaluation location, and retain bounded neutral-command/disarm cleanup.
+  the evaluation location, and retain bounded zero-velocity-command/disarm cleanup.
 
 Required alongside each migration above; remove obsolete assertions rather than
 keeping dual ownership or old topic names as permanent compatibility behavior.
