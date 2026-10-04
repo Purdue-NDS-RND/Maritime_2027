@@ -6,42 +6,76 @@ dependency: settle the shared contracts first, move runtime ownership second,
 then replace tests and run end-to-end acceptance. None of the items below is
 implemented merely because it appears in the design.
 
+## Status reconciliation: 2026-10-04
+
+Checked items record completed repository work at `4ff89fb`, supported by the
+[original integration report](../Simulation/docs/PRE_IMPLEMENTATION_MIGRATION_VERIFICATION.md)
+and the [benchmark validation update](../Simulation/docs/MAVROS_VELOCITY_BENCHMARK_VERIFICATION.md).
+Static, build, and live results are identified separately in those reports.
+Checking implementation items does not mark the whole migration accepted.
+
+Checks apply to the supported Simulation Adapter and existing evaluator and
+bootstrap consumers. Hardware remains deferred. The checked autonomy-process
+item uses only the approved simulation bootstrap exception; a real autonomy
+application is still absent. Camera contracts and normalized interfaces are
+implemented, but synchronized RGB-D throughput and clock acceptance remain open.
+
+The camera-roster item remains partial: the simulation roster and future
+hardware contract exist, but a real autonomy launch enumerating cameras does not.
+Repeated-category rendering and entity-keyed evaluation code are implemented;
+live two-instance acceptance is still unverified. Ordinary shutdown/log retention
+has evidence, but the full lifecycle items remain open pending failure injection,
+semantic startup gates, restart/WIPE_PARAMS verification, and real application
+state behavior. Dependency checks are source/Compose checks plus the earlier
+clean-build evidence, not a new clean Adapter/autonomy rebuild.
+
+Section 8 remains partial: the container suite covers Compose ownership, while
+other suites cover dependency exclusions; it does not yet assert every requested
+ownership property in `test_container_boundaries.py`. The boundary smoke runs in
+the evaluator, so it does not establish real autonomy consumption. Broader camera
+negative cases, readiness distinctions, and live repeated-category coverage remain
+open. Current documentation still has stale design wording; the full documentation
+scan/remediation item therefore remains unchecked. The original report is retained
+as historical evidence; its failed RC benchmark is superseded only by the new
+velocity-benchmark report.
+
 ## 1. Freeze the Adapter Contracts
 
 ### Common MAVROS Contract
 
-- [ ] Define one versioned MAVROS contract used by both the Simulation and
+- [x] Define one versioned MAVROS contract used by both the Simulation and
   Hardware Adapters: ROS distribution and MAVROS version, public `/mavros/...`
   namespace, enabled/disabled plugin lists, MAVLink protocol, source system ID,
   target system/component IDs, frame conventions, and time/timesync settings.
-- [ ] Put the shared values in one canonical configuration source, with only
+- [x] Put the shared values in one canonical configuration source, with only
   transport and environment-specific device settings overridden per Adapter.
-- [ ] Preserve or deliberately migrate the currently tested source system ID
+- [x] Preserve or deliberately migrate the currently tested source system ID
   `255`, target `1/1`, MAVLink v2, root namespace, and disabled/selected TF
   behavior; do not let Simulation and Hardware defaults drift independently.
-- [ ] Define the public telemetry, command, service, acknowledgment, and
+- [x] Define the public telemetry, command, service, acknowledgment, and
   connection-diagnostic surface that autonomy and the GCS may depend on.
-- [ ] Pin or otherwise control dependency changes closely enough that a rebuild
+- [x] Pin or otherwise control dependency changes closely enough that a rebuild
   cannot silently change MAVROS namespace or plugin behavior.
 
-Required before moving MAVROS or writing consumers against its interface. The
-current settings are embedded in
-`autonomy/ros_ws/src/maritime_bringup/launch/vehicle.launch.py`, and the current
-ROS packages are installed without an exact MAVROS package version.
+Required before moving MAVROS or writing consumers against its interface.
+The versioned contract is [mavros_adapter_contract.md](contracts/mavros_adapter_contract.md);
+canonical runtime settings now live in
+`Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/mavros.yaml`.
+The Simulation Adapter image pins exact MAVROS and MAVROS Extras versions.
 
 ### Common Camera Contract
 
-- [ ] Make each Adapter expose configured camera sources as
+- [x] Make each Adapter expose configured camera sources as
   `/sensors/camera_N/color/image_raw`,
   `/sensors/camera_N/depth/image_rect_raw`, and
   `/sensors/camera_N/color/camera_info`, with `camera_N_link` and
   `camera_N_optical_frame` frames. Internal Gazebo and vendor-driver names may
   remain private to their Adapter.
-- [ ] Specify accepted color encoding(s) and a canonical registered-depth
+- [x] Specify accepted color encoding(s) and a canonical registered-depth
   encoding and unit. Evaluate and document `32FC1` metres as the initial common
   depth representation, including invalid-value semantics and any conversion
   required by a hardware driver.
-- [ ] Require depth to be registered to the color image and define which
+- [x] Require depth to be registered to the color image and define which
   calibration, distortion model, dimensions, and optical frame apply to the
   pair. Preserve acquisition timestamps and define the RGB/depth timestamp
   matching tolerance.
@@ -49,10 +83,10 @@ ROS packages are installed without an exact MAVROS package version.
   `camera_0` in current simulation and `camera_0` plus `camera_1` on hardware.
   Autonomy launch must enumerate configured cameras rather than infer a fixed
   count or model name.
-- [ ] Make image consumers and acceptance tests derive dimensions and
+- [x] Make image consumers and acceptance tests derive dimensions and
   intrinsics from `CameraInfo`; retain 1280x720 only as the current simulated
   calibration, not as a shared autonomy constant.
-- [ ] Define Adapter startup behavior and diagnostics for missing images,
+- [x] Define Adapter startup behavior and diagnostics for missing images,
   missing/stale calibration, frame mismatches, unregistered depth, and
   incompatible timestamps.
 
@@ -62,13 +96,13 @@ topic and preserves the incoming header.
 
 ### Scenario Entity and Category Contract
 
-- [ ] Give every scenario buoy an immutable, unique entity identity independent
+- [x] Give every scenario buoy an immutable, unique entity identity independent
   of `marker_id` and category; keep the ArUco mapping category-level:
   `0 = white`, `1 = red`, `2 = green`, `3 = blue`.
-- [ ] Define manifest fields and evaluation-topic naming from that entity
+- [x] Define manifest fields and evaluation-topic naming from that entity
   identity so two physical buoys may use the same marker/category without
   colliding.
-- [ ] Replace comma-separated `ACTIVE_BUOY_IDS` and any other marker-ID roster
+- [x] Replace comma-separated `ACTIVE_BUOY_IDS` and any other marker-ID roster
   where it is being used as an entity roster with an identity-preserving
   manifest or equivalent configuration.
 
@@ -79,23 +113,23 @@ names and evaluator subscriptions must follow the same contract.
 
 ### Simulation Adapter
 
-- [ ] Move the current flat `Adapter/` simulation project to the target
+- [x] Move the current flat `Adapter/` simulation project to the target
   `Adapter/simulation/` layout before adding `Adapter/hardware/`. Update Docker
   build contexts, Compose extension paths, validation paths, Make targets, and
   documentation as one relocation; do not leave two active path conventions.
-- [ ] Move the MAVROS launch and shared configuration out of
+- [x] Move the MAVROS launch and shared configuration out of
   `autonomy/ros_ws/src/maritime_bringup/` and into Simulation Adapter bringup.
-- [ ] Install `mavros`, `mavros-extras`, `mavros_msgs`, GeographicLib tools, and
+- [x] Install `mavros`, `mavros-extras`, `mavros_msgs`, GeographicLib tools, and
   required GeographicLib datasets in the Simulation Adapter image; verify the
   dataset-install step in a clean image build.
-- [ ] Move `FCU_URL` ownership from the autonomy service and `Simulation/scripts/run.sh`
+- [x] Move `FCU_URL` ownership from the autonomy service and `Simulation/scripts/run.sh`
   handoff to the Simulation Adapter. Keep SITL's dedicated output on UDP 14552
   and configure the Adapter endpoint as `udp://:14552@` unless the shared
   contract intentionally changes it.
-- [ ] Start camera/Gazebo bridges and MAVROS through one Simulation Adapter
+- [x] Start camera/Gazebo bridges and MAVROS through one Simulation Adapter
   bringup chain, and make its process supervision fail visibly if either
   required child exits.
-- [ ] Move FCU connection checks into Adapter diagnostics and update Compose
+- [x] Move FCU connection checks into Adapter diagnostics and update Compose
   dependency/readiness ordering so autonomy starts against the selected Adapter,
   not directly against the simulator's health.
 
@@ -130,15 +164,15 @@ Compose file with `FCU_URL` is not a Hardware Adapter implementation.
 
 ### Shared Autonomy Cleanup and Real Bringup
 
-- [ ] Remove the MAVROS runtime packages, GeographicLib installation, `FCU_URL`,
+- [x] Remove the MAVROS runtime packages, GeographicLib installation, `FCU_URL`,
   vehicle launch wrapper, and MAVROS connection healthcheck from the autonomy
   image/package/Compose definition after the Adapter path is working. Retain
   `mavros_msgs` wherever autonomy code needs the public `/mavros/...` message or
   service definitions.
-- [ ] Keep autonomy dependent only on the public ROS message packages and
+- [x] Keep autonomy dependent only on the public ROS message packages and
   interfaces it actually consumes; add automated checks excluding Gazebo,
   camera-driver, simulator-truth, and flight-controller-transport dependencies.
-- [ ] Give the autonomy container a real application process after removing its
+- [x] Give the autonomy container a real application process after removing its
   current MAVROS-only `CMD`. Prefer coordinating this cutover with the first
   perception/state/system launch so the service has meaningful work and a
   meaningful liveness check. For the explicitly simulation-only
@@ -146,7 +180,7 @@ Compose file with `FCU_URL` is not a Hardware Adapter implementation.
   only with explicit simulation opt-in, no command capability, and mission
   readiness fixed false; do not use `sleep`, `tail`, or an unlabeled fake
   keepalive.
-- [ ] Keep shared `maritime_bringup` responsible for autonomy nodes and
+- [x] Keep shared `maritime_bringup` responsible for autonomy nodes and
   environment-neutral configuration only. Adapter startup must remain outside
   that launch tree.
 
@@ -155,20 +189,20 @@ container immediately exits or appears healthy while running no autonomy work.
 
 ## 3. Isolate Evaluation From Runtime Adapters
 
-- [ ] Move `sensor_smoke.py` and the boat-commanding `mavros_smoke.py` out of
+- [x] Move `sensor_smoke.py` and the boat-commanding `mavros_smoke.py` out of
   `blueboat_sim_bringup` into `Simulation/tests/` or a dedicated
   simulation-evaluation package/image.
-- [ ] Remove OpenCV/ArUco, scenario-manifest, and truth-consumer dependencies
+- [x] Remove OpenCV/ArUco, scenario-manifest, and truth-consumer dependencies
   from the Adapter runtime image unless a separate non-evaluation runtime
   function demonstrably needs them. The Adapter still needs the MAVROS runtime
   and its message definitions to expose the agreed vehicle interface.
-- [ ] Keep the Adapter limited to producing camera, clock, transform, MAVROS,
+- [x] Keep the Adapter limited to producing camera, clock, transform, MAVROS,
   and availability interfaces. Evaluators may subscribe to those outputs and
   `/blueboat/ground_truth/...`, but must not be launched as Adapter runtime
   responsibilities.
-- [ ] Ensure command-capable evaluators are invoked only by explicit simulation
+- [x] Ensure command-capable evaluators are invoked only by explicit simulation
   test commands, never by normal Adapter startup and never against hardware.
-- [ ] Preserve truth on evaluation-only topics and ensure no autonomy launch,
+- [x] Preserve truth on evaluation-only topics and ensure no autonomy launch,
   package, parameter, manifest mount, or shared TF source consumes perfect boat
   or buoy pose.
 
@@ -177,14 +211,14 @@ and before reusing its shape for hardware.
 
 ## 4. Normalize the Current Simulated Camera Boundary
 
-- [ ] Remap the current `/blueboat/camera/...` ROS outputs to the common
+- [x] Remap the current `/blueboat/camera/...` ROS outputs to the common
   `/sensors/camera_0/...` topics at the Simulation Adapter boundary. Gazebo may
   continue publishing `/blueboat/rgbd_camera/...` internally.
-- [ ] Replace public `zed2i_camera_link` and
+- [x] Replace public `zed2i_camera_link` and
   `zed2i_left_camera_optical_frame` headers/transforms with `camera_0_link` and
   `camera_0_optical_frame` while leaving any private Gazebo asset identifiers
   unchanged where renaming provides no interface benefit.
-- [ ] Update bridge YAML, static-transform launch, Adapter health/readiness
+- [x] Update bridge YAML, static-transform launch, Adapter health/readiness
   diagnostics, perception remaps, evaluator subscriptions, and boundary tests
   in the same change so there is no mixed old/new public interface.
 - [ ] Verify RGB, registered depth, and `CameraInfo` carry compatible timestamps,
@@ -201,15 +235,15 @@ verification gap; detector `use_sim_time` alone does not prove synchronization.
 
 ## 5. Make Repeated-Category Scenarios Scalable
 
-- [ ] Update `Simulation/scripts/render_scenario.py` to require unique entity
+- [x] Update `Simulation/scripts/render_scenario.py` to require unique entity
   names but allow repeated marker IDs; remove the `buoy_<marker_id>` naming rule
   and marker-ID uniqueness check.
-- [ ] Add a committed scenario containing at least two distinct buoys of the
+- [x] Add a committed scenario containing at least two distinct buoys of the
   same category and verify the rendered SDF and manifest preserve both entities.
-- [ ] Replace the four hard-coded `buoy_0` through `buoy_3` truth bridges in
+- [x] Replace the four hard-coded `buoy_0` through `buoy_3` truth bridges in
   `blueboat_sim_bringup/config/bridge.yaml` with generated/dynamic bridging or
   another approach that scales to the manifest's entity roster.
-- [ ] Update truth subscriptions and evaluation storage to key by entity
+- [x] Update truth subscriptions and evaluation storage to key by entity
   identity. Do not store detections in a dictionary keyed only by marker ID,
   because that collapses simultaneous same-category observations.
 - [ ] Verify evaluation can compare each simulated entity independently while
@@ -221,11 +255,11 @@ mapping acceptance run.
 
 ## 6. Align Simulator Category Assets
 
-- [ ] Align marker 0's model materials and `model.config` description with the
+- [x] Align marker 0's model materials and `model.config` description with the
   white category in `Simulation/models/aruco_buoy_id0/`.
-- [ ] Align marker 3's model materials and `model.config` description with the
+- [x] Align marker 3's model materials and `model.config` description with the
   blue category in `Simulation/models/aruco_buoy_id3/`.
-- [ ] Update scenario documentation, fixtures, screenshots, and visual
+- [x] Update scenario documentation, fixtures, screenshots, and visual
   expectations to the agreed marker/category mapping.
 
 Required before validating category labels against simulator buoy appearances.
@@ -241,7 +275,7 @@ ArUco classification still uses marker IDs, not sampled visible color.
 - [ ] Make ordering depend on explicit readiness evidence at each handoff, with
   bounded timeouts, actionable failure messages, and relevant log collection.
   Container creation or process existence alone is insufficient readiness.
-- [ ] Separate liveness from source and mission readiness. Container health may
+- [x] Separate liveness from source and mission readiness. Container health may
   prove required processes are alive; diagnostics must separately report camera
   delivery/calibration, MAVROS transport connection, required telemetry and
   state freshness, transform availability, and whether the sensing/mapping
@@ -272,7 +306,7 @@ startup and shutdown must be deterministic.
 - [ ] Update `tests/ros_boundary_smoke.py` to consume the generic camera topic
   and frames, verify MAVROS and actual camera data delivery into autonomy, and
   assert that truth frames/data do not enter the shared navigation interfaces.
-- [ ] Add package/image dependency tests proving autonomy excludes Gazebo,
+- [x] Add package/image dependency tests proving autonomy excludes Gazebo,
   simulator manifests/truth, ZED drivers, MAVROS launch/runtime packages, and
   environment-specific transport configuration.
 - [ ] Update camera/evaluator tests to cover configured camera rosters,
@@ -283,7 +317,7 @@ startup and shutdown must be deterministic.
   one marker/category and separately identified truth entities.
 - [ ] Split liveness, source-readiness, FCU-readiness, and mission-readiness
   assertions so a healthy container cannot be reported as semantic success.
-- [ ] Keep `make mavros-smoke` explicitly simulation-only, move its execution to
+- [x] Keep `make mavros-smoke` explicitly simulation-only, move its execution to
   the evaluation location, and retain bounded zero-velocity-command/disarm cleanup.
 
 Required alongside each migration above; remove obsolete assertions rather than
@@ -291,16 +325,16 @@ keeping dual ownership or old topic names as permanent compatibility behavior.
 
 ## 9. Update Operational Guidance
 
-- [ ] Update `AGENTS.md`, `Adapter/README.md`, `autonomy/README.md`,
+- [x] Update `AGENTS.md`, `Adapter/README.md`, `autonomy/README.md`,
   `Simulation/README.md`, and `Simulation/docs/DEVELOPMENT.md` when ownership
   migrates so contributor instructions no longer assign MAVROS to autonomy or
   evaluation clients to Adapter runtime.
-- [ ] Update `Simulation/docs/SETUP.md` and
+- [x] Update `Simulation/docs/SETUP.md` and
   `Simulation/docs/RGBD_AND_BUOY_SCENARIOS.md` with the final image contents,
   startup handoffs, generic topics/frames, and Adapter-owned MAVROS behavior.
 - [ ] Scan all current Markdown for old `Adapter/` paths, legacy public camera
   names, autonomy-owned `FCU_URL`, and autonomy-owned MAVROS instructions.
-- [ ] Preserve completed implementation plans and verification reports as
+- [x] Preserve completed implementation plans and verification reports as
   historical records. Add a clear superseded reference where necessary rather
   than rewriting past verification as if it tested the new architecture.
 
@@ -309,14 +343,14 @@ agents do not reintroduce the superseded boundary.
 
 ## 10. Final Integration Verification
 
-- [ ] Run `make validate` from `Simulation/` before building changed images.
-- [ ] Perform clean Adapter and autonomy image builds so dependency placement,
+- [x] Run `make validate` from `Simulation/` before building changed images.
+- [x] Perform clean Adapter and autonomy image builds so dependency placement,
   GeographicLib installation, and launch ownership are tested rather than
   inherited from old image layers.
 - [ ] Run `make verify-rgbd` after changes to models, scenarios, bridges, frames,
   MAVROS, Compose, or evaluation tools, plus focused contract tests for both
   Adapter configurations.
-- [ ] Exercise the live simulation path through UDP 14552 and record separate
+- [x] Exercise the live simulation path through UDP 14552 and record separate
   evidence for process liveness, camera delivery, MAVROS connection/telemetry,
   common frames/topics, truth isolation, and safe command cleanup.
 - [ ] Run the agreed manually piloted mapping acceptance scenario with all four
