@@ -180,6 +180,22 @@ def run_case(output, name):
             assert code == 128 + sig, code
             assert_clean()
             return {"exit": code, **identity}
+        if name in ("simulator_exit", "autonomy_exit"):
+            target = CONTAINERS[0] if name == "simulator_exit" else CONTAINERS[2]
+            # Stop just the selected required service. The launcher must notice
+            # that exit, report failure, and tear down the remaining services.
+            injected_at = time.monotonic()
+            stopped = command("docker", "stop", "--time", "15", target).stdout.strip()
+            assert stopped == target, stopped
+            code = process.wait(timeout=75)
+            assert code != 0, "required service exit was reported successful"
+            assert_clean()
+            text = (output / f"{name}.log").read_text()
+            assert f"required service {target} failed" in text, text[-1500:]
+            directory = ROOT / "logs/runs" / identity["run_id"]
+            assert (directory / "failure.log").stat().st_size > 0
+            return {"exit": code, "stopped_service": target,
+                    "failure_cleanup_s": round(time.monotonic() - injected_at, 1), **identity}
         executable = "camera_boundary" if name in ("child_exit", "camera_silence") else "mavros_node"
         sig = signal.SIGTERM if name == "child_exit" else signal.SIGSTOP
         injection = inject(CONTAINERS[1], executable, sig)
@@ -246,9 +262,9 @@ def persistence(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cases", default="gazebo_startup,adapter_startup,child_exit,camera_silence,fcu_silence,signal_int,signal_term,double_start,parameters")
+    parser.add_argument("--cases", default="gazebo_startup,adapter_startup,simulator_exit,child_exit,autonomy_exit,camera_silence,fcu_silence,signal_int,signal_term,double_start,parameters")
     args = parser.parse_args()
-    allowed = {"gazebo_startup", "adapter_startup", "child_exit", "camera_silence",
+    allowed = {"gazebo_startup", "adapter_startup", "simulator_exit", "child_exit", "autonomy_exit", "camera_silence",
                "fcu_silence", "signal_int", "signal_term", "double_start", "parameters"}
     if not set(args.cases.split(",")) <= allowed:
         parser.error("unknown lifecycle case")

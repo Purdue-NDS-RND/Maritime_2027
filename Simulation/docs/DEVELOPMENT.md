@@ -91,11 +91,17 @@ configuration, movement, Hold, RTL, and disarm.
 Run `make lifecycle-smoke` explicitly from `Simulation/` with the simulator
 stopped. It invokes `tests/lifecycle_acceptance.py`; this acceptance harness is
 never part of runtime startup. It launches separate simulation runs to exercise
-bounded failed Gazebo/Adapter startup, required-child exit, camera/FCU silence,
-SIGINT/SIGTERM cleanup, and parameter persistence. Test-only injections include
+bounded failed Gazebo/Adapter startup, simulator and autonomy service exits,
+required Adapter-child exit, camera/FCU silence, SIGINT/SIGTERM cleanup,
+double-start rejection, and parameter persistence. Test-only injections include
 a wrong SITL MAVROS output port (14559), stopping the camera boundary or MAVROS
-node, and an incompatible direct-world readiness case. Startup and silence
+node, stopping exactly one required simulator or autonomy container, and an
+incompatible direct-world readiness case. Startup and silence
 waits are bounded; production readiness retries and data thresholds are unchanged.
+To rerun just the service-exit cases, use
+`python3 tests/lifecycle_acceptance.py --cases simulator_exit,autonomy_exit`.
+Each requires the launcher to report the selected failed service, return nonzero,
+preserve failure evidence, and clean up the remaining stack.
 
 The parameter case changes only the benign `LOG_DISARMED` setting, verifies
 retention across a normal restart and reset with `WIPE_PARAMS=1`, then restores

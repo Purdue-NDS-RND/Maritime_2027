@@ -12,14 +12,17 @@ readiness policy. Both environment Adapters must produce this same boundary.
 
 ## Normative configuration source
 
-The manifest in this section is the one canonical source for contract version
-`2.0.0`. Adapter environment files and launch files are consumers of it; they
-must not carry independent copies with different shared values. A later runtime
-migration may extract this manifest verbatim into one version-controlled,
-machine-readable shared configuration file, but that change must update this
-document and contract tests in the same review. Until then, this section is
-authoritative and the package-supplied `apm_config.yaml` and
-`apm_pluginlists.yaml` are not authoritative project configuration.
+The manifest in this section defines the normative values for contract version
+`2.0.0`. The canonical simulation runtime configuration is
+`Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/mavros.yaml`.
+Launch consumes its loader and UAS settings; `configure_mavros` reads its plugin
+groups and applies them through parameter services. Adapter diagnostics
+independently checks the effective values against the contract. The runtime
+configuration, diagnostic expectations, and contract tests must remain aligned
+with this manifest and change together in the same review. Adapter environment
+files may supply only the overrides defined below. Package-supplied
+`apm_config.yaml` and `apm_pluginlists.yaml` are not authoritative project
+configuration.
 
 ```yaml
 contract_id: maritime.mavros_adapter
