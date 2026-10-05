@@ -8,36 +8,27 @@ implemented merely because it appears in the design.
 
 ## Status reconciliation: 2026-10-04
 
-Checked items record completed repository work at `4ff89fb`, supported by the
-[original integration report](../Simulation/docs/PRE_IMPLEMENTATION_MIGRATION_VERIFICATION.md)
-and the [benchmark validation update](../Simulation/docs/MAVROS_VELOCITY_BENCHMARK_VERIFICATION.md).
-Static, build, and live results are identified separately in those reports.
-Checking implementation items does not mark the whole migration accepted.
+The simulation foundation is reconciled against the
+[final verification report](../Simulation/docs/PRE_IMPLEMENTATION_FINAL_VERIFICATION.md),
+which separates source tests, clean dependency builds, live acceptance, and
+lifecycle failure injection. The
+[original integration report](../Simulation/docs/PRE_IMPLEMENTATION_MIGRATION_VERIFICATION.md),
+[velocity benchmark report](../Simulation/docs/MAVROS_VELOCITY_BENCHMARK_VERIFICATION.md),
+and [RGB-D transport report](../Simulation/docs/RGBD_TRANSPORT_VERIFICATION.md)
+remain historical evidence; their earlier failures are not current acceptance
+claims.
 
-Checks apply to the supported Simulation Adapter and existing evaluator and
-bootstrap consumers. Hardware remains deferred. The checked autonomy-process
-item uses only the approved simulation bootstrap exception; a real autonomy
-application is still absent. Camera contracts and normalized interfaces are
-implemented, but synchronized RGB-D throughput and clock acceptance remain open.
+Checks apply to the Simulation Adapter, explicit evaluators, and approved
+simulation-only bootstrap exception. MAVROS contract `2.0.0` replaces unsupported
+parameter aliases with the actual pinned implementation's settings; the public
+namespace, vehicle IDs, ports, and camera contract `1.0.0` remain unchanged.
 
-The camera-roster item remains partial: the simulation roster and future
-hardware contract exist, but a real autonomy launch enumerating cameras does not.
-Repeated-category rendering and entity-keyed evaluation code are implemented;
-live two-instance acceptance is still unverified. Ordinary shutdown/log retention
-has evidence, but the full lifecycle items remain open pending failure injection,
-semantic startup gates, restart/WIPE_PARAMS verification, and real application
-state behavior. Dependency checks are source/Compose checks plus the earlier
-clean-build evidence, not a new clean Adapter/autonomy rebuild.
-
-Section 8 remains partial: the container suite covers Compose ownership, while
-other suites cover dependency exclusions; it does not yet assert every requested
-ownership property in `test_container_boundaries.py`. The boundary smoke runs in
-the evaluator, so it does not establish real autonomy consumption. Broader camera
-negative cases, readiness distinctions, and live repeated-category coverage remain
-open. Current documentation still has stale design wording; the full documentation
-scan/remediation item therefore remains unchecked. The original report is retained
-as historical evidence; its failed RC benchmark is superseded only by the new
-velocity-benchmark report.
+Unchecked items below are deliberately deferred hardware or real application
+work. The bootstrap publishes false mission readiness and has no command
+capability. Receiving camera data and FCU diagnostics in that container does not
+implement perception, vessel-state interpolation, mapping, or navigation.
+Multifaceted items have been split so completed preparation is distinguishable
+from those future consumers and deployment requirements.
 
 ## 1. Freeze the Adapter Contracts
 
@@ -79,10 +70,11 @@ The Simulation Adapter image pins exact MAVROS and MAVROS Extras versions.
   calibration, distortion model, dimensions, and optical frame apply to the
   pair. Preserve acquisition timestamps and define the RGB/depth timestamp
   matching tolerance.
-- [ ] Make the enabled camera roster explicit deployment configuration:
+- [x] Make the enabled camera roster explicit deployment configuration:
   `camera_0` in current simulation and `camera_0` plus `camera_1` on hardware.
-  Autonomy launch must enumerate configured cameras rather than infer a fixed
-  count or model name.
+  The hardware roster is a contract, not an implemented camera deployment.
+- [ ] **Deferred real application:** autonomy launch must enumerate configured
+  cameras rather than infer a fixed count or model name.
 - [x] Make image consumers and acceptance tests derive dimensions and
   intrinsics from `CameraInfo`; retain 1280x720 only as the current simulated
   calibration, not as a shared autonomy constant.
@@ -221,13 +213,16 @@ and before reusing its shape for hardware.
 - [x] Update bridge YAML, static-transform launch, Adapter health/readiness
   diagnostics, perception remaps, evaluator subscriptions, and boundary tests
   in the same change so there is no mixed old/new public interface.
-- [ ] Verify RGB, registered depth, and `CameraInfo` carry compatible timestamps,
+- [x] Verify RGB, registered depth, and `CameraInfo` carry compatible timestamps,
   dimensions, calibration, encoding, and the normalized optical frame. Verify
   the `base_link -> camera_0_link -> camera_0_optical_frame` transform using the
   configured simulated mount.
-- [ ] Resolve camera and MAVROS clock behavior under uninterrupted simulation,
-  including `use_sim_time`, timestamp origins, state interpolation, stale-data
-  limits, and behavior at supported launch/shutdown boundaries.
+- [x] Resolve source camera and MAVROS clock behavior under uninterrupted
+  simulation, including `use_sim_time`, timestamp origins, stale-data limits,
+  and behavior at supported full launch/shutdown boundaries.
+- [ ] **Deferred real state application:** implement and validate vessel-state
+  interpolation and explicit camera/FCU clock correlation before combining
+  images, depth, and vessel state. Source timesync telemetry is not that proof.
 
 Required before autonomy depends on named camera transforms or combines images,
 depth, and vessel state. This is partly a known migration and partly a runtime
@@ -246,8 +241,11 @@ verification gap; detector `use_sim_time` alone does not prove synchronization.
 - [x] Update truth subscriptions and evaluation storage to key by entity
   identity. Do not store detections in a dictionary keyed only by marker ID,
   because that collapses simultaneous same-category observations.
-- [ ] Verify evaluation can compare each simulated entity independently while
-  perception and autonomy receive only category observations, never entity IDs
+- [x] Verify evaluation compares repeated-category simulated entities
+  independently, and the shared bootstrap receives neither entity IDs nor truth
+  positions. The `repeated_red` live test distinguishes both visible red buoys.
+- [ ] **Deferred real perception/mapping:** verify category observations and
+  data association in actual autonomy consumers without leaking simulator IDs
   or truth positions.
 
 Required before repeated-category mapping association and the agreed integrated
@@ -267,12 +265,13 @@ ArUco classification still uses marker IDs, not sampled visible color.
 
 ## 7. Complete Bringup, Readiness, Persistence, and Shutdown
 
-- [ ] Define and implement the complete simulation launch chain: render a fresh
+- [x] Define and implement the current simulation launch chain: render a fresh
   scenario/manifest, start Gazebo and SITL, confirm advancing simulation time
   and the vehicle, expose SITL MAVLink on UDP 14552, start the Simulation
-  Adapter and MAVROS, then start autonomy and its configured perception/state/
-  mapping processes.
-- [ ] Make ordering depend on explicit readiness evidence at each handoff, with
+  Adapter and MAVROS, then start the explicitly non-commanding autonomy bootstrap.
+- [ ] **Deferred real application:** replace the approved bootstrap with the
+  configured perception/state/mapping processes and their readiness policy.
+- [x] Make ordering depend on explicit readiness evidence at each handoff, with
   bounded timeouts, actionable failure messages, and relevant log collection.
   Container creation or process existence alone is insufficient readiness.
 - [x] Separate liveness from source and mission readiness. Container health may
@@ -280,15 +279,20 @@ ArUco classification still uses marker IDs, not sampled visible color.
   delivery/calibration, MAVROS transport connection, required telemetry and
   state freshness, transform availability, and whether the sensing/mapping
   application is ready for the current milestone.
-- [ ] Define failure propagation and graceful shutdown for every service and
-  child process. `make down`, Ctrl-C, failed startup, and verification cleanup
-  must stop autonomy, Adapter/MAVROS, SITL/MAVProxy, and Gazebo without orphaned
-  publishers or occupied ports.
+- [x] Implement failure propagation and shutdown for the current services and
+  supervised children. Failed startup, simulator exit, Adapter child exit,
+  autonomy exit, camera silence, and `make down` passed live cleanup checks.
+- [ ] **Remaining lifecycle acceptance:** inject FCU silence; test Ctrl-C and
+  TERM cleanup, duplicate-start rejection, and SITL parameter retention/reset
+  across `down`/restart/`WIPE_PARAMS`. The current 11-case run was stopped after
+  six cases; see the final verification report for results.
 - [ ] Preserve runtime logs and SITL EEPROM/parameter state across ordinary
-  `down`/restart, retain the explicit `WIPE_PARAMS` path for a clean FCU state,
-  and ensure each fresh application launch creates empty mapping/observation
-  state rather than reloading a prior map.
-- [ ] Record run/scenario/configuration identity with logs so persisted vehicle
+  `down`/restart, and retain the explicit `WIPE_PARAMS` path for a clean FCU
+  state. Implementation exists; persistence/restart acceptance remains unrun.
+- [ ] **Deferred real mapping application:** ensure each fresh application
+  launch creates empty mapping/observation state rather than reloading a prior
+  map. The current bootstrap owns no mapping state.
+- [x] Record run/scenario/configuration identity with logs so persisted vehicle
   state is not confused with fresh mapping-session state.
 
 Required before the first integrated perception/state/mapping run. Pause/resume
@@ -297,25 +301,32 @@ startup and shutdown must be deterministic.
 
 ## 8. Replace Boundary and Acceptance Tests
 
-- [ ] Rewrite `tests/test_container_boundaries.py` to assert that the selected
+- [x] Rewrite `tests/test_container_boundaries.py` to assert that the selected
   Adapter owns `FCU_URL`, MAVROS packages/configuration/launch, GeographicLib,
   and FCU health while autonomy owns none of them.
-- [ ] Replace the standalone-autonomy-with-`FCU_URL` contract with Simulation
-  and Hardware deployment tests that select one Adapter and share the common
-  MAVROS and camera contracts.
-- [ ] Update `tests/ros_boundary_smoke.py` to consume the generic camera topic
-  and frames, verify MAVROS and actual camera data delivery into autonomy, and
-  assert that truth frames/data do not enter the shared navigation interfaces.
+- [x] Replace the standalone-autonomy-with-`FCU_URL` contract with Simulation
+  deployment tests selecting one Adapter and using the common MAVROS/camera
+  contracts.
+- [ ] **Deferred hardware:** add matching Hardware deployment tests when the
+  actual Hardware Adapter and deployment exist.
+- [x] Update `tests/ros_boundary_smoke.py` to consume generic camera topics and
+  frames, verify actual RGB-D and FCU diagnostic delivery inside autonomy, and
+  reject truth frames/data and bootstrap command capability. The evaluator
+  additionally decodes live MAVROS State; the autonomy probe checks its graph
+  type without adding unused message dependencies.
+- [ ] **Deferred real state application:** validate direct MAVROS telemetry
+  consumption by the real autonomy state node with its required public message
+  dependencies.
 - [x] Add package/image dependency tests proving autonomy excludes Gazebo,
   simulator manifests/truth, ZED drivers, MAVROS launch/runtime packages, and
   environment-specific transport configuration.
-- [ ] Update camera/evaluator tests to cover configured camera rosters,
+- [x] Update camera/evaluator tests to cover configured camera rosters,
   calibration-driven dimensions, agreed encodings and depth units,
   registered-depth timing/frame compatibility, stale inputs, and missing-source
   diagnostics.
-- [ ] Add repeated-category regression coverage for two visible instances with
+- [x] Add repeated-category regression coverage for two visible instances with
   one marker/category and separately identified truth entities.
-- [ ] Split liveness, source-readiness, FCU-readiness, and mission-readiness
+- [x] Split liveness, source-readiness, FCU-readiness, and mission-readiness
   assertions so a healthy container cannot be reported as semantic success.
 - [x] Keep `make mavros-smoke` explicitly simulation-only, move its execution to
   the evaluation location, and retain bounded zero-velocity-command/disarm cleanup.
@@ -332,7 +343,7 @@ keeping dual ownership or old topic names as permanent compatibility behavior.
 - [x] Update `Simulation/docs/SETUP.md` and
   `Simulation/docs/RGBD_AND_BUOY_SCENARIOS.md` with the final image contents,
   startup handoffs, generic topics/frames, and Adapter-owned MAVROS behavior.
-- [ ] Scan all current Markdown for old `Adapter/` paths, legacy public camera
+- [x] Scan all current Markdown for old `Adapter/` paths, legacy public camera
   names, autonomy-owned `FCU_URL`, and autonomy-owned MAVROS instructions.
 - [x] Preserve completed implementation plans and verification reports as
   historical records. Add a clear superseded reference where necessary rather
@@ -347,17 +358,20 @@ agents do not reintroduce the superseded boundary.
 - [x] Perform clean Adapter and autonomy image builds so dependency placement,
   GeographicLib installation, and launch ownership are tested rather than
   inherited from old image layers.
-- [ ] Run `make verify-rgbd` after changes to models, scenarios, bridges, frames,
-  MAVROS, Compose, or evaluation tools, plus focused contract tests for both
-  Adapter configurations.
+- [x] Run `make verify-rgbd` after changes to models, scenarios, bridges, frames,
+  MAVROS, Compose, or evaluation tools, plus focused contract tests for the
+  implemented Simulation Adapter and normative shared configuration.
+- [ ] **Deferred hardware:** run focused contract and live acceptance tests for
+  the Hardware Adapter after its deployment is implemented.
 - [x] Exercise the live simulation path through UDP 14552 and record separate
   evidence for process liveness, camera delivery, MAVROS connection/telemetry,
   common frames/topics, truth isolation, and safe command cleanup.
-- [ ] Run the agreed manually piloted mapping acceptance scenario with all four
+- [ ] **Deferred real sensing/mapping application:** run the agreed manually
+  piloted mapping acceptance scenario with all four
   categories and two same-category buoys only after perception, state, mapping,
   and lifecycle work exists; confirm the sensing/mapping stack emits no motion
   commands.
-- [ ] Record semantic results, versions, configuration, logs, and visual evidence
+- [x] Record semantic results, versions, configuration, logs, and visual evidence
   before marking corresponding items complete. Do not treat Compose resolution,
   a healthy container, source inspection, or a single delivered image as
   end-to-end acceptance.
