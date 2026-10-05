@@ -118,7 +118,12 @@ class PluginConfigurationResponseTests(unittest.TestCase):
         filename = PACKAGE / "config/mavros.yaml"
         harness = self
         class NodeHarness:
-            def __init__(self, name):
+            @property
+            def clients(self):
+                # rclpy.Node owns this read-only property. Production state
+                # must use another name even in the isolated harness.
+                return ()
+            def __init__(self, name, parameter_overrides=None):
                 self.name = name
             def declare_parameter(self, name, default):
                 return SimpleNamespace(value=str(filename))
@@ -184,6 +189,33 @@ class PluginConfigurationResponseTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "/mavros/time"):
             self.node.configure()
         self.assertFalse(self.cancelled)
+
+
+class ConfigureMavrosRosConstructionTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec("rclpy") is not None, "ROS unavailable: run this constructor check inside the Simulation Adapter")
+    def test_actual_rclpy_constructor_accepts_configuration_without_spinning_or_sending_commands(self):
+        import rclpy
+        source = PACKAGE / "blueboat_sim_bringup/configure_mavros.py"
+        spec = importlib.util.spec_from_file_location("configure_mavros_integration", source)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        configuration = PACKAGE / "config/mavros.yaml"
+        from rclpy.parameter import Parameter
+        rclpy.init(args=[])
+        node = None
+        try:
+            # Actual Node initialization catches collisions with rclpy's own
+            # properties. No spinning means parameter services are not called.
+            node = module.ConfigureMavros(parameter_overrides=[Parameter("configuration_file", value=str(configuration))])
+            self.assertEqual(node.get_name(), "mavros_configuration")
+            self.assertEqual(set(node.parameter_clients), set(node.groups))
+            self.assertEqual(node.completed, set())
+            self.assertEqual(node.futures, {})
+            self.assertGreater(node.deadline, 0)
+        finally:
+            if node is not None:
+                node.destroy_node()
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

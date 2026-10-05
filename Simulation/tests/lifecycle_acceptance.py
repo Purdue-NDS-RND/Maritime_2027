@@ -156,6 +156,13 @@ def run_case(output, name):
             return {"exit": code, "bounded_failed_startup": True}
         identity = ready(process)
         if name == "double_start":
+            for filename in ("ros_boundary_smoke.py", "boundary_contract.py"):
+                command("docker", "cp", str(ROOT.parent / "tests" / filename),
+                        f"{CONTAINERS[2]}:/tmp/{filename}")
+            boundary = command("docker", "exec", CONTAINERS[2], "bash", "-lc",
+                               "source /etc/maritime_autonomy_setup.bash && python3 /tmp/ros_boundary_smoke.py --autonomy")
+            (output / "autonomy-boundary.log").write_text(boundary.stdout + boundary.stderr)
+            assert "BOUNDARY PASS:" in boundary.stdout
             before = command("docker", "inspect", "-f", "{{.Id}}", *CONTAINERS).stdout
             authority = (ROOT / "logs/active-xauth.path").read_text()
             second = command("./scripts/run.sh", check=False, timeout=15)
@@ -164,7 +171,8 @@ def run_case(output, name):
             assert command("docker", "inspect", "-f", "{{.Id}}", *CONTAINERS).stdout == before
             assert (ROOT / "logs/active-xauth.path").read_text() == authority
             stop(process)
-            return {"second_launch_exit": second.returncode, "active_stack_preserved": True, **identity}
+            return {"second_launch_exit": second.returncode, "active_stack_preserved": True,
+                    "autonomy_boundary_probe": "PASS", **identity}
         if name in ("signal_int", "signal_term"):
             sig = signal.SIGINT if name == "signal_int" else signal.SIGTERM
             process.send_signal(sig)

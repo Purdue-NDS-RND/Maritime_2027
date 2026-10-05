@@ -17,8 +17,8 @@ import yaml
 
 
 class ConfigureMavros(Node):
-    def __init__(self):
-        super().__init__("mavros_configuration")
+    def __init__(self, *, parameter_overrides=None):
+        super().__init__("mavros_configuration", parameter_overrides=parameter_overrides)
         filename = self.declare_parameter("configuration_file", "").value
         settings = yaml.safe_load(Path(filename).read_text(encoding="utf-8"))
         self.groups = {
@@ -31,7 +31,7 @@ class ConfigureMavros(Node):
         if timeout <= 0:
             raise ValueError("STACK_STARTUP_TIMEOUT must be positive")
         self.deadline = time.monotonic() + timeout
-        self.clients = {owner: AsyncParameterClient(self, owner) for owner in self.groups}
+        self.parameter_clients = {owner: AsyncParameterClient(self, owner) for owner in self.groups}
         self.futures = {}
         self.completed = set()
         self.timer = self.create_timer(0.25, self.configure)
@@ -48,9 +48,9 @@ class ConfigureMavros(Node):
                 continue
             future = self.futures.get(owner)
             if future is None:
-                if self.clients[owner].services_are_ready():
+                if self.parameter_clients[owner].services_are_ready():
                     parameters = [Parameter(name, value=value) for name, value in settings.items()]
-                    self.futures[owner] = self.clients[owner].set_parameters(parameters)
+                    self.futures[owner] = self.parameter_clients[owner].set_parameters(parameters)
                 continue
             if not future.done():
                 continue
