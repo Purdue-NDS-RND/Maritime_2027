@@ -26,6 +26,7 @@ required=(
     container/Dockerfile ../Adapter/simulation/container/Dockerfile ../autonomy/container/Dockerfile
     ../deployment/compose.base.yaml
     container/compose.yaml container/compose.gpu.yaml Makefile
+    ../Adapter/simulation/config/fastdds.xml
     config/blueboat.parm worlds/blueboat_waves.sdf worlds/blueboat_calm.sdf
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
     scenarios/one.json scenarios/gate.json scenarios/multi.json
@@ -98,6 +99,7 @@ import struct
 import xml.etree.ElementTree as ET
 
 payload = ET.parse('models/blueboat_rgbd/camera_payload.sdf')
+ET.parse('../Adapter/simulation/config/fastdds.xml')
 link = payload.find("./model/link[@name='base_link']")
 assert link is not None
 assert [child.tag for child in link] == ['visual', 'sensor']

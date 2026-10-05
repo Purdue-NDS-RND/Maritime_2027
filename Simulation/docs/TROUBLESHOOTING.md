@@ -102,6 +102,14 @@ heartbeat, and meaningful MAVLink behavior.
   `make boundary-smoke` in a scenario to test actual delivery, not just discovery.
 - If camera topics are absent, inspect `gz topic -l` in the simulator and make
   sure an RGB-D scenario—not a legacy world—was selected.
+- If Gazebo supplies 30 Hz exact RGB-D pairs but ROS images or public triples
+  are missing, confirm the Adapter's `FASTRTPS_DEFAULT_PROFILES_FILE` points to
+  `/etc/maritime/fastdds.xml` and that its read-only Compose mount is present.
+  `Adapter/simulation/config/fastdds.xml` supplies a tested 32 MiB Fast DDS
+  shared-memory segment per participant, retaining UDP discovery. The default
+  512 KiB segment reproduced substantial image loss. Restart the stack after
+  changing the profile; no image rebuild is needed for this mounted configuration.
+  Do not lower the synchronized-triple requirement to compensate for delivery loss.
 - A lower camera rate under `SOFTWARE_RENDERING=1` is a rendering-performance
   limitation. `make verify-rgbd` measures Gazebo message timestamps and accepts
   27–33 Hz in simulated time for the configured 30 Hz GPU path. Wall-clock and

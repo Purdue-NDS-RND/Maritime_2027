@@ -72,7 +72,12 @@ services:
       FCU_URL: udp://:14552@
       ADAPTER_ENVIRONMENT: simulation
       SCENARIO_MANIFEST: /scenario/active.manifest.json
+      FASTRTPS_DEFAULT_PROFILES_FILE: /etc/maritime/fastdds.xml
     volumes:
+      - type: bind
+        source: ../../Adapter/simulation/config/fastdds.xml
+        target: /etc/maritime/fastdds.xml
+        read_only: true
       - type: bind
         source: ../logs/generated-worlds
         target: /scenario
