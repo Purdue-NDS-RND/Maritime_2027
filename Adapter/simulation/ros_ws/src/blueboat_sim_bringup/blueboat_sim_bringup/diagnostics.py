@@ -10,6 +10,7 @@ from mavros_msgs.srv import CommandBool, CommandInt, CommandLong, SetMode
 from nav_msgs.msg import Odometry
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
+from rclpy.parameter import parameter_value_to_python
 from rclpy.parameter_client import AsyncParameterClient
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, NavSatFix, TimeReference
@@ -123,8 +124,13 @@ class AdapterDiagnostics(Node):
             if not future.done():
                 continue
             try:
-                parameters = future.result()
-                observed = {name: value.value for name, value in zip(expected_values, parameters)}
+                response = future.result()
+                # AsyncParameterClient returns the service response, whose values
+                # are ParameterValue messages rather than rclpy Parameters.
+                observed = {
+                    name: parameter_value_to_python(value)
+                    for name, value in zip(expected_values, response.values)
+                }
                 self.parameter_values[node] = observed
                 mismatches = parameter_mismatches(expected_values, observed)
                 self.parameter_errors[node] = f"parameter_mismatch:{','.join(mismatches)}" if mismatches else None

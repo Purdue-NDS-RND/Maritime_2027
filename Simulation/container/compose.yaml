@@ -22,6 +22,9 @@ services:
       DISPLAY: ${DISPLAY}
       XAUTHORITY: /tmp/ardupilot-blueboat.xauth
       WORLD: ${WORLD:-blueboat_waves.sdf}
+      RUN_ID: ${RUN_ID:-standalone}
+      SCENARIO: ${SCENARIO:-none}
+      RUN_CONFIG_SHA256: ${RUN_CONFIG_SHA256:-unknown}
       MAVLINK_QGC: ${MAVLINK_QGC:-udp:127.0.0.1:14550}
       MAVLINK_API: ${MAVLINK_API:-udp:127.0.0.1:14551}
       MAVLINK_MAVROS: ${MAVLINK_MAVROS:-udp:127.0.0.1:14552}
@@ -51,7 +54,7 @@ services:
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 10s
-      timeout: 6s
+      timeout: 12s
       retries: 6
       start_period: 45s
     restart: "no"
@@ -67,6 +70,8 @@ services:
     ipc: host
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RUN_ID: ${RUN_ID:-standalone}
+      RUN_CONFIG_SHA256: ${RUN_CONFIG_SHA256:-unknown}
       GZ_PARTITION: ardupilot_blueboat_starter
       CAMERA_ENABLED: ${CAMERA_ENABLED:-1}
       FCU_URL: udp://:14552@
@@ -101,6 +106,8 @@ services:
     environment:
       ADAPTER_ENVIRONMENT: simulation
       MARITIME_PREIMPLEMENTATION_PLACEHOLDER: "1"
+      RUN_ID: ${RUN_ID:-standalone}
+      RUN_CONFIG_SHA256: ${RUN_CONFIG_SHA256:-unknown}
     depends_on:
       adapter:
         condition: service_healthy
@@ -115,6 +122,8 @@ services:
     ipc: host
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RUN_ID: ${RUN_ID:-standalone}
+      RUN_CONFIG_SHA256: ${RUN_CONFIG_SHA256:-unknown}
       ADAPTER_ENVIRONMENT: simulation
       SIMULATION_EVALUATION: "0"
       FCU_URL: udp://:14552@

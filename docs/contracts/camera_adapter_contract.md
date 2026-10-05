@@ -638,13 +638,17 @@ frames, diagnostics, and timing results under the contract version. Intentional
 incompatible changes update this document and major version first, then both
 Adapters, tests, and all consumers in one migration.
 
-## Current implementation gap
+## Current implementation status
 
-The current Simulation Adapter still exposes legacy private camera paths and
-frames rather than this public boundary. Its source data provides the measured
-encoding, depth, calibration, and timing evidence used for the simulation
-configuration, but source evidence is not contract conformance. A later
-simulation migration must change bridges, frames, health/readiness diagnostics,
-perception remaps, evaluators, and boundary tests together. The Hardware Adapter
-and its deployment timing evidence do not yet exist; no claim of physical-camera
-or vessel readiness is made.
+The Simulation Adapter implements the public `camera_0` boundary, generic
+frames, normalized registered depth, deterministic exact-triple matching,
+source-availability diagnostics, and truth isolation. Runtime evidence for the
+unchanged 8.00 Hz acceptance threshold and the full simulation regression suite
+is recorded in the [RGB-D transport verification](../../Simulation/docs/RGBD_TRANSPORT_VERIFICATION.md).
+That report supersedes the earlier integration throughput failure; it does not
+establish hardware conformance or camera-to-vessel-state synchronization for
+future mapping.
+
+The Hardware Adapter and its deployment timing evidence do not yet exist; no
+claim of physical-camera or vessel readiness is made. Application-level
+perception, state integration, and mapping remain separate future work.

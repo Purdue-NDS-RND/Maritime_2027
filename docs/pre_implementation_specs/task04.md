@@ -42,4 +42,3 @@ or current documentation.
 Do not merge this staging commit directly to the shared integration branch.
 Task 09 must apply the shared path updates in the same integration cutover so
 the main branch never retains broken build contexts.
-

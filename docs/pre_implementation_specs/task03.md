@@ -39,4 +39,3 @@ renderer, bridges, evaluators, or the checklist.
 
 List the old `ACTIVE_BUOY_IDS`, `buoy_<marker_id>`, and fixed bridge assumptions
 that downstream tasks must remove.
-

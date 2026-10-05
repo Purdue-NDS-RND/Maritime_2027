@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import unittest
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,33 @@ class ContainerBoundaries(unittest.TestCase):
         self.assertTrue(str(services["adapter"]["build"]["context"]).endswith("Adapter/simulation"))
         self.assertNotIn("SCENARIO_MANIFEST", services["autonomy"].get("environment", {}))
         self.assertFalse(services["autonomy"].get("volumes"))
+
+    def test_autonomy_has_only_environment_neutral_runtime(self):
+        services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
+        autonomy = services["autonomy"]
+        self.assertEqual(set(autonomy["environment"]), {
+            "ROS_DOMAIN_ID", "ADAPTER_ENVIRONMENT", "MARITIME_PREIMPLEMENTATION_PLACEHOLDER",
+            "RUN_ID", "RUN_CONFIG_SHA256",
+        })
+        self.assertEqual(autonomy["environment"]["RUN_ID"], services["adapter"]["environment"]["RUN_ID"])
+        self.assertEqual(autonomy["environment"]["RUN_CONFIG_SHA256"], services["adapter"]["environment"]["RUN_CONFIG_SHA256"])
+        self.assertEqual(set(autonomy["depends_on"]), {"adapter"})
+        self.assertEqual(autonomy["depends_on"]["adapter"]["condition"], "service_healthy")
+        self.assertFalse(autonomy.get("devices"))
+        self.assertFalse(autonomy.get("volumes"))
+        self.assertFalse(autonomy.get("privileged", False))
+        self.assertFalse(any("hardware" in service.get("profiles", []) for service in services.values()))
+        for service in services.values():
+            self.assertNotIn("ACTIVE_BUOY_IDS", service.get("environment", {}))
+        package = ET.parse(ROOT / "autonomy/ros_ws/src/maritime_bringup/package.xml")
+        dependencies = {item.text for item in package.getroot() if "depend" in item.tag}
+        self.assertEqual(dependencies, {"ament_python", "rclpy", "diagnostic_msgs"})
+
+        adapter = services["adapter"]
+        self.assertEqual(adapter["environment"]["ADAPTER_ENVIRONMENT"], "simulation")
+        self.assertIn("SCENARIO_MANIFEST", adapter["environment"])
+        self.assertTrue(all(volume.get("read_only") for volume in adapter["volumes"]))
+        self.assertEqual(set(adapter["depends_on"]), {"simulator"})
 
     def test_no_standalone_autonomy_transport_profile_remains(self):
         self.assertFalse((ROOT / "deployment" / "compose.autonomy.yaml").exists())

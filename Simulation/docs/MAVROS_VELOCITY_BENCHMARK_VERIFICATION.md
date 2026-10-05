@@ -19,7 +19,9 @@ simulation-only and SITL-transport guards remain enabled.
 This report supersedes the failed RC-command benchmark result in the
 [September integration report](PRE_IMPLEMENTATION_MIGRATION_VERIFICATION.md)
 for command acceptance only. It does not supersede its RGB-D failure or establish
-hardware or autonomy readiness.
+hardware or autonomy readiness. The later
+[RGB-D transport verification](RGBD_TRANSPORT_VERIFICATION.md) records the
+subsequent RGB-D fix and full regression pass.
 
 ## Configuration
 

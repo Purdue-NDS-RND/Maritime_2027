@@ -1,6 +1,8 @@
 """Static checks for Task 08's simulation-only autonomy boundary."""
 
+import ast
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import unittest
 
@@ -27,6 +29,43 @@ class Task08BoundaryTests(unittest.TestCase):
             validate_environment("simulation", None),
             "placeholder_opt_in_missing",
         )
+
+    def test_placeholder_runtime_only_publishes_false_mission_diagnostics(self):
+        source = PACKAGE_ROOT / "maritime_bringup" / "placeholder.py"
+        tree = ast.parse(source.read_text())
+        definitions = [item for item in tree.body if isinstance(item, (ast.ClassDef, ast.Assign))]
+        publications, topics, timers = [], [], []
+        class NodeHarness:
+            def __init__(self, name):
+                self.name = name
+            def create_publisher(self, message_type, topic, qos):
+                topics.append(topic)
+                return SimpleNamespace(publish=publications.append)
+            def create_timer(self, period, callback):
+                timers.append((period, callback))
+                return object()
+        class Status:
+            WARN = 1
+        namespace = dict(Node=NodeHarness, DiagnosticStatus=Status,
+                         DiagnosticArray=SimpleNamespace, KeyValue=SimpleNamespace)
+        # Execute the real constructor/publisher logic, replacing ROS transport
+        # with a recorder. Any subscription or client creation fails this harness.
+        exec(compile(ast.Module(body=definitions, type_ignores=[]), str(source), "exec"), namespace)
+        node = namespace["PreimplementationPlaceholder"]()
+        self.assertEqual(node.name, "maritime_preimplementation_placeholder")
+        self.assertEqual(topics, ["/diagnostics"])
+        self.assertEqual(len(timers), 1)
+        timers[0][1]()
+        self.assertEqual(len(publications), 2)
+        for message in publications:
+            self.assertEqual(len(message.status), 1)
+            status = message.status[0]
+            self.assertEqual(status.level, 1)
+            self.assertEqual(status.message, "preimplementation_placeholder")
+            self.assertEqual({value.key: value.value for value in status.values}, {
+                "adapter_environment": "simulation", "placeholder_active": "true",
+                "mission_ready": "false", "vehicle_commands_permitted": "false",
+            })
 
     def test_autonomy_image_excludes_adapter_owned_runtime(self):
         dockerfile = (AUTONOMY_ROOT / "container" / "Dockerfile").read_text()

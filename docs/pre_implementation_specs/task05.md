@@ -44,4 +44,3 @@ or documentation outside `Simulation/scenarios/README.md`.
 
 Return the manifest schema/version and exact roster interface consumed by Task
 06. Do not add entity IDs to autonomy-facing detection messages.
-

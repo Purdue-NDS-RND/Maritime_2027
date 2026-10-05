@@ -2,12 +2,12 @@
 
 ## Purpose and Design Status
 
-**Current migration status (2026-09-15):** the Simulation Adapter owns MAVROS,
+**Current migration status (2026-10-04):** the Simulation Adapter owns MAVROS,
 the simulation FCU transport, and the public `camera_0` boundary. Autonomy is
 only a simulation bootstrap placeholder with mission readiness false. The
-Hardware Adapter and real autonomy application remain deferred; any later
-transitional wording in this historical design discussion is superseded by the
-current contracts and operational guides.
+Hardware Adapter and real autonomy application remain deferred. The simulation
+RGB-D and MAVROS regressions have passing evidence in the
+[RGB-D transport verification report](../Simulation/docs/RGBD_TRANSPORT_VERIFICATION.md).
 
 This document translates the [Project Overview](Project_Overview.md) into the
 major components, responsibilities, deployment boundaries, and project
@@ -73,8 +73,8 @@ numbers remain deployment configuration rather than autonomy interface names.
 
 The current simulator's `zed2i_*` frame names are implementation identifiers
 from its initial RGB-D model. They do not identify the target flight cameras.
-The Simulation Adapter must normalize those legacy names to the agreed generic
-interface before shared autonomy depends on them.
+The Simulation Adapter normalizes those legacy names to the agreed generic
+public interface; shared autonomy must not depend on the private names.
 
 The target simulation deployment has three core services: Simulation, Simulation
 Adapter, and shared Autonomy. The future GCS adds a fourth service. On the vessel,
@@ -258,12 +258,11 @@ Sharing the autonomy components does not require the
 desktop and Jetson to use an identical binary image; platform-specific builds
 and hardware integration may be necessary.
 
-In the target architecture, MAVROS and camera drivers do not belong in this
-shared image; they are owned by the selected Adapter. The current implementation
-has not completed that migration: `autonomy/container/` still installs MAVROS,
-and `maritime_bringup/launch/vehicle.launch.py` launches it. No shared perception,
+MAVROS and camera drivers are owned by the selected Adapter. The current
+Simulation Adapter installs and launches MAVROS; `autonomy/container/` contains
+only the explicitly enabled simulation bootstrap. No shared perception,
 state-integration, mapping, navigation, or mission package is implemented yet,
-and production ZED integration also remains future work.
+and production ZED integration remains deferred.
 
 Shared autonomy packages consume camera-neutral observations, calibration, and
 transforms. Simulation and hardware configuration must account for source count

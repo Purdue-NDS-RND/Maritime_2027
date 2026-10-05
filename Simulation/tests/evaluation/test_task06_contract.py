@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -180,9 +181,57 @@ class Task06ContractTests(unittest.TestCase):
             d, k, r, p = [0.0] * 5, [0.0] * 9, [0.0] * 9, [0.0] * 12
         self.assertEqual(validate_camera_info(Info()), "invalid_calibration")
 
+    def test_camera_images_reject_dimensions_encoding_and_layout_errors(self):
+        def image(**changes):
+            values = dict(header=SimpleNamespace(frame_id="camera_0_optical_frame"),
+                          width=2, height=2, step=6, encoding="rgb8", data=b"a" * 12)
+            values.update(changes)
+            return SimpleNamespace(**values)
+        self.assertIsNone(validate_image(image()))
+        self.assertIsNone(validate_image(image(encoding="bgr8")))
+        self.assertIsNone(validate_image(image(step=8, encoding="32FC1", data=b"a" * 16), depth=True))
+        for changes, depth, reason in (
+            ({"width": 0}, False, "invalid_dimensions"),
+            ({"height": -1}, False, "invalid_dimensions"),
+            ({"step": 0}, False, "invalid_dimensions"),
+            ({"data": b"short"}, False, "invalid_data_layout"),
+            ({"encoding": "mono8"}, False, "unsupported_encoding"),
+            ({"encoding": "16UC1"}, True, "unsupported_encoding"),
+            ({"encoding": "32FC1"}, True, "invalid_data_layout"),
+        ):
+            with self.subTest(changes=changes, depth=depth):
+                self.assertEqual(validate_image(image(**changes), depth=depth), reason)
+
+    def test_camera_calibration_accepts_roster_dimensions_and_rejects_invalid_coefficients(self):
+        def info(**changes):
+            values = dict(header=SimpleNamespace(frame_id="camera_0_optical_frame"),
+                          width=640, height=480, distortion_model="plumb_bob", d=[0.0] * 5,
+                          k=[400.0, 0, 320, 0, 400, 240, 0, 0, 1], r=[1, 0, 0, 0, 1, 0, 0, 0, 1],
+                          p=[400.0, 0, 320, 0, 0, 400, 240, 0, 0, 0, 1, 0])
+            values.update(changes)
+            return SimpleNamespace(**values)
+        # Dimensions are supplied by calibration, not hardcoded at 640x480.
+        self.assertIsNone(validate_camera_info(info(width=1280, height=720)))
+        for changes, reason in (
+            ({"header": SimpleNamespace(frame_id="camera_1_optical_frame")}, "frame_mismatch"),
+            ({"width": 0}, "invalid_dimensions"),
+            ({"distortion_model": "unknown"}, "invalid_calibration"),
+            ({"d": [0.0] * 4}, "invalid_calibration"),
+            ({"d": [float("nan")] * 5}, "invalid_calibration"),
+            ({"k": [0.0] * 9}, "invalid_calibration"),
+            ({"p": [0.0] * 12}, "invalid_calibration"),
+        ):
+            with self.subTest(changes=changes):
+                self.assertEqual(validate_camera_info(info(**changes)), reason)
+
+    def test_camera_freshness_boundaries_do_not_relax_exact_timestamp_matching(self):
+        self.assertEqual(freshness(1, 1, 100_000_001, 2_000_000_001), ("OK", "ready"))
+        self.assertEqual(freshness(1, 1, 100_000_002, 2_000_000_001), ("STALE", "acquisition_timeout"))
+        self.assertEqual(freshness(1, 1, 100_000_001, 2_000_000_002), ("STALE", "arrival_timeout"))
+
     def test_camera_anchor_waits_when_only_present_stream_advanced(self):
         header = ADAPTER / "ros_ws" / "src" / "blueboat_camera_adapter" / "include" / "blueboat_camera_adapter" / "matching.hpp"
-        source = f'''#include <cassert>\n#include "{header}"\nint main() {{\nusing blueboat_camera_adapter::reject_anchor;\nassert(!reject_anchor(false, true, true, false, false));\nassert(reject_anchor(true, true, false, false, false));\nassert(reject_anchor(false, false, true, false, true));\n}}'''
+        source = f'''#include <cassert>\n#include "{header}"\nint main() {{\nusing blueboat_camera_adapter::reject_anchor;\nassert(!reject_anchor(false, true, true, false, false));\nassert(reject_anchor(true, true, false, false, false));\nassert(reject_anchor(false, false, true, false, true));\nassert(!reject_anchor(true, false, true, false, false));\nassert(!reject_anchor(true, false, false, true, false));\nassert(reject_anchor(false, false, true, true, false));\n}}'''
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "test.cpp"
             binary = Path(directory) / "test"

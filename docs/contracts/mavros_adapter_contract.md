@@ -357,16 +357,17 @@ change must first update the manifest and major version, update both Adapter
 tests and consumers, and include an explicit migration note. Simulation and
 Hardware may not advance contract versions independently.
 
-## Current implementation gap
+## Current implementation status
 
-Repository sources select ROS Jazzy and configure the root namespace, MAVLink
-v2, source system 255, target 1/1, blank GCS URL, and Simulation UDP 14552.
-However, the current Dockerfile installs unversioned apt packages from a mutable
-base tag, and the launch includes plugin, frame, and time values from files
-inside the installed MAVROS package. The exact Debian package revisions,
-resolved plugin set, source component 191, and detailed time/frame parameters
-above were observable in the existing local `maritime-autonomy:jazzy` image but
-are not reproducible from committed repository sources alone. Therefore the
-current implementation must not claim contract conformance until a later task
-adds the build lock, canonical runtime configuration, and automated snapshot
-checks. The hardware transport remains intentionally unspecified.
+The Simulation Adapter owns MAVROS in `Adapter/simulation/`, using a digest-pinned
+ROS Jazzy base and exact MAVROS/MAVROS extras Debian revisions. Its canonical
+`blueboat_sim_bringup/config/mavros.yaml` selects the root namespace, MAVLink v2,
+source system/component 255/191, target 1/1, blank GCS URL, simulation UDP 14552,
+and the frozen plugin, frame, and time configuration. Adapter diagnostics check
+runtime identity, telemetry freshness, and command-service availability.
+
+The [velocity benchmark verification](../../Simulation/docs/MAVROS_VELOCITY_BENCHMARK_VERIFICATION.md)
+and subsequent [full RGB-D regression](../../Simulation/docs/RGBD_TRANSPORT_VERIFICATION.md)
+record passing simulation command and data checks. These results do not
+establish hardware transport, physical FCU compatibility, or vessel readiness;
+the Hardware Adapter remains deferred.
