@@ -29,7 +29,7 @@ required=(
     ../Adapter/simulation/config/fastdds.xml
     config/blueboat.parm worlds/blueboat_waves.sdf worlds/blueboat_calm.sdf
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
-    scenarios/one.json scenarios/gate.json scenarios/multi.json
+    scenarios/one.json scenarios/gate.json scenarios/multi.json scenarios/repeated_red.json
     models/blueboat_rgbd/model.config models/blueboat_rgbd/camera_payload.sdf
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/package.xml
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/bridge.yaml
@@ -78,7 +78,7 @@ grep -q '<height>720</height>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<near>0.30</near><far>20.0</far>' models/blueboat_rgbd/camera_payload.sdf
 grep -q 'udp://:14552@' container/compose.yaml
 
-for scenario in one gate multi; do
+for scenario in one gate multi repeated_red; do
     python3 scripts/render_scenario.py \
         --scenario "scenarios/$scenario.json" \
         --base-world worlds/blueboat_rgbd_base.sdf \
@@ -111,7 +111,7 @@ for marker_id in range(4):
     png = (root / 'materials/textures' / f'aruco_4x4_50_id{marker_id}.png').read_bytes()
     assert png[:8] == b'\x89PNG\r\n\x1a\n'
     assert struct.unpack('>II', png[16:24]) == (512, 512)
-for scenario in ('one', 'gate', 'multi'):
+for scenario in ('one', 'gate', 'multi', 'repeated_red'):
     data = json.loads(Path(f'scenarios/{scenario}.json').read_text())
     assert data['name'] == scenario and data['buoys']
 print('Camera, buoy, texture, and scenario structure passed.')
@@ -121,7 +121,7 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
         docker compose -f container/compose.yaml --profile ros config --quiet
     if docker image inspect ardupilot-blueboat:4.7.0 >/dev/null 2>&1; then
-        for scenario in one gate multi; do
+        for scenario in one gate multi repeated_red; do
             cp "$tmp_dir/$scenario.sdf" "$tmp_dir/$scenario-resolved.sdf"
             sed -i \
                 -e 's#model://blueboat_rgbd#file:///opt/boat_sim/models/blueboat_rgbd#g' \
