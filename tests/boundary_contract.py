@@ -17,6 +17,15 @@ ALLOWED_FRAMES = EXPECTED_FRAMES | {
 }
 
 
+def diagnostic_level(level):
+    """Normalize ROS byte fields and integer fixtures to the same severity."""
+    if isinstance(level, bytes):
+        if len(level) != 1:
+            raise ValueError("diagnostic severity must contain exactly one byte")
+        return level[0]
+    return int(level)
+
+
 def validate_evidence(diagnostics, frames, placeholder_publishers, placeholder_subscribers, placeholder_clients):
     """Reject readiness confusion and command capability using observed evidence.
 
@@ -25,8 +34,8 @@ def validate_evidence(diagnostics, frames, placeholder_publishers, placeholder_s
     """
     for name in REQUIRED_READY:
         assert name in diagnostics, f"missing readiness evidence: {name}"
-        level, _, values = diagnostics[name]
-        assert level == 0 and values.get("source_ready") == "true", f"unready: {name}"
+        level, reason, values = diagnostics[name]
+        assert level == 0 and values.get("source_ready") == "true", f"unready: {name}: level={level}, reason={reason}, evidence={values}"
     assert MISSION in diagnostics, "missing Adapter mission policy diagnostic"
     level, reason, values = diagnostics[MISSION]
     assert level != 0 and reason == "mission_policy_unavailable", "Adapter claims mission readiness"

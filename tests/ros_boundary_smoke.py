@@ -7,6 +7,7 @@ Copy this file and boundary_contract.py together when executing in a container.
 """
 
 import argparse
+from collections import Counter
 import time
 
 import rclpy
@@ -16,7 +17,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_msgs.msg import TFMessage
 
-from boundary_contract import MISSION, PLACEHOLDER, REQUIRED_READY, validate_evidence
+from boundary_contract import MISSION, PLACEHOLDER, REQUIRED_READY, diagnostic_level, validate_evidence
 
 
 def main():
@@ -35,7 +36,7 @@ def main():
 
     def on_diagnostics(message):
         for item in message.status:
-            diagnostics[item.name] = (item.level, item.message, {value.key: value.value for value in item.values})
+            diagnostics[item.name] = (diagnostic_level(item.level), item.message, {value.key: value.value for value in item.values})
             arrivals[item.name] = time.monotonic()
 
     def on_camera(kind, message):
@@ -68,6 +69,7 @@ def main():
     try:
         deadline = time.monotonic() + args.timeout
         failure = "no data"
+        failures = Counter()
         while time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.1)
             try:
@@ -83,13 +85,14 @@ def main():
                                   [name for name, _ in subscribers], [name for name, _ in clients])
             except AssertionError as error:
                 failure = str(error)
+                failures[":".join(failure.split(":", 2)[:2])] += 1
                 continue
             print(f"BOUNDARY PASS: {received['triples']} exact RGB-D triples received; source/FCU readiness observed; shared TF and non-commanding placeholder verified; mission remains unready")
             if args.autonomy:
                 print("AUTONOMY PROBE: MAVROS State graph type and FCU diagnostics verified; direct State decoding checked separately by evaluator")
             break
         else:
-            raise AssertionError(failure)
+            raise AssertionError(f"{failure}; observations={received}; failure_counts={dict(failures)}; frames={sorted(shared_frames)}")
     finally:
         for subscription in subscriptions:
             node.destroy_subscription(subscription)

@@ -3,6 +3,8 @@
 The active Simulation Adapter is `Adapter/simulation/`. It owns the
 Gazebo-to-ROS bridges, normalized `camera_0` interfaces, MAVROS, FCU
 connection/readiness diagnostics, and the SITL endpoint `udp://:14552@`.
+It implements [MAVROS contract 2.0.0](../docs/contracts/mavros_adapter_contract.md)
+and [camera contract 1.0.0](../docs/contracts/camera_adapter_contract.md).
 
 It is not onboard autonomy and never launches evaluators. Explicit simulator
 evaluators live in `Simulation/tests/evaluation/`; `make sensor-smoke`,

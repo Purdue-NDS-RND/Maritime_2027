@@ -232,11 +232,16 @@ def persistence(output):
             if process is not None:
                 stop(process)
         finally:
-            assert_clean()
+            # Do not overwrite an active SITL EEPROM, but unrelated socket or
+            # display-artifact failures must not prevent restoring user state.
+            simulator = command("docker", "inspect", "-f", "{{.State.Running}}",
+                                CONTAINERS[0], check=False)
+            assert simulator.returncode != 0 or simulator.stdout.strip() == "false", "cannot restore EEPROM while SITL is running"
             if existed:
                 shutil.copy2(backup, state)
             else:
                 state.unlink(missing_ok=True)
+            assert_clean()
 
 
 def main():

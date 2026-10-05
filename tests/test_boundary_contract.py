@@ -1,9 +1,10 @@
 """Negative tests of observed runtime boundary evidence, independent of ROS."""
 
 import copy
+import importlib.util
 import unittest
 
-from boundary_contract import EXPECTED_FRAMES, MISSION, PLACEHOLDER, REQUIRED_READY, validate_evidence
+from boundary_contract import EXPECTED_FRAMES, MISSION, PLACEHOLDER, REQUIRED_READY, diagnostic_level, validate_evidence
 
 
 class BoundaryEvidenceTests(unittest.TestCase):
@@ -62,6 +63,31 @@ class BoundaryEvidenceTests(unittest.TestCase):
                        {"placeholder_clients": ["/mavros/cmd/arming"]}):
             with self.subTest(change=change), self.assertRaises(AssertionError):
                 self.check(**change)
+
+
+class DiagnosticLevelTests(unittest.TestCase):
+    def test_integer_and_wire_byte_severities_have_same_meaning(self):
+        for level in range(4):
+            for representation in (level, bytes([level])):
+                with self.subTest(level=level, representation=representation):
+                    self.assertEqual(diagnostic_level(representation), level)
+
+    def test_empty_and_multibyte_wire_values_are_rejected(self):
+        for malformed in (b"", b"\x00\x00", b"\x01\x02\x03"):
+            with self.subTest(malformed=malformed), self.assertRaises(ValueError):
+                diagnostic_level(malformed)
+
+    @unittest.skipUnless(importlib.util.find_spec("rclpy") is not None, "ROS unavailable: run actual DiagnosticStatus roundtrip in a ROS container")
+    def test_actual_ros_message_roundtrip_preserves_readiness_severity(self):
+        from diagnostic_msgs.msg import DiagnosticStatus
+        from rclpy.serialization import deserialize_message, serialize_message
+        for expected, value in enumerate((DiagnosticStatus.OK, DiagnosticStatus.WARN,
+                                          DiagnosticStatus.ERROR, DiagnosticStatus.STALE)):
+            with self.subTest(expected=expected):
+                message = DiagnosticStatus(level=value, name="readiness_probe", message="test")
+                restored = deserialize_message(serialize_message(message), DiagnosticStatus)
+                self.assertEqual(diagnostic_level(message.level), expected)
+                self.assertEqual(diagnostic_level(restored.level), expected)
 
 
 if __name__ == "__main__":

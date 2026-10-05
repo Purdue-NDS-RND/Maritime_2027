@@ -93,8 +93,8 @@ Start a complete ROS-enabled gate:
 SCENARIO=gate make run
 ```
 
-This is still a foreground command. Wait for both Compose services to become
-healthy, then use another terminal for `make sensor-smoke` or
+This is still a foreground command. Wait for the simulator, Adapter, and
+bootstrap to become healthy, then use another terminal for `make sensor-smoke` or
 `make mavros-smoke`. `Ctrl+C` stops Gazebo, SITL, MAVROS, and the ROS bridges.
 The launcher waits for simulator health and semantic Adapter source readiness
 before starting the bootstrap. Failed startup or a running service failure
