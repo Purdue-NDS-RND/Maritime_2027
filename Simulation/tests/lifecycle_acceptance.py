@@ -185,7 +185,7 @@ def run_case(output, name):
             # Stop just the selected required service. The launcher must notice
             # that exit, report failure, and tear down the remaining services.
             injected_at = time.monotonic()
-            stopped = command("docker", "stop", "--time", "15", target).stdout.strip()
+            stopped = command("docker", "stop", "--timeout", "15", target).stdout.strip()
             assert stopped == target, stopped
             code = process.wait(timeout=75)
             assert code != 0, "required service exit was reported successful"
