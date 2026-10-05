@@ -1,7 +1,7 @@
 FROM ros:jazzy-ros-base-noble@sha256:386d06ec6d4188f731bae5678e07b4cb64a4e4d4152090c0bd1f881dcf7706f5
 
 LABEL org.opencontainers.image.title="Maritime Simulation Adapter" \
-      maritime.contract.mavros="maritime.mavros_adapter@1.0.0" \
+      maritime.contract.mavros="maritime.mavros_adapter@2.0.0" \
       maritime.contract.camera="maritime.camera_adapter@1.0.0" \
       maritime.ros.base-digest="sha256:386d06ec6d4188f731bae5678e07b4cb64a4e4d4152090c0bd1f881dcf7706f5" \
       maritime.mavros.debian-version="2.15.1-1noble.20260903.022619" \

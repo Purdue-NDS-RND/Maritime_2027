@@ -24,7 +24,7 @@ class Health(Node):
 
     def live(self):
         names = {f"{namespace.rstrip('/')}/{name}" for name, namespace in self.get_node_names_and_namespaces()}
-        required = {"/mavros", "/camera_0_boundary", "/mavlink_v2_monitor", "/simulation_adapter_diagnostics"}
+        required = {"/mavros", "/camera_0_boundary", "/mavlink_v2_monitor", "/simulation_adapter_diagnostics", "/mavros_configuration", "/mavros_node", "/mavros_router"}
         return required.issubset(names)
 
     def failures(self):

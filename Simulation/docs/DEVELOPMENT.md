@@ -16,6 +16,12 @@ make run
 GPU selection, display validation, and a temporary Xauthority file.
 `container/start-sim.sh` owns simulator process order, logs, readiness, and shutdown.
 
+The launcher takes a nonblocking lock at `logs/.launcher.lock` before writing
+shared launch inputs, including build-only preparation. A second launcher or
+existing project containers (including stopped containers) cause an explicit
+failure; use `make down` before a fresh launch. The shutdown command remains
+available while a launcher holds the lock.
+
 For ROS runs the host launcher starts the simulator, waits for its healthcheck,
 then starts the Adapter and waits for semantic health before starting the
 bootstrap. Each handoff has a `STACK_STARTUP_TIMEOUT` deadline (180 seconds by

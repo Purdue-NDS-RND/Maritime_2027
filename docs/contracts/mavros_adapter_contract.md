@@ -2,7 +2,7 @@
 
 **Contract ID:** `maritime.mavros_adapter`
 
-**Contract version:** `1.0.0`
+**Contract version:** `2.0.0`
 
 **Status:** Normative for Simulation and Hardware Adapter implementations
 
@@ -13,7 +13,7 @@ readiness policy. Both environment Adapters must produce this same boundary.
 ## Normative configuration source
 
 The manifest in this section is the one canonical source for contract version
-`1.0.0`. Adapter environment files and launch files are consumers of it; they
+`2.0.0`. Adapter environment files and launch files are consumers of it; they
 must not carry independent copies with different shared values. A later runtime
 migration may extract this manifest verbatim into one version-controlled,
 machine-readable shared configuration file, but that change must update this
@@ -23,7 +23,7 @@ authoritative and the package-supplied `apm_config.yaml` and
 
 ```yaml
 contract_id: maritime.mavros_adapter
-contract_version: 1.0.0
+contract_version: 2.0.0
 
 platform:
   ros_distribution: jazzy
@@ -56,7 +56,11 @@ system:
 time:
   time_reference_source: fcu
   timesync_mode: MAVLINK
-  timesync_average_alpha: 0.6
+  timesync_alpha_initial: 0.05
+  timesync_beta_initial: 0.05
+  timesync_alpha_final: 0.003
+  timesync_beta_final: 0.003
+  convergence_window: 500
   timesync_rate_hz: 10.0
   system_time_rate_hz: 1.0
 
@@ -70,7 +74,6 @@ frames:
     tf_send: false
     tf_frame_id: map
     tf_child_frame_id: base_link
-    tf_send_fcu: false
   global_position:
     frame_id: map
     child_frame_id: base_link
@@ -154,14 +157,50 @@ Ownership is singular at runtime:
 
 | Manifest group | Runtime owner |
 |---|---|
-| `platform` and `contract_version` | The shared autonomy image build lock and image metadata. |
-| `mavlink`, `ros`, and `plugins` | The MAVROS core node `/mavros`, loaded from the canonical shared configuration. |
+| `platform` and `contract_version` | The selected Adapter image build lock and image metadata. |
+| MAVLink transport and target IDs | Loader `/mavros_node` (`fcu_url`, `gcs_url`, `tgt_system`, `tgt_component`); router `/mavros_router` owns the resolved connection endpoints. |
+| MAVLink source IDs/protocol, `ros`, and `plugins` | UAS node `/mavros`, loaded from the canonical configuration. |
 | `system` | The enabled system-status plugin node `/mavros/sys`. |
 | `time` | The enabled system-time plugin node `/mavros/time`. |
 | `frames.local_position` | The enabled plugin node `/mavros/local_position`. |
 | `frames.global_position` | The enabled plugin node `/mavros/global_position`. |
 | `frames.imu` | The enabled plugin node `/mavros/imu`. |
 | Per-Adapter values | The selected Adapter's deployment configuration, restricted to the override table below. |
+
+The runtime configuration correction made during pre-implementation finalization
+removes the forced executable name that collapsed loader, router, and UAS nodes
+into duplicate `/mavros` names. Parameters must reach their declared owners;
+public telemetry, command topics, services, message types, IDs, and namespace
+remain unchanged.
+
+MAVROS 2.15.1 declares scheduled alpha/beta gains and `convergence_window`, not
+`timesync_avg_alpha`. The earlier `0.6` alias was unsupported and had no effect.
+The four values above explicitly freeze the pinned implementation's effective
+upstream defaults; they are not numerically equivalent to a single `0.6`
+filter coefficient.
+
+### Migration from 1.0.0 to 2.0.0
+
+Version `1.0.0` prescribed an unimplementable `timesync_average_alpha: 0.6`
+field. Version `2.0.0` removes that field, specifies the supported filter gains
+and convergence window at the existing MAVROS 2.15.1 defaults, and corrects
+loader/router/UAS parameter ownership. The unsupported local-position
+`tf.send_fcu` parameter is also removed; supported `tf.send: false` continues to
+prohibit dynamic motion TF. This changes the normative configuration
+contract and therefore advances its major version. Public ROS interfaces,
+message types, namespace, MAVLink IDs, and intended protocol remain unchanged.
+The unsupported alias had no runtime effect; the new gains do not claim
+numerical equivalence to it. There are no released hardware or production
+autonomy clients to migrate. Both environment implementations must target
+`2.0.0`; Hardware Adapter implementation remains deferred. Future supported
+timing changes follow the compatibility rules below.
+
+The pinned plugin implementation ignores global ROS arguments, including the
+parameters file. Simulation bringup therefore applies the canonical plugin
+groups through their parameter services after loading the plugins, before
+semantic readiness can pass. Diagnostics independently verifies each value and
+unique node ownership and detects later parameter changes. YAML presence or a
+successful setter call alone is not conformance evidence.
 
 The enabled list is closed: implementations must configure it as an explicit
 allowlist and must also configure the explicit disabled list. A newly installed
@@ -199,7 +238,7 @@ roles; the Simulation Adapter's MAVROS stream remains UDP 14552.
 
 ## Public ROS surface
 
-Only the interfaces below are stable dependencies of contract `1.0.0`.
+Only the interfaces below are stable dependencies of contract `2.0.0`.
 Additional endpoints may appear because an enabled MAVROS plugin creates them,
 but autonomy and GCS code must not depend on an unlisted endpoint without a
 contract revision.
@@ -301,9 +340,14 @@ perform the assertions, rather than relying on visual inspection alone.
    `ros2 param get /mavros system_id`,
    `ros2 param get /mavros component_id`,
    `ros2 param get /mavros target_system_id`,
-   `ros2 param get /mavros target_component_id`, and
-   `ros2 param get /mavros fcu_protocol`; require `255`, `191`, `1`, `1`, and
-   `v2.0`. The Adapter-side wire check must observe MAVLink 2 framing
+   `ros2 param get /mavros target_component_id`,
+   `ros2 param get /mavros_node tgt_system`,
+   `ros2 param get /mavros_node tgt_component`, and
+   `ros2 param get /mavros fcu_protocol`; require `255`, `191`, `1`, `1`,
+   `1`, `1`, and `v2.0` respectively. Capture the loader
+   transport and router `fcu_urls`, `uas_urls`, and `gcs_urls`; require the
+   resolved endpoint values match the selected configuration. The Adapter-side
+   wire check must observe MAVLink 2 framing
    (`0xFD`) on the selected link.
 4. **Connection:** receive a fresh `/mavros/state` sample and require
    `connected: true`; then continue sampling longer than the 10-second
@@ -317,12 +361,14 @@ perform the assertions, rather than relying on visual inspection alone.
 6. **Acknowledgment:** in simulation, call `/mavros/set_mode` and
    `/mavros/cmd/arming`, require their response fields and matching
    `/mavros/state` transitions, and always finish confirmed disarmed. Check a
-   bounded `/mavros/rc/override` pulse only in the existing simulation smoke
-   test, followed by neutralization. Hardware uses an approved non-actuating or
-   bench procedure.
+   bounded `/mavros/setpoint_velocity/cmd_vel` command only in the explicit
+   simulation smoke test, followed by zero-velocity stop, HOLD, and disarm.
+   Hardware uses an approved non-actuating or bench procedure.
 7. **Time and diagnostics:** capture `ros2 param dump /mavros/time` and
    `ros2 param dump /mavros/sys`; compare `time_ref_source`, `timesync_mode`,
-   `timesync_avg_alpha`, `timesync_rate`, `system_time_rate`, `heartbeat_rate`,
+   `timesync_alpha_initial`, `timesync_beta_initial`, `timesync_alpha_final`,
+   `timesync_beta_final`, `convergence_window`, `timesync_rate`,
+   `system_time_rate`, `heartbeat_rate`,
    `heartbeat_mav_type`, `conn_timeout`, and `disable_diag` with the manifest.
    Receive
    `/mavros/time_reference`, `/mavros/timesync_status`, and `/diagnostics`, and

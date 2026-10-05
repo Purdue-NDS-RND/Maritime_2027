@@ -75,6 +75,7 @@ services:
       GZ_PARTITION: ardupilot_blueboat_starter
       CAMERA_ENABLED: ${CAMERA_ENABLED:-1}
       FCU_URL: udp://:14552@
+      STACK_STARTUP_TIMEOUT: ${STACK_STARTUP_TIMEOUT:-180}
       ADAPTER_ENVIRONMENT: simulation
       SCENARIO_MANIFEST: /scenario/active.manifest.json
       FASTRTPS_DEFAULT_PROFILES_FILE: /etc/maritime/fastdds.xml
