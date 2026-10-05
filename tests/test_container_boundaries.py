@@ -1,9 +1,11 @@
 """Deployment contracts: exercise Compose resolution, not YAML source text."""
 
+import ast
 import json
 import os
 from pathlib import Path
 import subprocess
+import shlex
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -69,6 +71,53 @@ class ContainerBoundaries(unittest.TestCase):
         self.assertIn("SCENARIO_MANIFEST", adapter["environment"])
         self.assertTrue(all(volume.get("read_only") for volume in adapter["volumes"]))
         self.assertEqual(set(adapter["depends_on"]), {"simulator"})
+
+    def test_adapter_owns_mavros_configuration_geoid_and_fcu_health(self):
+        # Source ownership complements separate image inspection and live
+        # acceptance; this test makes no claim that a Docker build was run.
+        services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
+        adapter = Path(services["adapter"]["build"]["context"])
+        autonomy = Path(services["autonomy"]["build"]["context"])
+        package = adapter / "ros_ws/src/blueboat_sim_bringup"
+        dependencies = {item.text for item in ET.parse(package / "package.xml").getroot() if "depend" in item.tag}
+        self.assertTrue({"mavros", "mavros_msgs"} <= dependencies)
+
+        dockerfile = (adapter / "container/Dockerfile").read_text()
+        instructions = dockerfile.replace("\\\n", " ").splitlines()
+        run_tokens = [token for line in instructions if line.startswith("RUN ") for token in shlex.split(line[4:])]
+        self.assertTrue(any(token.startswith("ros-jazzy-mavros=") for token in run_tokens))
+        self.assertTrue(any(token.startswith("ros-jazzy-mavros-extras=") for token in run_tokens))
+        self.assertIn("geographiclib-tools", run_tokens)
+        self.assertIn("/opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh", run_tokens)
+        self.assertIn("/usr/share/GeographicLib/geoids/egm96-5.pgm", run_tokens)
+
+        launch = ast.parse((package / "launch/bringup.launch.py").read_text())
+        mavros_calls = [node for node in ast.walk(launch) if isinstance(node, ast.Call)
+                        and any(keyword.arg == "package" and isinstance(keyword.value, ast.Constant)
+                                and keyword.value.value == "mavros" for keyword in node.keywords)]
+        self.assertEqual(len(mavros_calls), 1)
+        parameters = next(keyword.value for keyword in mavros_calls[0].keywords if keyword.arg == "parameters")
+        self.assertTrue(any(isinstance(node, ast.Constant) and node.value == "mavros.yaml" for node in ast.walk(parameters)))
+        self.assertTrue((package / "config/mavros.yaml").is_file())
+        health = ast.parse((package / "blueboat_sim_bringup/healthcheck.py").read_text())
+        diagnostic_requirements = next(node.value for node in ast.walk(health) if isinstance(node, ast.Assign)
+                                       and any(isinstance(target, ast.Attribute) and target.attr == "required_diagnostics" for target in node.targets))
+        self.assertIn("mavros_adapter/fcu_readiness", ast.literal_eval(diagnostic_requirements))
+        self.assertIn("blueboat_sim_bringup healthcheck", " ".join(services["adapter"]["healthcheck"]["test"]))
+
+        autonomy_dockerfile = (autonomy / "container/Dockerfile").read_text().lower()
+        for forbidden in ("mavros", "geographiclib", "fcu_url"):
+            self.assertNotIn(forbidden, autonomy_dockerfile)
+        self.assertFalse(list((autonomy / "ros_ws/src").rglob("mavros*")))
+        self.assertNotIn("FCU_URL", services["autonomy"]["environment"])
+        autonomy_health = " ".join(services["autonomy"]["healthcheck"]["test"])
+        self.assertIn("placeholder_healthcheck", autonomy_health)
+        self.assertNotIn("mavros", autonomy_health.lower())
+        for source in (autonomy / "ros_ws/src").rglob("*.py"):
+            imports = [node for node in ast.walk(ast.parse(source.read_text())) if isinstance(node, (ast.Import, ast.ImportFrom))]
+            modules = [node.module or "" for node in imports if isinstance(node, ast.ImportFrom)]
+            modules += [alias.name for node in imports if isinstance(node, ast.Import) for alias in node.names]
+            self.assertFalse(any(module.startswith(("mavros", "geographiclib")) for module in modules), source)
 
     def test_no_standalone_autonomy_transport_profile_remains(self):
         self.assertFalse((ROOT / "deployment" / "compose.autonomy.yaml").exists())
