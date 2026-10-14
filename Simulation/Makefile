@@ -1,4 +1,4 @@
-.PHONY: run build rebuild ros-build validate smoke sensor-smoke mavros-smoke boundary-smoke verify-rgbd lifecycle-smoke down logs
+.PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
 
 run:
 	./scripts/run.sh
@@ -17,6 +17,14 @@ validate:
 
 smoke:
 	./scripts/smoke.sh
+
+teleop:
+	@docker compose -f container/compose.yaml ps --status running --services | grep -qx simulator || { printf '%s\n' "ERROR: simulator is not running. Start it with 'make run' first." >&2; exit 1; }
+	@docker run --rm -it --network host \
+		--user 0 \
+		$(foreach device,$(wildcard /dev/input/event*),--device $(device)) \
+		-v "$(CURDIR)/scripts/teleop_wasd.py:/tmp/teleop_wasd.py:ro" \
+		--entrypoint python3 "$${SIM_IMAGE:-ardupilot-blueboat:4.7.0}" /tmp/teleop_wasd.py
 
 sensor-smoke:
 	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation sensor_smoke
