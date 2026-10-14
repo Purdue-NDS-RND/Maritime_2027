@@ -33,10 +33,13 @@ mavros-smoke:
 	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 
 boundary-smoke:
-	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -e SIMULATION_EVALUATION=1 evaluation python3 - < ../tests/ros_boundary_smoke.py
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -v "$(abspath ../tests):/boundary-tests:ro" -e SIMULATION_EVALUATION=1 evaluation python3 /boundary-tests/ros_boundary_smoke.py
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
+
+lifecycle-smoke:
+	python3 tests/lifecycle_acceptance.py
 
 down:
 	./scripts/run.sh --down

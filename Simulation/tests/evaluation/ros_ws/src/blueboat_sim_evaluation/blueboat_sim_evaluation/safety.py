@@ -1,2 +1,2 @@
-def manual_mode_observed(state):
-    return state is not None and state.mode == "MANUAL"
+def guided_mode_observed(state):
+    return state is not None and state.mode == "GUIDED"

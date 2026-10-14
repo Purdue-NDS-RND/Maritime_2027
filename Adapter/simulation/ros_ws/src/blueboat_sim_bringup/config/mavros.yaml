@@ -2,10 +2,15 @@
   ros__parameters:
     use_sim_time: false
 
-/mavros:
+/mavros_node:
   ros__parameters:
     fcu_url: udp://:14552@
     gcs_url: ""
+    tgt_system: 1
+    tgt_component: 1
+
+/mavros:
+  ros__parameters:
     uas_url: /uas1
     fcu_protocol: v2.0
     system_id: 255
@@ -26,7 +31,13 @@
   ros__parameters:
     time_ref_source: fcu
     timesync_mode: MAVLINK
-    timesync_avg_alpha: 0.6
+    # MAVROS 2.15.1 declares scheduled alpha/beta gains, not the legacy
+    # timesync_avg_alpha alias. Freeze its actual upstream defaults explicitly.
+    timesync_alpha_initial: 0.05
+    timesync_beta_initial: 0.05
+    timesync_alpha_final: 0.003
+    timesync_beta_final: 0.003
+    convergence_window: 500
     timesync_rate: 10.0
     system_time_rate: 1.0
 
@@ -36,7 +47,6 @@
     tf.send: false
     tf.frame_id: map
     tf.child_frame_id: base_link
-    tf.send_fcu: false
 
 /mavros/global_position:
   ros__parameters:

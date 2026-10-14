@@ -23,6 +23,7 @@ setup(
         "console_scripts": [
             "healthcheck = blueboat_sim_bringup.healthcheck:main",
             "diagnostics = blueboat_sim_bringup.diagnostics:main",
+            "configure_mavros = blueboat_sim_bringup.configure_mavros:main",
             "readiness = blueboat_sim_bringup.readiness:main",
         ]
     },

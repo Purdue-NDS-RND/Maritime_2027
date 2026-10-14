@@ -37,15 +37,17 @@ def main():
     rclpy.init()
     node = Watch(NAMES[args.boundary])
     deadline = time.monotonic() + args.timeout
+    reason = "diagnostic_unobserved"
     try:
         while time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.25)
             if node.result is not None:
-                if node.result.level == DiagnosticStatus.OK:
+                ready = next((item.value for item in node.result.values if item.key == "source_ready"), "false")
+                if node.result.level == DiagnosticStatus.OK and ready == "true":
                     return
                 reason = next((item.value for item in node.result.values if item.key == "reason"), node.result.message)
-                raise SystemExit(f"{args.boundary} readiness false: {reason}")
-        raise SystemExit(f"timed out waiting for {args.boundary} readiness diagnostic")
+                node.result = None
+        raise SystemExit(f"timed out waiting for {args.boundary} readiness: {reason}")
     finally:
         node.destroy_node()
         rclpy.shutdown()

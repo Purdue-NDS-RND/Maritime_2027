@@ -27,6 +27,7 @@ make build          # build/update the simulator image
 make run            # start the GUI simulator
 make smoke          # acceptance test of a running boat via MAVLink
 make verify-rgbd    # complete RGB-D scenario and control regression suite
+make lifecycle-smoke # explicit startup/failure cleanup and parameter regression
 make down           # stop containers while retaining logs and SITL state
 ```
 
@@ -34,6 +35,8 @@ Use `SCENARIO=gate make run` for RGB-D work. Run `make validate` before a
 build and the relevant smoke test after changes. `make smoke` requires a
 running simulator; `make sensor-smoke` and `make mavros-smoke` run the explicit
 simulation-only evaluation image and require the running Simulation Adapter.
+`make lifecycle-smoke` starts its own simulation runs and
+requires the stack to be stopped; run it after launcher or lifecycle changes.
 
 ## Coding Style & Naming Conventions
 

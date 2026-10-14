@@ -10,6 +10,7 @@ from mavros_msgs.srv import CommandBool, CommandInt, CommandLong, SetMode
 from nav_msgs.msg import Odometry
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
+from rclpy.parameter import parameter_value_to_python
 from rclpy.parameter_client import AsyncParameterClient
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, NavSatFix, TimeReference
@@ -24,12 +25,14 @@ from .mavros_readiness import (
 
 LEVEL = {"OK": DiagnosticStatus.OK, "STALE": DiagnosticStatus.STALE, "ERROR": DiagnosticStatus.ERROR}
 MAVROS_PARAMETERS = {
-    "fcu_url": "udp://:14552@", "gcs_url": "", "uas_url": "/uas1",
+    "uas_url": "/uas1",
     "fcu_protocol": "v2.0", "system_id": 255, "component_id": 191,
     "target_system_id": 1, "target_component_id": 1,
     "plugin_allowlist": PLUGIN_ALLOWLIST, "plugin_denylist": PLUGIN_DENYLIST,
 }
 PARAMETER_GROUPS = {
+    "/mavros_node": {"fcu_url": "udp://:14552@", "gcs_url": "", "tgt_system": 1, "tgt_component": 1},
+    "/mavros_router": {"fcu_urls": ["udp://:14552@"], "gcs_urls": [], "uas_urls": ["/uas1"]},
     "/mavros": MAVROS_PARAMETERS,
     "/mavros/sys": {
         "heartbeat_rate": 1.0, "heartbeat_mav_type": "ONBOARD_CONTROLLER",
@@ -37,11 +40,13 @@ PARAMETER_GROUPS = {
     },
     "/mavros/time": {
         "time_ref_source": "fcu", "timesync_mode": "MAVLINK",
-        "timesync_avg_alpha": 0.6, "timesync_rate": 10.0, "system_time_rate": 1.0,
+        "timesync_alpha_initial": 0.05, "timesync_beta_initial": 0.05,
+        "timesync_alpha_final": 0.003, "timesync_beta_final": 0.003,
+        "convergence_window": 500, "timesync_rate": 10.0, "system_time_rate": 1.0,
     },
     "/mavros/local_position": {
         "frame_id": "map", "tf.send": False, "tf.frame_id": "map",
-        "tf.child_frame_id": "base_link", "tf.send_fcu": False,
+        "tf.child_frame_id": "base_link",
     },
     "/mavros/global_position": {
         "frame_id": "map", "child_frame_id": "base_link", "tf.send": False,
@@ -54,7 +59,7 @@ PARAMETER_GROUPS = {
 
 def status(name, level, reason, ready, extra=()):
     message = DiagnosticStatus(name=name, hardware_id="simulation_adapter", level=level, message=reason)
-    values = [("contract_version", "1.0.0"), ("source_ready", str(ready).lower()), ("reason", reason), *extra]
+    values = [("contract_version", "2.0.0"), ("source_ready", str(ready).lower()), ("reason", reason), *extra]
     message.values = [KeyValue(key=key, value=str(value)) for key, value in values]
     return message
 
@@ -123,8 +128,13 @@ class AdapterDiagnostics(Node):
             if not future.done():
                 continue
             try:
-                parameters = future.result()
-                observed = {name: value.value for name, value in zip(expected_values, parameters)}
+                response = future.result()
+                # AsyncParameterClient returns the service response, whose values
+                # are ParameterValue messages rather than rclpy Parameters.
+                observed = {
+                    name: parameter_value_to_python(value)
+                    for name, value in zip(expected_values, response.values)
+                }
                 self.parameter_values[node] = observed
                 mismatches = parameter_mismatches(expected_values, observed)
                 self.parameter_errors[node] = f"parameter_mismatch:{','.join(mismatches)}" if mismatches else None
@@ -133,6 +143,10 @@ class AdapterDiagnostics(Node):
             self.parameter_futures[node] = None
 
     def graph_state(self):
+        owners = [f"{namespace.rstrip('/')}/{name}" for name, namespace in self.get_node_names_and_namespaces()]
+        for owner in PARAMETER_GROUPS:
+            if owners.count(owner) != 1:
+                return DiagnosticStatus.ERROR, f"node_owner_count:{owner}:{owners.count(owner)}", False
         topic_names = dict(self.get_topic_names_and_types())
         service_names = dict(self.get_service_names_and_types())
         graph_valid, graph_reason = validate_graph(topic_names, service_names)

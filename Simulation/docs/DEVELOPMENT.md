@@ -14,7 +14,36 @@ make run
 
 `scripts/run.sh` owns host concerns: Docker access, UID/GID mapping, image selection,
 GPU selection, display validation, and a temporary Xauthority file.
-`container/start-sim.sh` owns container process order, logs, readiness, and shutdown.
+`container/start-sim.sh` owns simulator process order, logs, readiness, and shutdown.
+
+The launcher takes a nonblocking lock at `logs/.launcher.lock` before writing
+shared launch inputs, including build-only preparation. A second launcher or
+existing project containers (including stopped containers) cause an explicit
+failure; use `make down` before a fresh launch. The shutdown command remains
+available while a launcher holds the lock.
+
+For ROS runs the host launcher starts the simulator, waits for its healthcheck,
+then starts the Adapter and waits for semantic health before starting the
+bootstrap. Each handoff has a `STACK_STARTUP_TIMEOUT` deadline (180 seconds by
+default). Adapter health requires fresh OK camera source diagnostics when the
+camera is enabled, plus MAVROS source and FCU readiness; node presence alone is
+insufficient. Bootstrap health remains a process-liveness check and never
+implies mission readiness.
+
+The launcher monitors service exits and sustained unhealthy status throughout
+the run. A failed handoff or runtime service failure stops the complete stack.
+`Ctrl+C`, termination, and `make down` also stop the stack and remove its
+recorded temporary Xauthority file. Ordinary logs and SITL state are retained.
+`WIPE_PARAMS=1` remains the explicit way to reset virtual EEPROM for a launch.
+
+Each launch exports a unique `RUN_ID` and a `RUN_CONFIG_SHA256` identifying its
+saved resolved Compose configuration. `logs/runs/$RUN_ID/` contains
+`compose.yaml`, `identity.txt`, `services.log`, and failure evidence when
+applicable; ROS launches also save `scenario.manifest.json`. The simulator's
+`logs/last-run.txt` records the run ID and configuration hash. The resolved
+configuration can contain environment values: keep these generated artifacts
+out of Git. Direct `WORLD` launches generate a fresh empty truth roster rather
+than reuse a previous scenario's manifest.
 
 ## Reproducible sources
 
@@ -41,6 +70,7 @@ SITL parameters once, and repeat the full smoke test.
 | `SOFTWARE_RENDERING` | `0` | Use Mesa CPU rendering when set to `1` |
 | `WIPE_PARAMS` | `0` | Reset virtual EEPROM when set to `1` |
 | `GAZEBO_STARTUP_TIMEOUT` | `90` | Gazebo/BlueBoat readiness deadline |
+| `STACK_STARTUP_TIMEOUT` | `180` | Positive integer seconds per simulator/Adapter/bootstrap startup handoff |
 | `SIM_IMAGE` | `ardupilot-blueboat:4.7.0` | Local Docker image tag |
 
 ## Water profiles
@@ -53,15 +83,41 @@ looks up the wavefield to calculate buoyancy and drag.
 ## Health versus acceptance
 
 The Compose healthcheck proves Gazebo, ArduRover, and MAVProxy processes exist
-and that a world-clock message can be received. It does not prove navigation.
+and that two live world-clock samples show advancing simulation time. It does
+not prove navigation.
 `make smoke` is the semantic acceptance test for controller identity, parameter
 configuration, movement, Hold, RTL, and disarm.
 
+Run `make lifecycle-smoke` explicitly from `Simulation/` with the simulator
+stopped. It invokes `tests/lifecycle_acceptance.py`; this acceptance harness is
+never part of runtime startup. It launches separate simulation runs to exercise
+bounded failed Gazebo/Adapter startup, simulator and autonomy service exits,
+required Adapter-child exit, camera/FCU silence, SIGINT/SIGTERM cleanup,
+double-start rejection, and parameter persistence. Test-only injections include
+a wrong SITL MAVROS output port (14559), stopping the camera boundary or MAVROS
+node, stopping exactly one required simulator or autonomy container, and an
+incompatible direct-world readiness case. Startup and silence
+waits are bounded; production readiness retries and data thresholds are unchanged.
+To rerun just the service-exit cases, use
+`python3 tests/lifecycle_acceptance.py --cases simulator_exit,autonomy_exit`.
+Each requires the launcher to report the selected failed service, return nonzero,
+preserve failure evidence, and clean up the remaining stack.
+
+The parameter case changes only the benign `LOG_DISARMED` setting, verifies
+retention across a normal restart and reset with `WIPE_PARAMS=1`, then restores
+the original stopped SITL EEPROM on exit (or removes test-created EEPROM if
+none originally existed). Results and launcher logs are saved under
+`logs/lifecycle-<UTC>/`; a passing outcome requires clean containers, ports, and
+temporary display credentials. These are simulation lifecycle tests, not
+hardware or application-readiness evidence.
+
 ## Deferred work
 
-Do not add ROS 2 or competition-specific behavior to this baseline incidentally.
-Future AIMM work should add a separate autonomy layer and course assets while
-preserving this known-good ArduPilot/Gazebo foundation.
+The current ROS extension provides simulation bridges, camera normalization,
+MAVROS, diagnostics, explicit evaluators, and the non-commanding bootstrap.
+Perception, state integration, mapping, navigation, missions, and the Hardware
+Adapter remain later work. Preserve the ArduPilot/Gazebo foundation and the
+implemented Adapter boundary when adding those application layers.
 # RGB-D extension invariants
 
 - Never edit the fetched upstream BlueBoat model. The image build verifies its

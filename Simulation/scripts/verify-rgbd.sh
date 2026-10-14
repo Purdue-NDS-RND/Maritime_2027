@@ -17,7 +17,9 @@ stop_run() {
     runner_pid=
     ./scripts/run.sh --down >/dev/null 2>&1 || true
 }
-trap stop_run EXIT INT TERM
+trap stop_run EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 wait_for_health() {
     local deadline=$((SECONDS + 150))
@@ -45,7 +47,7 @@ run_case() {
     runner_pid=$!
     wait_for_health
     docker exec ardupilot-blueboat-sim gz model --list | tee "logs/verify-$scenario-models.txt"
-    if [[ $scenario == one || $scenario == gate ]]; then
+    if [[ $scenario == one || $scenario == gate || $scenario == repeated_red ]]; then
         docker exec ardupilot-blueboat-sim python3 /opt/boat_sim/scripts/gazebo_sensor_smoke.py
         make sensor-smoke
     fi
@@ -59,6 +61,7 @@ run_case() {
 run_case one
 run_case gate
 run_case multi 42
+run_case repeated_red
 
 echo "=== Verifying original ArduPilot behavior with the augmented boat and no buoys ==="
 ROS_SIM=1 WORLD=blueboat_rgbd_base.sdf ./scripts/run.sh >logs/verify-camera-only.log 2>&1 &

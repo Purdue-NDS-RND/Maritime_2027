@@ -60,8 +60,14 @@ def generate_launch_description():
             package="blueboat_mavlink_monitor", executable="mavlink_v2_monitor", name="mavlink_v2_monitor", output="screen",
         ),
         required_node(
-            package="mavros", executable="mavros_node", name="mavros", namespace="/", output="screen",
+            # Keep the executable's three default owners unique: loader, router,
+            # and UAS. A global name remap would rename all three to /mavros.
+            package="mavros", executable="mavros_node", namespace="/", output="screen",
             parameters=[str(package_share / "config" / "mavros.yaml"), {"fcu_url": ParameterValue(fcu_url, value_type=str)}],
+        ),
+        required_node(
+            package="blueboat_sim_bringup", executable="configure_mavros", name="mavros_configuration", output="screen",
+            parameters=[{"configuration_file": str(package_share / "config" / "mavros.yaml")}],
         ),
         required_node(
             package="blueboat_sim_bringup", executable="diagnostics", name="simulation_adapter_diagnostics", output="screen",

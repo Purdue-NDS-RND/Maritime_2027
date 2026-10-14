@@ -44,4 +44,3 @@ deployment YAML, tests, or the source checklist.
 
 Report any current value that could not be verified from repository sources as
 an unresolved blocker. Do not silently choose a hardware transport.
-

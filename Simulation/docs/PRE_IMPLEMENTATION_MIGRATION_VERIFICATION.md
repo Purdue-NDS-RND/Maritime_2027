@@ -1,7 +1,14 @@
 # Pre-implementation migration verification
 
-**Run:** 2026-09-15T04:54:09Z  
-**Revision under test:** `c0c470cf333dcc47a79e9850564bf5f63c8829c4` plus the uncommitted diagnostics and evaluator-invocation repairs recorded below.  
+Historical integration evidence. Its failed RGB-D and RC-command acceptance
+results are superseded by the [RGB-D transport verification](RGBD_TRANSPORT_VERIFICATION.md)
+and [MAVROS velocity benchmark verification](MAVROS_VELOCITY_BENCHMARK_VERIFICATION.md).
+The original results below are retained for traceability.
+
+**Run:** 2026-09-15T04:54:09Z
+
+**Revision under test:** `c0c470cf333dcc47a79e9850564bf5f63c8829c4` plus the uncommitted diagnostics and evaluator-invocation repairs recorded below.
+
 **Environment:** local Ubuntu host, Docker, ROS Jazzy/Noble, Gazebo Harmonic, software rendering, `SCENARIO=one`, ROS domain 0. Hardware Adapter and hardware tests were deliberately deferred and were not built or run.
 
 ## Configuration under test

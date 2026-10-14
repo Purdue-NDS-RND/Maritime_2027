@@ -6,6 +6,7 @@ Start a ROS scenario from `Simulation/`:
 SCENARIO=one make run
 SCENARIO=gate make run
 SCENARIO=multi BUOY_SEED=42 make run
+SCENARIO=repeated_red make run
 ```
 
 The ROS profile starts Gazebo/SITL, the Simulation Adapter, and the temporary
@@ -42,10 +43,13 @@ make mavros-smoke
 
 These commands run the dedicated `Simulation/tests/evaluation/` image only when
 explicitly invoked. `mavros-smoke` is simulation-guarded, requires the SITL
-endpoint, confirms MANUAL mode before arming, then performs neutral/release and
-disarm cleanup. Never use it against hardware.
+endpoint, confirms GUIDED mode before arming, then sends a bounded MAVROS
+velocity setpoint and verifies a zero-velocity stop, HOLD, and disarm cleanup.
+Never use it against hardware.
 
-`make verify-rgbd` runs scenario and control regressions. The RGB-D evaluator's
+`make verify-rgbd` runs scenario and control regressions, including two visible
+red-category entities in `repeated_red` with distinct instance identity. The
+RGB-D evaluator's
 8.00 synchronized-pairs/sec threshold remains unchanged; a lower measured rate
 is a failure, not evidence of a successful run.
 

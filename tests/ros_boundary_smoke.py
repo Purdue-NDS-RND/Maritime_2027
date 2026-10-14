@@ -1,57 +1,98 @@
-"""Read-only check from the simulation evaluator: public ROS interfaces exist.
+"""Read-only public-interface/readiness probe; also runnable inside autonomy.
 
-Run through `make boundary-smoke` in Simulation/, with a scenario running.
-Perfect pose remains outside shared navigation TF and is not used by this probe.
+Evaluator mode decodes MAVROS State. --autonomy mode uses Adapter FCU
+readiness evidence and verifies the State graph type without adding MAVROS
+runtime/message packages to autonomy. Neither mode is mission acceptance.
+Copy this file and boundary_contract.py together when executing in a container.
 """
 
+import argparse
+from collections import Counter
 import time
 
 import rclpy
-from mavros_msgs.msg import State
+from diagnostic_msgs.msg import DiagnosticArray
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 from tf2_msgs.msg import TFMessage
+
+from boundary_contract import MISSION, PLACEHOLDER, REQUIRED_READY, diagnostic_level, validate_evidence
 
 
 def main():
-    rclpy.init()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--autonomy", action="store_true")
+    parser.add_argument("--timeout", type=float, default=30.0)
+    args = parser.parse_args()
+    rclpy.init(args=[])
     node = Node("container_boundary_smoke")
-    received = {"image": False, "connected": False}
-    shared_frames = set()
+    received = {"connected": args.autonomy, "triples": 0}
+    diagnostics, arrivals, streams, shared_frames = {}, {}, {"color": {}, "depth": {}, "info": {}}, set()
     static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
     def on_shared(message):
-        shared_frames.update(
-            (item.header.frame_id, item.child_frame_id) for item in message.transforms
-        )
+        shared_frames.update((item.header.frame_id, item.child_frame_id) for item in message.transforms)
+
+    def on_diagnostics(message):
+        for item in message.status:
+            diagnostics[item.name] = (diagnostic_level(item.level), item.message, {value.key: value.value for value in item.values})
+            arrivals[item.name] = time.monotonic()
+
+    def on_camera(kind, message):
+        assert message.header.frame_id == "camera_0_optical_frame", f"wrong public camera frame: {kind}"
+        if kind != "info":
+            expected = {"rgb8", "bgr8"} if kind == "color" else {"32FC1"}
+            assert message.encoding in expected, f"wrong encoding: {kind}/{message.encoding}"
+        key = (message.header.stamp.sec, message.header.stamp.nanosec)
+        streams[kind][key] = (message.width, message.height)
+        common = set(streams["color"]) & set(streams["depth"]) & set(streams["info"])
+        for stamp in common:
+            dimensions = [streams[component].pop(stamp) for component in streams]
+            assert len(set(dimensions)) == 1 and min(dimensions[0]) > 0, "RGB-D not registered to CameraInfo dimensions"
+            received["triples"] += 1
+        for messages in streams.values():
+            while len(messages) > 200:
+                del messages[next(iter(messages))]
 
     subscriptions = [
-        node.create_subscription(Image, "/sensors/camera_0/color/image_raw",
-                                 lambda _: received.update(image=True), qos_profile_sensor_data),
-        node.create_subscription(State, "/mavros/state",
-                                 lambda msg: received.update(connected=msg.connected), 10),
+        node.create_subscription(Image, "/sensors/camera_0/color/image_raw", lambda msg: on_camera("color", msg), qos_profile_sensor_data),
+        node.create_subscription(Image, "/sensors/camera_0/depth/image_rect_raw", lambda msg: on_camera("depth", msg), qos_profile_sensor_data),
+        node.create_subscription(CameraInfo, "/sensors/camera_0/color/camera_info", lambda msg: on_camera("info", msg), qos_profile_sensor_data),
+        node.create_subscription(DiagnosticArray, "/diagnostics", on_diagnostics, 10),
         node.create_subscription(TFMessage, "/tf", on_shared, 100),
         node.create_subscription(TFMessage, "/tf_static", on_shared, static_qos),
     ]
+    if not args.autonomy:
+        from mavros_msgs.msg import State
+        subscriptions.append(node.create_subscription(State, "/mavros/state", lambda msg: received.update(connected=msg.connected), 10))
     try:
-        deadline = time.monotonic() + 10.0
+        deadline = time.monotonic() + args.timeout
+        failure = "no data"
+        failures = Counter()
         while time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.1)
-        assert all(received.values()), f"missing cross-container data: {received}"
-        expected = {
-            ("base_link", "camera_0_link"),
-            ("camera_0_link", "camera_0_optical_frame"),
-        }
-        # MAVROS publishes fixed ENU/NED and FLU/FRD convention conversions;
-        # these are not vessel pose estimates or simulator truth.
-        allowed = expected | {
-            ("map", "map_ned"), ("odom", "odom_ned"),
-            ("base_link", "base_link_frd"),
-        }
-        assert expected <= shared_frames, f"missing camera extrinsics: {shared_frames}"
-        assert shared_frames <= allowed, f"unexpected shared TF: {shared_frames}"
-        print("BOUNDARY PASS: public camera and FCU data are present; truth TF is excluded from shared navigation TF")
+            try:
+                assert received["triples"] >= 10 and received["connected"], f"missing cross-container data: {received}"
+                assert dict(node.get_topic_names_and_types()).get("/mavros/state") == ["mavros_msgs/msg/State"], "MAVROS State contract missing"
+                for name in REQUIRED_READY | {MISSION, PLACEHOLDER}:
+                    assert time.monotonic() - arrivals.get(name, 0) <= 2.0, f"stale diagnostics: {name}"
+                publishers = node.get_publisher_names_and_types_by_node("maritime_preimplementation_placeholder", "/")
+                subscribers = node.get_subscriber_names_and_types_by_node("maritime_preimplementation_placeholder", "/")
+                clients = node.get_client_names_and_types_by_node("maritime_preimplementation_placeholder", "/")
+                assert publishers, "placeholder node not discovered"
+                validate_evidence(diagnostics, shared_frames, [name for name, _ in publishers],
+                                  [name for name, _ in subscribers], [name for name, _ in clients])
+            except AssertionError as error:
+                failure = str(error)
+                failures[":".join(failure.split(":", 2)[:2])] += 1
+                continue
+            print(f"BOUNDARY PASS: {received['triples']} exact RGB-D triples received; source/FCU readiness observed; shared TF and non-commanding placeholder verified; mission remains unready")
+            if args.autonomy:
+                print("AUTONOMY PROBE: MAVROS State graph type and FCU diagnostics verified; direct State decoding checked separately by evaluator")
+            break
+        else:
+            raise AssertionError(f"{failure}; observations={received}; failure_counts={dict(failures)}; frames={sorted(shared_frames)}")
     finally:
         for subscription in subscriptions:
             node.destroy_subscription(subscription)
