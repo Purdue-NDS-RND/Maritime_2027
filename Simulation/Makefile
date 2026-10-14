@@ -1,4 +1,4 @@
-.PHONY: run build rebuild ros-build validate smoke sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
+.PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
 
 run:
 	./scripts/run.sh
@@ -18,17 +18,28 @@ validate:
 smoke:
 	./scripts/smoke.sh
 
+teleop:
+	@docker compose -f container/compose.yaml ps --status running --services | grep -qx simulator || { printf '%s\n' "ERROR: simulator is not running. Start it with 'make run' first." >&2; exit 1; }
+	@docker run --rm -it --network host \
+		--user 0 \
+		$(foreach device,$(wildcard /dev/input/event*),--device $(device)) \
+		-v "$(CURDIR)/scripts/teleop_wasd.py:/tmp/teleop_wasd.py:ro" \
+		--entrypoint python3 "$${SIM_IMAGE:-ardupilot-blueboat:4.7.0}" /tmp/teleop_wasd.py
+
 sensor-smoke:
-	docker exec maritime-sim-adapter bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup sensor_smoke'
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation sensor_smoke
 
 mavros-smoke:
-	docker exec maritime-sim-adapter bash -lc 'source /etc/blueboat_ros_setup.bash && ros2 run blueboat_sim_bringup mavros_smoke'
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 
 boundary-smoke:
-	docker exec -i maritime-autonomy bash -lc 'source /etc/maritime_autonomy_setup.bash && python3 -' < ../tests/ros_boundary_smoke.py
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -v "$(abspath ../tests):/boundary-tests:ro" -e SIMULATION_EVALUATION=1 evaluation python3 /boundary-tests/ros_boundary_smoke.py
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
+
+lifecycle-smoke:
+	python3 tests/lifecycle_acceptance.py
 
 down:
 	./scripts/run.sh --down

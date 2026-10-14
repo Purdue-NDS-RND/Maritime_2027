@@ -93,9 +93,15 @@ Start a complete ROS-enabled gate:
 SCENARIO=gate make run
 ```
 
-This is still a foreground command. Wait for both Compose services to become
-healthy, then use another terminal for `make sensor-smoke` or
+This is still a foreground command. Wait for the simulator, Adapter, and
+bootstrap to become healthy, then use another terminal for `make sensor-smoke` or
 `make mavros-smoke`. `Ctrl+C` stops Gazebo, SITL, MAVROS, and the ROS bridges.
+The launcher waits for simulator health and semantic Adapter source readiness
+before starting the bootstrap. Failed startup or a running service failure
+stops the complete stack. `make down` also removes the recorded temporary
+display authorization file while retaining logs and SITL parameters. Run
+identity and resolved configuration are saved under `logs/runs/`; see the
+[maintenance guide](DEVELOPMENT.md) for the detailed lifecycle.
 
 Use `SCENARIO=one`, `SCENARIO=gate`, or `SCENARIO=multi`. For reproducible
 randomization, add an integer such as `BUOY_SEED=42`. Supplying both `WORLD`

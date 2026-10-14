@@ -11,7 +11,7 @@ ENABLE_MAVROS=${ENABLE_MAVROS:-0}
 CAMERA_ENABLED=${CAMERA_ENABLED:-0}
 GAZEBO_STARTUP_TIMEOUT=${GAZEBO_STARTUP_TIMEOUT:-90}
 WIPE_PARAMS=${WIPE_PARAMS:-0}
-RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
+RUN_ID=${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 GAZEBO_LOG="$LOG_DIR/gazebo-$RUN_ID.log"
 SIM_VEHICLE_LOG="$LOG_DIR/sim-vehicle-$RUN_ID.log"
 ARDUROVER_LOG="$LOG_DIR/ardurover-$RUN_ID.log"
@@ -63,6 +63,9 @@ trap 'exit 143' TERM
 cat > "$LOG_DIR/last-run.txt" <<EOF
 run_id=$RUN_ID
 world=$WORLD
+scenario=${SCENARIO:-none}
+configuration_sha256=${RUN_CONFIG_SHA256:-unknown}
+application_state=empty_simulation_placeholder
 mavlink_qgc=$MAVLINK_QGC
 mavlink_api=$MAVLINK_API
 mavlink_mavros=$MAVLINK_MAVROS
@@ -94,7 +97,7 @@ while (( SECONDS < deadline )); do
         camera_ready=0
     fi
     if [[ -n $clock_topic ]] && grep -q '^/model/blueboat/odometry$' <<<"$topics" && [[ $camera_ready == 1 ]]; then
-        if timeout 4 gz topic -e -t "$clock_topic" -n 1 2>/dev/null | grep -q 'sim'; then
+        if python3 /opt/boat_sim/scripts/gazebo_clock_ready.py "$clock_topic"; then
             ready=1
             break
         fi

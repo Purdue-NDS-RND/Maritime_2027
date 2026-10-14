@@ -28,9 +28,10 @@ mechanisms, or a digital twin of the competition LPV.
   programs on UDP `14551`.
 - Timestamped logs and virtual controller state are saved under `logs/`.
 
-With `SCENARIO=one|gate|multi`, a second container also starts ROS 2 Jazzy,
-MAVROS on dedicated UDP `14552`, RGB and registered depth bridges, camera info,
-TF, simulation clock, and evaluation-only ground truth.
+With `SCENARIO=one|gate|multi|repeated_red`, the ROS profile starts the Simulation Adapter,
+its MAVROS endpoint on UDP `14552`, normalized RGB-D/camera-info interfaces,
+TF, simulation clock, the non-mission autonomy bootstrap, and evaluation-only
+ground truth.
 
 QGroundControl stays outside Docker. On this workstation it is located at:
 
@@ -49,7 +50,7 @@ QGroundControl stays outside Docker. On this workstation it is located at:
    ```
 
 4. Wait for Gazebo to show BlueBoat and for QGroundControl to connect.
-5. In a second terminal, prove autonomous navigation works:
+5. In a second terminal, exercise the simulator control acceptance test:
 
    ```bash
    make smoke
@@ -73,6 +74,7 @@ make ros-build # Build simulator, simulation adapter, and autonomy images
 make sensor-smoke # Check RGB-D, ArUco visibility, depth, timing, and TF
 make mavros-smoke # Check the FCU control path through MAVROS
 make verify-rgbd  # Run the complete scenario and control regression suite
+make lifecycle-smoke # Explicit startup, failure cleanup, and parameter tests
 make logs      # Follow the running container's output
 make down      # Stop/remove the container; keep logs and controller state
 ```
@@ -83,7 +85,8 @@ For the RGB-D test gate, use one command:
 SCENARIO=gate make run
 ```
 
-Other layouts are `one` and `multi`. Add `BUOY_SEED=42` for repeatable pose
+Other layouts are `one`, `multi`, and `repeated_red` (two visible red-category
+buoys). Add `BUOY_SEED=42` for repeatable pose
 randomization. See [RGB-D and buoy scenarios](docs/RGBD_AND_BUOY_SCENARIOS.md)
 for topics, frames, tests, and boundaries.
 
@@ -135,10 +138,10 @@ Use the root Makefile for normal operation. `scripts/` is for host-side
 automation, while `container/` holds Docker and in-container startup files.
 
 ROS responsibilities live in sibling project areas: [`Adapter/`](../Adapter/README.md)
-owns the Gazebo bridges and simulation-only tests; [`autonomy/`](../autonomy/README.md)
-owns MAVROS and future onboard algorithms. The simulation `ros` profile starts
-both services alongside the simulator. The autonomy service can also start
-independently through [`deployment/`](../deployment/README.md).
+owns the Gazebo bridges, MAVROS, and diagnostics; explicit evaluators live in
+`tests/evaluation/`. [`autonomy/`](../autonomy/README.md) contains only the
+temporary non-mission bootstrap. The simulation `ros` profile starts both
+services alongside the simulator; there is no standalone autonomy profile.
 
 ## Model limitation
 

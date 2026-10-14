@@ -2,6 +2,13 @@
 
 ## Purpose and Design Status
 
+**Current migration status (2026-10-04):** the Simulation Adapter owns MAVROS,
+the simulation FCU transport, and the public `camera_0` boundary. Autonomy is
+only a simulation bootstrap placeholder with mission readiness false. The
+Hardware Adapter and real autonomy application remain deferred. The simulation
+RGB-D and MAVROS regressions have passing evidence in the
+[RGB-D transport verification report](../Simulation/docs/RGBD_TRANSPORT_VERIFICATION.md).
+
 This document translates the [Project Overview](Project_Overview.md) into the
 major components, responsibilities, deployment boundaries, and project
 organization needed to develop autonomous buoy navigation.
@@ -66,8 +73,8 @@ numbers remain deployment configuration rather than autonomy interface names.
 
 The current simulator's `zed2i_*` frame names are implementation identifiers
 from its initial RGB-D model. They do not identify the target flight cameras.
-The Simulation Adapter must normalize those legacy names to the agreed generic
-interface before shared autonomy depends on them.
+The Simulation Adapter normalizes those legacy names to the agreed generic
+public interface; shared autonomy must not depend on the private names.
 
 The target simulation deployment has three core services: Simulation, Simulation
 Adapter, and shared Autonomy. The future GCS adds a fourth service. On the vessel,
@@ -251,12 +258,11 @@ Sharing the autonomy components does not require the
 desktop and Jetson to use an identical binary image; platform-specific builds
 and hardware integration may be necessary.
 
-In the target architecture, MAVROS and camera drivers do not belong in this
-shared image; they are owned by the selected Adapter. The current implementation
-has not completed that migration: `autonomy/container/` still installs MAVROS,
-and `maritime_bringup/launch/vehicle.launch.py` launches it. No shared perception,
+MAVROS and camera drivers are owned by the selected Adapter. The current
+Simulation Adapter installs and launches MAVROS; `autonomy/container/` contains
+only the explicitly enabled simulation bootstrap. No shared perception,
 state-integration, mapping, navigation, or mission package is implemented yet,
-and production ZED integration also remains future work.
+and production ZED integration remains deferred.
 
 Shared autonomy packages consume camera-neutral observations, calibration, and
 transforms. Simulation and hardware configuration must account for source count
@@ -366,18 +372,16 @@ Each Adapter has its own small ROS workspace because its dependencies and runtim
 purpose differ from shared onboard autonomy. This is not a workspace per
 autonomy component: all onboard packages still share `autonomy/ros_ws/`.
 
-Currently, the Simulation Adapter is still the flat `Adapter/` project rather
-than the target `Adapter/simulation/` subtree, and no `Adapter/hardware/` project
-exists. Its bridge publishes the legacy `/blueboat/camera/...` topics and
-`zed2i_*` frames. MAVROS is still installed and launched from `autonomy/`, as
-described above. These are migration gaps, not alternate interface decisions.
+The active Simulation Adapter is `Adapter/simulation/`; it publishes the
+normalized `/sensors/camera_0/...` topics and `camera_0_*` frames, and owns
+MAVROS. `Adapter/hardware/` remains deliberately deferred.
 
 Currently, `Simulation/container/compose.yaml` orchestrates simulation, adapter,
 and autonomy while reusing the autonomy service definition in
 `deployment/compose.base.yaml`.
-`deployment/compose.autonomy.yaml` is a transitional standalone autonomy profile;
-future vessel deployment will add the Hardware Adapter and connect it to the
-shared autonomy service. It is not a completed Jetson hardware deployment.
+There is no standalone autonomy profile. Future vessel deployment will add the
+Hardware Adapter only after its platform and evidence gates are satisfied. It is
+not a completed Jetson hardware deployment.
 Future deployment integration can add the GCS without changing these boundaries.
 
 ## Development and Evaluation Priorities

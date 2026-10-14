@@ -7,7 +7,7 @@ pgrep -f '[m]avproxy.py' >/dev/null
 
 clock_topic=$(timeout 3 gz topic -l 2>/dev/null | sed -n '/^\/world\/.*\/clock$/p' | head -n 1)
 [[ -n $clock_topic ]]
-timeout 4 gz topic -e -t "$clock_topic" -n 1 2>/dev/null | grep -q 'sim'
+python3 /opt/boat_sim/scripts/gazebo_clock_ready.py "$clock_topic"
 
 if [[ ${CAMERA_ENABLED:-0} == 1 ]]; then
     topics=$(timeout 3 gz topic -l 2>/dev/null)

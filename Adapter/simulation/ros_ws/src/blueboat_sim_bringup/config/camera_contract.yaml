@@ -1,0 +1,17 @@
+contract_id: maritime.camera_adapter
+contract_version: 1.0.0
+environment: simulation
+use_sim_time: true
+enabled_cameras: [camera_0]
+cameras:
+  camera_0:
+    mount_parent_frame: base_link
+    mount_xyz_m: [0.35, 0.0, 0.40]
+    mount_rpy_rad: [0.0, 0.0, 0.0]
+    registration_mode: color
+    registration_evidence_ref: simulation-rgbd-registration
+    timing:
+      rgb_depth_match_tolerance_ns: 0
+      max_acquisition_age_ns: 100000000
+      max_arrival_silence_ns: 2000000000
+      evidence_ref: simulation-camera-timing-2026-09-13

@@ -11,9 +11,8 @@ services:
     ipc: host
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      FCU_URL: ${FCU_URL:-}
     healthcheck:
-      test: ["CMD", "bash", "-lc", "source /etc/maritime_autonomy_setup.bash && ros2 run maritime_bringup healthcheck"]
+      test: ["CMD", "bash", "-lc", "source /etc/maritime_autonomy_setup.bash && ros2 run maritime_bringup placeholder_healthcheck"]
       interval: 10s
       timeout: 10s
       retries: 9

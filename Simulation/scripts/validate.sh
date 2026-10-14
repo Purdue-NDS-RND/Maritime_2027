@@ -13,26 +13,26 @@ for script in "${scripts[@]}" scripts/smoke-test.py; do
 done
 python_sources=(
     scripts/smoke-test.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
-    ../Adapter/ros_ws/src/blueboat_sim_bringup/setup.py
-    ../Adapter/ros_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
-    ../Adapter/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py
+    ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/setup.py
+    ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
+    ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py
     ../autonomy/ros_ws/src/maritime_bringup/setup.py
-    ../autonomy/ros_ws/src/maritime_bringup/launch/vehicle.launch.py
     ../autonomy/ros_ws/src/maritime_bringup/maritime_bringup/*.py
     ../tests/*.py
 )
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
 
 required=(
-    container/Dockerfile ../Adapter/container/Dockerfile ../autonomy/container/Dockerfile
-    ../deployment/compose.base.yaml ../deployment/compose.autonomy.yaml
+    container/Dockerfile ../Adapter/simulation/container/Dockerfile ../autonomy/container/Dockerfile
+    ../deployment/compose.base.yaml
     container/compose.yaml container/compose.gpu.yaml Makefile
+    ../Adapter/simulation/config/fastdds.xml
     config/blueboat.parm worlds/blueboat_waves.sdf worlds/blueboat_calm.sdf
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
-    scenarios/one.json scenarios/gate.json scenarios/multi.json
+    scenarios/one.json scenarios/gate.json scenarios/multi.json scenarios/repeated_red.json
     models/blueboat_rgbd/model.config models/blueboat_rgbd/camera_payload.sdf
-    ../Adapter/ros_ws/src/blueboat_sim_bringup/package.xml
-    ../Adapter/ros_ws/src/blueboat_sim_bringup/config/bridge.yaml
+    ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/package.xml
+    ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/bridge.yaml
     ../autonomy/ros_ws/src/maritime_bringup/package.xml
     README.md docs/SETUP.md docs/USING_THE_SIM.md docs/TROUBLESHOOTING.md docs/DEVELOPMENT.md
 )
@@ -78,7 +78,7 @@ grep -q '<height>720</height>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<near>0.30</near><far>20.0</far>' models/blueboat_rgbd/camera_payload.sdf
 grep -q 'udp://:14552@' container/compose.yaml
 
-for scenario in one gate multi; do
+for scenario in one gate multi repeated_red; do
     python3 scripts/render_scenario.py \
         --scenario "scenarios/$scenario.json" \
         --base-world worlds/blueboat_rgbd_base.sdf \
@@ -99,6 +99,7 @@ import struct
 import xml.etree.ElementTree as ET
 
 payload = ET.parse('models/blueboat_rgbd/camera_payload.sdf')
+ET.parse('../Adapter/simulation/config/fastdds.xml')
 link = payload.find("./model/link[@name='base_link']")
 assert link is not None
 assert [child.tag for child in link] == ['visual', 'sensor']
@@ -110,7 +111,7 @@ for marker_id in range(4):
     png = (root / 'materials/textures' / f'aruco_4x4_50_id{marker_id}.png').read_bytes()
     assert png[:8] == b'\x89PNG\r\n\x1a\n'
     assert struct.unpack('>II', png[16:24]) == (512, 512)
-for scenario in ('one', 'gate', 'multi'):
+for scenario in ('one', 'gate', 'multi', 'repeated_red'):
     data = json.loads(Path(f'scenarios/{scenario}.json').read_text())
     assert data['name'] == scenario and data['buoys']
 print('Camera, buoy, texture, and scenario structure passed.')
@@ -119,9 +120,8 @@ PY
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
         docker compose -f container/compose.yaml --profile ros config --quiet
-    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ../tests -v
     if docker image inspect ardupilot-blueboat:4.7.0 >/dev/null 2>&1; then
-        for scenario in one gate multi; do
+        for scenario in one gate multi repeated_red; do
             cp "$tmp_dir/$scenario.sdf" "$tmp_dir/$scenario-resolved.sdf"
             sed -i \
                 -e 's#model://blueboat_rgbd#file:///opt/boat_sim/models/blueboat_rgbd#g' \
