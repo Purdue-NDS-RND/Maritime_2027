@@ -119,6 +119,14 @@ image once (`make build`), then run `make rviz-sim`. This opens a dedicated pres
 - The existing `base_link → camera_0_link → camera_0_optical_frame` attachment
   is built from the Adapter's canonical camera mount contract, mounted read-only
   into the Monitor. The optical rotation follows the same camera convention.
+- The native CameraInfo display subscribes to
+  `/sensors/camera_0/color/camera_info` and draws its calibrated viewing outline.
+  Optical axes show the image coordinate convention (Z forward, X right, Y down).
+- A compact label beside the boat shows resolution, encoding, fx/fy/cx/cy,
+  horizontal/vertical FoV, distortion model, and RGB arrival rate. RGB or
+  CameraInfo arrival silence longer than two wall-clock seconds turns the label
+  amber and marks that stream stale. This remains active when simulation time
+  pauses; the displayed rate is Monitor delivery rate, not nominal sensor rate.
 - The full RGB image remains in the lower-left dock. A second, sampled RGB
   image appears on the camera viewing outline's far plane, 1.5 m ahead of the
   optical frame. `CameraInfo` determines its geometry and field of view.
@@ -149,6 +157,14 @@ To verify against the running `gate` scenario while the scene view is open:
 ```bash
 docker compose -f container/compose.yaml run --rm --no-deps -T \
   -v "$PWD/tests:/tests:ro" shell python3 /tests/simulation_view_probe.py
+```
+
+For the camera status summary tests (no simulator needed):
+
+```bash
+docker compose -f container/compose.yaml run --rm --no-deps -T \
+  -e PYTHONPATH=/opt/monitor/tools -v "$PWD/tests:/tests:ro" \
+  shell python3 /tests/test_camera_status.py
 ```
 
 ## Choose the ROS graph

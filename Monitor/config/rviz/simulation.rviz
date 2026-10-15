@@ -35,6 +35,25 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Depth: 2
+    - Class: rviz_default_plugins/CameraInfo
+      Name: Camera 0 calibration
+      Enabled: true
+      Far clip: 1.5
+      Show edges: true
+      Show polygons: false
+      Edge color: 255; 200; 0
+      Topic:
+        Value: /sensors/camera_0/color/camera_info
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/Axes
+      Name: Camera optical axes
+      Enabled: true
+      Reference Frame: camera_0_optical_frame
+      Length: 0.3
+      Radius: 0.01
     - Class: rviz_default_plugins/TF
       Name: TF
       Enabled: true

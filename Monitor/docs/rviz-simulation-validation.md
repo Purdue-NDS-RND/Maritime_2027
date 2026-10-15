@@ -46,3 +46,25 @@ passed. The simulator was restored to `gate` afterward.
 - `Monitor/logs/rviz-monitor-smoke.log`: cross-container regression.
 - `Simulation/logs/rviz-sensor-smoke.log`, `rviz-mavros-smoke.log`.
 - `Simulation/logs/verify-rgbd-monitor.log`: full-suite attempt and shutdown abort.
+
+## CameraInfo follow-up
+
+Enabled RViz's installed native CameraInfo display on the public calibration
+stream, plus optical-frame axes. A nearby label shows resolution, image encoding,
+intrinsics, FoV, distortion model, wall-clock image arrival rate and stale-stream
+indicators. Its health timer continues while simulation time is paused.
+
+- Three focused camera-status tests passed: live summary, arrival silence,
+  missing/invalid calibration.
+- The live scene probe verified RViz's CameraInfo subscription (ROS node `rviz`),
+  label values against the actual CameraInfo message, private TF connectivity,
+  image-plane geometry and TF-cache recovery.
+- Fresh sensor-smoke follow-up passed: 100 exact triples at 30.30 Hz.
+- Monitor image build, Monitor validation and Simulation static validation passed.
+- Visual evidence: `Monitor/logs/rviz-camera-info.png`; live results in
+  `Monitor/logs/rviz-camera-info-probe.log` and
+  `Simulation/logs/rviz-camera-info-sensor-smoke.log`.
+
+No Adapter calibration, sensor configuration or transform definitions changed.
+The earlier full-suite shutdown abort above remains unresolved; this follow-up
+is not a new passing full-suite result.

@@ -45,7 +45,9 @@ deadline = time.monotonic() + 35
 while time.monotonic() < deadline:
     rclpy.spin_once(node, timeout_sec=.1)
     if (all(frame in transforms for frame in ('base_link', 'buoy/buoy_1', 'buoy/buoy_2')) and
-            len(static) == 2 and ('camera/image_plane', 0) in markers and len(truth) == 3 and calibration):
+            len(static) == 2 and ('camera/image_plane', 0) in markers and len(truth) == 3 and calibration and ('camera/calibration', 0) in markers and
+            any(endpoint.node_name in ('rviz', 'rviz2') for endpoint in
+                node.get_subscriptions_info_by_topic('/sensors/camera_0/color/camera_info'))):
         break
 assert len(truth) == 3, f'Missing source truth: {truth.keys()}'
 for name, frame in [('boat', 'base_link'), ('buoy_1', 'buoy/buoy_1'), ('buoy_2', 'buoy/buoy_2')]:
@@ -70,6 +72,14 @@ assert abs(max(p.y for p in plane.points) - 1.5 * (info.height - info.k[5]) / in
 assert plane.frame_locked
 assert len({(round(c.r, 2), round(c.g, 2), round(c.b, 2)) for c in plane.colors}) > 10
 assert len(markers['camera/frustum', 0].points) == 16
+label = markers['camera/calibration', 0]
+assert label.header.frame_id == 'base_link'
+for expected in (f'{info.width}x{info.height}', f'fx {info.k[0]:.1f}', info.distortion_model, 'FoV', 'info receiving'):
+    assert expected in label.text, (expected, label.text)
+assert 'RGB STALE' not in label.text, label.text
+assert any(endpoint.node_name in ('rviz', 'rviz2') for endpoint in
+           node.get_subscriptions_info_by_topic('/sensors/camera_0/color/camera_info')), \
+    'RViz native CameraInfo display is not subscribed'
 # A clock reset clears RViz's TF cache without recreating its subscriptions.
 # Existing subscribers must receive the static mount again and reconnect.
 static.clear()
