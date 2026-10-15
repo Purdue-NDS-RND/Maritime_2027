@@ -11,12 +11,15 @@ RUN apt-get update \
         ros-jazzy-rmw-fastrtps-cpp \
         ros-jazzy-rosbag2 \
         ros-jazzy-mavros-msgs \
+        python3-numpy \
+        python3-yaml \
         libgl1-mesa-dri \
     && rm -rf /var/lib/apt/lists/*
 
 COPY container/entrypoint.sh /usr/local/bin/monitor-entrypoint
 COPY container/bashrc /etc/monitor.bashrc
 COPY config /opt/monitor/config
+COPY tools /opt/monitor/tools
 ENV HOME=/tmp/monitor-home \
     RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
     FASTRTPS_DEFAULT_PROFILES_FILE=/opt/monitor/config/fastdds.xml

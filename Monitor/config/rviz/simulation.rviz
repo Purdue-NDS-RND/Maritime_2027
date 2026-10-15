@@ -1,0 +1,102 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Help Height: 40
+    Tree Height: 340
+    Property Tree Widget:
+      Expanded:
+        - /Scene1
+        - /Scene1/Status1
+      Splitter Ratio: 0.8
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid (1 m)
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 30
+      Plane: XY
+    - Class: rviz_default_plugins/Axes
+      Name: World origin
+      Enabled: true
+      Reference Frame: world
+      Length: 1
+      Radius: 0.03
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Scene
+      Enabled: true
+      Topic:
+        Value: /monitor/simulation/markers
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 2
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+    - Class: rviz_default_plugins/Image
+      Name: Camera 0 RGB
+      Enabled: true
+      Topic:
+        Value: /sensors/camera_0/color/image_raw
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/Image
+      Name: Camera 0 depth (0-20 m)
+      Enabled: false
+      Normalize Range: false
+      Min Value: 0
+      Max Value: 20
+      Topic:
+        Value: /sensors/camera_0/depth/image_rect_raw
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/Odometry
+      Name: FCU odometry (map)
+      Enabled: false
+      Keep: 50
+      Position Tolerance: 0.1
+      Angle Tolerance: 0.1
+      Topic:
+        Value: /mavros/local_position/odom
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 5
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 22
+      Focal Point:
+        X: 5
+        Y: 0
+        Z: 0
+      Pitch: 0.5
+      Yaw: 0.8
+    Saved:
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: Top down
+        Angle: 0
+        Scale: 40
+        X: 0
+        Y: 0
+Window Geometry:
+  Hide Left Dock: false
+  Hide Right Dock: true
+  QMainWindow State: "000000ff00000000fd00000002000000000000016800000320fc0200000003fb000000100044006900730070006c0061007900730100000000000001ee0000002c00fffffffb0000001800430061006d00650072006100200030002000520047004201000001f40000012c0000002c00fffffffb0000002e00430061006d00650072006100200030002000640065007000740068002000280030002d003200300020006d00290000000247000000d90000002c00ffffff00000001000000f000000320fc0200000001fb0000000a005600690065007700730100000000000003200000002c00ffffff0000029c0000032000000004000000040000000800000008fc00000000"
+  Width: 1280
+  Height: 800

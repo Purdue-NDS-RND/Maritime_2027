@@ -4,11 +4,12 @@ set -euo pipefail
 PROJECT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 usage() {
     cat <<'EOF'
-Usage: Monitor/scripts/monitor build|shell|rviz|gui|config [arguments...]
+Usage: Monitor/scripts/monitor build|shell|rviz|rviz-sim|gui|config [arguments...]
 
   build                 Build the tools image (extra arguments go to Compose build)
   shell [COMMAND ...]   Open a ROS-sourced Bash shell, or run a command
   rviz [ARG ...]        Open RViz2 with the neutral default view
+  rviz-sim [ARG ...]    Open the simulation world, entities and camera view
   gui COMMAND [ARG ...] Run another GUI tool, e.g. rqt_graph
   config                Validate and print resolved Compose configuration
 
@@ -29,7 +30,7 @@ action=${1:---help}
 [[ $# == 0 ]] || shift
 case "$action" in
     -h|--help|help) usage; exit 0 ;;
-    build|shell|rviz|gui|config) ;;
+    build|shell|rviz|rviz-sim|gui|config) ;;
     *) usage >&2; exit 2 ;;
 esac
 if [[ $action == gui && $# == 0 ]]; then
@@ -81,14 +82,21 @@ export MONITOR_XAUTH_FILE
 trap 'rm -f -- "$MONITOR_XAUTH_FILE"' EXIT
 printf '%s\n' "$cookie" | sed 's/^..../ffff/' | xauth -f "$MONITOR_XAUTH_FILE" nmerge -
 chmod 600 "$MONITOR_XAUTH_FILE"
-if [[ $action == rviz ]]; then
-    view_args=(-d /opt/monitor/config/rviz/default.rviz)
+if [[ $action == rviz || $action == rviz-sim ]]; then
+    rviz_command=rviz2
+    preset=default
+    if [[ $action == rviz-sim ]]; then
+        rviz_command=/opt/monitor/tools/rviz-simulation
+        preset=simulation
+        run_options+=(-v "$PROJECT_DIR/../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/camera_contract.yaml:/opt/monitor/simulation-camera.yaml:ro")
+    fi
+    view_args=(-d "/opt/monitor/config/rviz/$preset.rviz")
     for argument in "$@"; do
         case "$argument" in
             -d|--display-config|--display-config=*) view_args=(); break ;;
         esac
     done
-    "${compose[@]}" run "${run_options[@]}" gui rviz2 \
+    "${compose[@]}" run "${run_options[@]}" gui "$rviz_command" \
         "${view_args[@]}" "$@" \
         --ros-args -p "use_sim_time:=${USE_SIM_TIME:-false}"
 else

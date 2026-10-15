@@ -5,3 +5,8 @@
 !container/bashrc
 !config/
 !config/**
+
+!tools/
+!tools/**
+**/__pycache__/
+**/*.pyc

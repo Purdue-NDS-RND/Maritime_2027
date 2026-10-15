@@ -29,7 +29,7 @@ Start your target ROS system separately, then open tools in additional terminals
 ```bash
 make topics            # Quick topic listing
 make nodes             # Quick node listing
-make rviz-sim          # Simulation or bag playback publishing /clock
+make rviz-sim          # Gazebo world, boat, buoys and attached camera view
 make rviz              # Hardware / wall time
 make graph             # rqt_graph
 ```
@@ -105,6 +105,50 @@ The preset includes no goal-setting tools or simulation-truth subscriptions.
 For targets outside the Adapter contract, change the topics and fixed frame.
 Use `make rviz-sim` when the target publishes `/clock`; hardware defaults to
 wall time. Other GUI tools accept their usual ROS arguments separately.
+
+## Simulation scene view
+
+With the RGB-D simulator and Simulation Adapter running, rebuild the Monitor
+image once (`make build`), then run `make rviz-sim`. This opens a dedicated preset:
+
+- `world` is fixed at Gazebo's origin, with a metre grid and origin axes.
+- A schematic boat, heading arrow and label follow live boat truth odometry.
+- Buoy frames, cylinders, heading arrows and names are discovered from live
+  `/blueboat/ground_truth/<entity>/odometry` topics. Repeated marker IDs remain
+  separate entities. No buoy topics means no buoy visuals.
+- The existing `base_link → camera_0_link → camera_0_optical_frame` attachment
+  is built from the Adapter's canonical camera mount contract, mounted read-only
+  into the Monitor. The optical rotation follows the same camera convention.
+- The full RGB image remains in the lower-left dock. A second, sampled RGB
+  image appears on the camera viewing outline's far plane, 1.5 m ahead of the
+  optical frame. `CameraInfo` determines its geometry and field of view.
+
+The in-scene image uses standard colored triangle markers (80 × 45 samples,
+up to 4 updates/s) to keep dependencies and rendering cost modest. The docked
+image retains its original resolution. Body and buoy shapes are schematic;
+RViz does not automatically import Gazebo's scene meshes. Buoy colors are
+neutral unless the entity name includes red, green or blue.
+
+The helper publishes only `/monitor/simulation/{tf,tf_static,markers}`. RViz's
+TF subscriptions are remapped to those private topics; simulator truth never
+becomes a public navigation transform. Closing RViz stops the helper, and a
+helper failure closes RViz. Stopped entity/image streams expire their markers
+after two seconds; TF axes age out according to RViz's frame timeout.
+`make rviz` retains the shared camera/body preset for hardware or bag inspection.
+For bags without simulation truth, use `make rviz USE_SIM_TIME=true`.
+
+Assumptions: simulation boat `odom` is aligned with Gazebo `world` (the existing
+Simulation Adapter declares this identity), buoy odometry uses `world`, and the
+camera publishes calibrated `rgb8` or `bgr8` images. This visualization does not
+align MAVROS `map` estimates with simulator truth. Start one simulation scene
+view per ROS domain; helper topics are shared within that domain.
+
+To verify against the running `gate` scenario while the scene view is open:
+
+```bash
+docker compose -f container/compose.yaml run --rm --no-deps -T \
+  -v "$PWD/tests:/tests:ro" shell python3 /tests/simulation_view_probe.py
+```
 
 ## Choose the ROS graph
 

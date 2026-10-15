@@ -14,7 +14,7 @@ help:
 	  '  make topics      List ROS topics' \
 	  '  make nodes       List ROS nodes' \
 	  '  make rviz        Open the testing preset using wall time by default' \
-	  '  make rviz-sim    Open the preset using simulation time (/clock)' \
+	  '  make rviz-sim    Open the world, boat, buoys and camera simulation view' \
 	  '  make graph       Open rqt_graph' \
 	  '  make config      Print resolved container configuration' \
 	  '  make validate    Check launcher syntax and Compose configuration' \
@@ -42,7 +42,7 @@ rviz:
 	@./scripts/monitor rviz $(ARGS)
 
 rviz-sim:
-	@USE_SIM_TIME=true ./scripts/monitor rviz $(ARGS)
+	@USE_SIM_TIME=true ./scripts/monitor rviz-sim $(ARGS)
 
 graph:
 	@./scripts/monitor gui rqt_graph $(ARGS)
@@ -51,7 +51,7 @@ config:
 	@./scripts/monitor config $(ARGS)
 
 validate:
-	@bash -n scripts/monitor scripts/smoke container/entrypoint.sh
+	@bash -n scripts/monitor scripts/smoke container/entrypoint.sh tools/rviz-simulation
 	@./scripts/monitor config --quiet
 	@printf '%s\n' 'Monitor launcher syntax and Compose configuration passed.'
 
