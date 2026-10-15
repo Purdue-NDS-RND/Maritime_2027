@@ -2,7 +2,7 @@
 
 ## Start and stop
 
-Start QGroundControl on the host, then run:
+Run from the host terminal (QGroundControl is optional):
 
 ```bash
 make run
@@ -35,6 +35,41 @@ The test runs inside the simulator container and:
 
 The test prints the stage and live distances. A timeout is a failure, not a
 pass. On failure it attempts to enter Hold and disarm before returning.
+
+## Keyboard control through pymavlink
+
+Keep `make run` active and run `make teleop` in another host terminal. It uses
+UDP `14551` directly and selects ACRO from any starting mode. QGroundControl
+is optional; mode changes and arming are handled by the script.
+
+| Key | Action |
+| --- | --- |
+| R | Select ACRO and request arming, or resume if already armed |
+| W / S | Hold to move forward / reverse |
+| A / D | Hold to steer left / right; combine with W or S |
+| Shift | Hold for higher speed and turn rate |
+| H | Enter HOLD and stop keyboard movement; keep the current arming state |
+| M | Select ACRO to resume keyboard control; does not arm |
+| X | Request HOLD and disarm |
+| Q / Ctrl+C | Exit, request HOLD and disarm, then release RC overrides |
+
+Begin with R, wait for the printed armed/ACRO confirmation, then press movement
+keys. Release and press movement keys again after a mode or arming change.
+Releasing all movement keys sends neutral throttle and steering. The script
+confirms mode and arming through FCU heartbeats and prints arming rejections and
+FCU status messages. Pre-arm checks remain enabled; resolve a rejection and
+press R to retry.
+
+WASD drives in ACRO, where steering controls turn rate and throttle controls
+speed. An external mode change or disarm pauses keyboard movement; use R or M
+to take control again. Losing the FCU heartbeat ends teleop and attempts the
+same HOLD/disarm cleanup; the script reports if it cannot confirm that state.
+Only one program should use the student UDP endpoint at a time, so exit teleop
+before running `make smoke`.
+
+The current keyboard reader uses Linux `/dev/input/event*` devices passed into
+the teleop container by the Makefile. Run it on the simulator host with a
+connected keyboard.
 
 ## Manual control with QGroundControl
 

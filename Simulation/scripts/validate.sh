@@ -8,11 +8,11 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 
 scripts=(scripts/run.sh scripts/validate.sh scripts/smoke.sh scripts/verify-rgbd.sh scripts/gazebo_sensor_smoke.py container/start-sim.sh container/sitl-process-wrapper.sh container/healthcheck.sh)
 bash -n "${scripts[@]}"
-for script in "${scripts[@]}" scripts/smoke-test.py; do
+for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
     [[ -x $script ]] || { echo "ERROR: $script is not executable" >&2; exit 1; }
 done
 python_sources=(
-    scripts/smoke-test.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
+    scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/setup.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py

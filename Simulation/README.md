@@ -70,6 +70,7 @@ make build     # Build/update the image without starting Gazebo
 make rebuild   # Build from scratch without Docker's build cache
 make validate  # Check scripts, assets, pins, and Compose configuration
 make smoke     # Test a running boat through MAVLink UDP 14551
+make teleop    # Arm and drive with the keyboard through pymavlink; QGC optional
 make ros-build # Build simulator, simulation adapter, and autonomy images
 make sensor-smoke # Check RGB-D, ArUco visibility, depth, timing, and TF
 make mavros-smoke # Check the FCU control path through MAVROS
