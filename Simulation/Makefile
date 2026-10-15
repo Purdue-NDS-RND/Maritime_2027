@@ -1,7 +1,7 @@
 .PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
 
 run:
-	./scripts/run.sh
+	@./scripts/run.sh
 
 build:
 	./scripts/run.sh --build-only

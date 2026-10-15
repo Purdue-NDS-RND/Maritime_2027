@@ -8,6 +8,21 @@ Run from the host terminal (QGroundControl is optional):
 make run
 ```
 
+The terminal menu offers mild waves (default), calm water, harbor/dock, single
+buoy, red/green gate, multiple buoys, repeated red buoys, and camera only. Type
+a number and press Enter, or just press Enter for mild waves. Type `q` at any
+prompt to cancel before startup. Invalid answers are re-prompted.
+
+For buoy scenarios, enter an optional integer seed to randomize buoy poses
+reproducibly, or leave it blank for the fixed layout. RGB-D choices enable
+ROS/MAVROS automatically. The three boat-only worlds ask whether to enable
+ROS/MAVROS, defaulting to off unless `ROS_SIM` is already enabled.
+
+Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
+launches (redirected input or output) keep the existing defaults and never
+prompt. Use `./scripts/run.sh --non-interactive` for default startup without a
+menu in a terminal. Builds and `make down` also never prompt.
+
 Gazebo starts first. The launcher waits for an advancing world clock and the
 BlueBoat odometry topic before starting Rover SITL. QGroundControl receives
 MAVLink on UDP `14550`; student software independently receives it on `14551`.

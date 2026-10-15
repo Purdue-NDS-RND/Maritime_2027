@@ -8,6 +8,7 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 
 scripts=(scripts/run.sh scripts/validate.sh scripts/smoke.sh scripts/verify-rgbd.sh scripts/gazebo_sensor_smoke.py container/start-sim.sh container/sitl-process-wrapper.sh container/healthcheck.sh)
 bash -n "${scripts[@]}"
+bash -n scripts/run-menu.sh
 for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
     [[ -x $script ]] || { echo "ERROR: $script is not executable" >&2; exit 1; }
 done

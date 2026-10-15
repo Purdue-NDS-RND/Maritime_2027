@@ -6,6 +6,12 @@ Launch an autonomous surface boat simulation with one command:
 make run
 ```
 
+Choose a world from the terminal menu: mild waves, calm water, harbor/dock,
+one buoy, a red/green gate, multiple buoys, repeated red buoys, or camera only.
+Press Enter for the mild-wave default, or `q` to cancel. Buoy scenarios ask
+for an optional integer randomization seed and automatically enable ROS/MAVROS.
+Boat-only worlds offer an optional ROS/MAVROS connection.
+
 Gazebo Harmonic simulates the official Blue Robotics BlueBoat model, mild
 surface waves, buoyancy, hydrodynamic drag, IMU data, and twin-thruster motion.
 ArduPilot Rover 4.7.0 runs its real boat-control code in software-in-the-loop
@@ -49,7 +55,8 @@ QGroundControl stays outside Docker. On this workstation it is located at:
    make run
    ```
 
-4. Wait for Gazebo to show BlueBoat and for QGroundControl to connect.
+4. Choose a world (Enter for mild waves), then wait for Gazebo to show BlueBoat
+   and for QGroundControl to connect.
 5. In a second terminal, exercise the simulator control acceptance test:
 
    ```bash
@@ -65,7 +72,7 @@ it can take considerable time and disk space. Later starts reuse the image
 ## Main commands
 
 ```bash
-make run       # Build if needed and start the GUI simulation
+make run       # Choose a world, build if needed, and start the GUI simulation
 make build     # Build/update the image without starting Gazebo
 make rebuild   # Build from scratch without Docker's build cache
 make validate  # Check scripts, assets, pins, and Compose configuration
@@ -85,6 +92,11 @@ For the RGB-D test gate, use one command:
 ```bash
 SCENARIO=gate make run
 ```
+
+You can also select it from the `make run` menu. Explicit `WORLD` or `SCENARIO`
+values skip the menu, so existing commands still work. Redirected input/output
+also skips it; automation can use `./scripts/run.sh --non-interactive` to launch
+the defaults even in a terminal. Build-only and shutdown commands never prompt.
 
 Other layouts are `one`, `multi`, and `repeated_red` (two visible red-category
 buoys). Add `BUOY_SEED=42` for repeatable pose

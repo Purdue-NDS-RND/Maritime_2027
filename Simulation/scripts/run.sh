@@ -6,18 +6,23 @@ cd "$PROJECT_DIR"
 
 build_mode=if-missing
 action=up
+interactive=1
 
 usage() {
     cat <<'EOF'
 Usage: make run|build|rebuild|down
 
-Internal form: scripts/run.sh [--build|--build-only|--rebuild-only|--down|--help]
+Internal form: scripts/run.sh [--build|--build-only|--rebuild-only|--down|--non-interactive|--help]
 
   no option       Start the simulation, building the image if absent
   --build         Rebuild the image, then start the simulation
   --build-only    Build the image without starting the simulation
   --rebuild-only  Force a clean image rebuild without starting
   --down          Stop and remove this project's container
+  --non-interactive Start with environment/defaults without the setup menu
+
+In a terminal, starting without WORLD or SCENARIO opens a quick setup menu.
+Explicit WORLD/SCENARIO selections and redirected input/output skip the menu.
 
 Environment:
   SCENARIO=one|gate|multi|repeated_red  Render and launch an RGB-D buoy scenario with ROS
@@ -33,9 +38,15 @@ case "${1:-}" in
     --build-only) build_mode=always; action=build ;;
     --rebuild-only) build_mode=no-cache; action=build ;;
     --down) action=down ;;
+    --non-interactive) interactive=0 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
 esac
+
+if [[ $action == up && $interactive == 1 && -t 0 && -t 1 && -z ${WORLD:-} && -z ${SCENARIO:-} ]]; then
+    source "$PROJECT_DIR/scripts/run-menu.sh"
+    configure_simulation
+fi
 
 if [[ $(uname -s) != Linux ]]; then
     echo "ERROR: this project requires native Linux for host networking and X11 forwarding." >&2
