@@ -130,7 +130,8 @@ RViz does not automatically import Gazebo's scene meshes. Buoy colors are
 neutral unless the entity name includes red, green or blue.
 
 The helper publishes only `/monitor/simulation/{tf,tf_static,markers}`. RViz's
-TF subscriptions are remapped to those private topics; simulator truth never
+TF subscriptions are remapped to those private topics. Camera transforms are
+repeated once per second so simulator clock resets restore the complete tree; simulator truth never
 becomes a public navigation transform. Closing RViz stops the helper, and a
 helper failure closes RViz. Stopped entity/image streams expire their markers
 after two seconds; TF axes age out according to RViz's frame timeout.

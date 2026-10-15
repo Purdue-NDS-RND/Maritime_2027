@@ -10,6 +10,7 @@ import numpy as np
 import rclpy
 from geometry_msgs.msg import Point, TransformStamped
 from nav_msgs.msg import Odometry
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
@@ -43,6 +44,8 @@ class SimulationView(Node):
         self.info = None
         self.last_image = None
         self.publish_camera_mount()
+        # RViz clears its TF buffer when simulation time jumps backwards.
+        self.create_timer(1.0, lambda: self.static.publish(self.camera_tf))
         self.create_subscription(Odometry, '/blueboat/ground_truth/odometry',
                                  lambda msg: self.on_pose(msg, 'base_link'), 10)
         self.create_subscription(CameraInfo, '/sensors/camera_0/color/camera_info',
@@ -76,7 +79,8 @@ class SimulationView(Node):
         optical.header.frame_id, optical.child_frame_id = 'camera_0_link', 'camera_0_optical_frame'
         q = optical.transform.rotation
         q.x, q.y, q.z, q.w = -.5, .5, -.5, .5
-        self.static.publish(TFMessage(transforms=[mount, optical]))
+        self.camera_tf = TFMessage(transforms=[mount, optical])
+        self.static.publish(self.camera_tf)
 
     def discover(self):
         for topic, types in self.get_topic_names_and_types():
@@ -176,7 +180,7 @@ def main():
     node = SimulationView()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()

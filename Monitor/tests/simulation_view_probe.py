@@ -4,7 +4,8 @@ import time
 import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from sensor_msgs.msg import CameraInfo
 from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer
 from visualization_msgs.msg import MarkerArray
@@ -32,6 +33,9 @@ node.create_subscription(TFMessage, '/monitor/simulation/tf_static',
                          QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
 node.create_subscription(MarkerArray, '/monitor/simulation/markers',
                          lambda msg: markers.update({(m.ns, m.id): m for m in msg.markers}), 10)
+calibration = {}
+node.create_subscription(CameraInfo, '/sensors/camera_0/color/camera_info',
+                         lambda msg: calibration.update(camera=msg), qos_profile_sensor_data)
 node.create_subscription(Odometry, '/blueboat/ground_truth/odometry',
                          lambda msg: truth.update(boat=msg), 10)
 for name in ('buoy_1', 'buoy_2'):
@@ -41,7 +45,7 @@ deadline = time.monotonic() + 35
 while time.monotonic() < deadline:
     rclpy.spin_once(node, timeout_sec=.1)
     if (all(frame in transforms for frame in ('base_link', 'buoy/buoy_1', 'buoy/buoy_2')) and
-            len(static) == 2 and ('camera/image_plane', 0) in markers and len(truth) == 3):
+            len(static) == 2 and ('camera/image_plane', 0) in markers and len(truth) == 3 and calibration):
         break
 assert len(truth) == 3, f'Missing source truth: {truth.keys()}'
 for name, frame in [('boat', 'base_link'), ('buoy_1', 'buoy/buoy_1'), ('buoy_2', 'buoy/buoy_2')]:
@@ -60,8 +64,23 @@ plane = markers['camera/image_plane', 0]
 assert plane.header.frame_id == 'camera_0_optical_frame'
 assert len(plane.points) == len(plane.colors) == 80 * 45 * 6
 assert all(abs(p.z - 1.5) < 1e-6 for p in plane.points)
+info = calibration['camera']
+assert abs(min(p.x for p in plane.points) + 1.5 * info.k[2] / info.k[0]) < 1e-5
+assert abs(max(p.y for p in plane.points) - 1.5 * (info.height - info.k[5]) / info.k[4]) < 1e-5
+assert plane.frame_locked
 assert len({(round(c.r, 2), round(c.g, 2), round(c.b, 2)) for c in plane.colors}) > 10
 assert len(markers['camera/frustum', 0].points) == 16
+# A clock reset clears RViz's TF cache without recreating its subscriptions.
+# Existing subscribers must receive the static mount again and reconnect.
+static.clear()
+buffer.clear()
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline:
+    rclpy.spin_once(node, timeout_sec=.1)
+    if len(static) == 2 and buffer.can_transform('world', 'camera_0_optical_frame', rclpy.time.Time()):
+        break
+assert len(static) == 2, 'Static mount was not repeated after cache reset'
+assert buffer.can_transform('world', 'camera_0_optical_frame', rclpy.time.Time()), 'Camera TF did not recover'
 for topic in ('/tf', '/tf_static'):
     assert all(p.node_name != 'monitor_simulation_view' for p in node.get_publishers_info_by_topic(topic)), f'Monitor published public TF on {topic}'
 print('PASS: world boat/buoy live poses, private camera chain, calibrated RGB plane and frustum; Monitor TF stays private')

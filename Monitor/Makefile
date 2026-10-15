@@ -52,6 +52,7 @@ config:
 
 validate:
 	@bash -n scripts/monitor scripts/smoke container/entrypoint.sh tools/rviz-simulation
+	@python3 -c 'import ast,sys; [ast.parse(open(p).read(), filename=p) for p in sys.argv[1:]]' tools/*.py tests/*.py
 	@./scripts/monitor config --quiet
 	@printf '%s\n' 'Monitor launcher syntax and Compose configuration passed.'
 

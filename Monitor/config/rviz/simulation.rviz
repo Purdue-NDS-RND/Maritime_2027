@@ -5,8 +5,7 @@ Panels:
     Tree Height: 340
     Property Tree Widget:
       Expanded:
-        - /Scene1
-        - /Scene1/Status1
+        - /Global Options1
       Splitter Ratio: 0.8
 Visualization Manager:
   Class: ""
@@ -85,8 +84,8 @@ Visualization Manager:
         X: 5
         Y: 0
         Z: 0
-      Pitch: 0.5
-      Yaw: 0.8
+      Pitch: 0.6
+      Yaw: 3.9
     Saved:
       - Class: rviz_default_plugins/TopDownOrtho
         Name: Top down
