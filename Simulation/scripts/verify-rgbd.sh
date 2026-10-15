@@ -58,6 +58,7 @@ run_case() {
     stop_run
 }
 
+make buoy-tracking-smoke
 run_case one
 run_case gate
 run_case multi 42

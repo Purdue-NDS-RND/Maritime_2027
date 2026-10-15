@@ -1,4 +1,4 @@
-.PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd down logs
+.PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd buoy-tracking-smoke down logs
 
 run:
 	@./scripts/run.sh
@@ -37,6 +37,12 @@ boundary-smoke:
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
+
+buoy-tracking-smoke:
+	@mkdir -p logs
+	docker run --rm -e GZ_PARTITION=buoy_tracking_test --entrypoint bash \
+		-v "$(CURDIR)/tests/buoy_tracking:/test:ro" "$${SIM_IMAGE:-ardupilot-blueboat:4.7.0}" \
+		-lc 'cmake -S /test -B /tmp/buoy-test && cmake --build /tmp/buoy-test -j2 && /tmp/buoy-test/buoy_tracking_test /tmp/tracking.sdf'
 
 lifecycle-smoke:
 	python3 tests/lifecycle_acceptance.py

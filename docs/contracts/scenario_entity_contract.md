@@ -54,8 +54,8 @@ Every `buoys[]` entity record contains all of the following fields:
 | `category` | Lowercase string derived from the fixed mapping above and consistent with `marker_id`. |
 | `gazebo_model_name` | String exactly equal to `name`; used as the generated SDF `<include><name>`. |
 | `model_uri` | String exactly `model://aruco_buoy_id<marker_id>`; category-level and therefore allowed to repeat. |
-| `model_pose` | Object containing finite numeric `x`, `y`, `z`, `yaw_deg`, and `yaw_rad`; the two yaw values describe the same resolved angle. |
-| `marker_plane_center` | Object containing finite numeric `x`, `y`, `z`, `normal_x`, and `normal_y`; the resolved marker face center and unit horizontal normal in world coordinates. |
+| `model_pose` | Object containing finite numeric `x`, `y`, `z`, `yaw_deg`, and `yaw_rad`; the two yaw values describe the same resolved initial angle. |
+| `marker_plane_center` | Object containing finite numeric `x`, `y`, `z`, `normal_x`, and `normal_y`; the initial marker face center and unit horizontal normal in world coordinates. |
 | `truth_topic` | String exactly `/blueboat/ground_truth/<name>/odometry`. |
 | `evaluation_key` | String exactly equal to `name`. |
 
@@ -65,6 +65,16 @@ source to the record's `truth_topic` as `nav_msgs/msg/Odometry`, in the
 `GZ_TO_ROS` direction. The manifest carries the derived names so bridge and
 evaluator consumers can validate the same roster instead of independently
 interpreting marker IDs.
+
+All four shared buoy assets include the simulation-only `maritime::BuoyFaceBoat`
+Gazebo system. While simulation time advances, it keeps each buoy upright and
+turns its local +X marker face toward the XY position of the world model
+`blueboat`, preserving its center. This also applies to assets inserted after
+startup. With no boat, or coincident XY positions, the current yaw is retained.
+The manifest describes the resolved spawn pose, not the changing runtime yaw.
+Evaluators must transform the local marker center `(0.311, 0, 0.75)` using live
+buoy odometry for runtime marker depth and position. The fixed category mapping
+and immutable entity identities remain unchanged.
 
 Manifest validation must reject malformed or missing required fields,
 unsupported `schema_version`, non-finite numeric values, marker IDs outside

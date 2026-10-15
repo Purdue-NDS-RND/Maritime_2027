@@ -167,6 +167,11 @@ COPY --chmod=0755 container/healthcheck.sh /usr/local/bin/healthcheck.sh
 COPY config /opt/boat_sim/config
 COPY worlds /opt/boat_sim/worlds
 COPY models /opt/boat_sim/models
+COPY plugins /opt/boat_sim/plugins
+RUN cmake -S /opt/boat_sim/plugins -B /opt/boat_sim/plugins/build \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/opt/boat_sim \
+    && cmake --build /opt/boat_sim/plugins/build --parallel "$(nproc)" \
+    && cmake --install /opt/boat_sim/plugins/build
 COPY scenarios /opt/boat_sim/scenarios
 COPY --chmod=0755 scripts /opt/boat_sim/scripts
 COPY --chmod=0755 scripts/smoke-test.py /opt/boat_sim/scripts/smoke-test.py
@@ -180,7 +185,7 @@ RUN python3 /opt/boat_sim/scripts/augment_blueboat_model.py \
 ENV GZ_VERSION=harmonic \
     GZ_PARTITION=ardupilot_blueboat_starter \
     LD_LIBRARY_PATH=/opt/asv_wave_sim/install/lib \
-    GZ_SIM_SYSTEM_PLUGIN_PATH=/opt/ardupilot_gazebo/build:/opt/asv_wave_sim/install/lib \
+    GZ_SIM_SYSTEM_PLUGIN_PATH=/opt/boat_sim/lib:/opt/ardupilot_gazebo/build:/opt/asv_wave_sim/install/lib \
     GZ_SIM_RESOURCE_PATH=/sim/generated-worlds:/opt/boat_sim/worlds:/opt/boat_sim/models:/opt/SITL_Models/Gazebo/models:/opt/ardupilot_gazebo/models:/opt/ardupilot_gazebo/worlds:/opt/asv_wave_sim/gz-waves-models/models:/opt/asv_wave_sim/gz-waves-models/world_models:/opt/asv_wave_sim/gz-waves-models/worlds \
     HOME=/sim/state \
     LOG_DIR=/sim \

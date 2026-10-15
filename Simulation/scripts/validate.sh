@@ -32,6 +32,7 @@ required=(
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
     scenarios/one.json scenarios/gate.json scenarios/multi.json scenarios/repeated_red.json
     models/blueboat_rgbd/model.config models/blueboat_rgbd/camera_payload.sdf
+    plugins/CMakeLists.txt plugins/BuoyFaceBoat.cc
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/package.xml
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/bridge.yaml
     ../autonomy/ros_ws/src/maritime_bringup/package.xml
@@ -108,7 +109,10 @@ assert all(child.tag not in {'collision', 'inertial'} for child in link)
 for marker_id in range(4):
     root = Path(f'models/aruco_buoy_id{marker_id}')
     ET.parse(root / 'model.config')
-    ET.parse(root / 'model.sdf')
+    buoy = ET.parse(root / 'model.sdf')
+    tracker = buoy.find("./model/plugin[@name='maritime::BuoyFaceBoat']")
+    assert tracker is not None and tracker.get('filename') == 'libBuoyFaceBoat.so'
+    assert tracker.findtext('boat_name') == 'blueboat'
     png = (root / 'materials/textures' / f'aruco_4x4_50_id{marker_id}.png').read_bytes()
     assert png[:8] == b'\x89PNG\r\n\x1a\n'
     assert struct.unpack('>II', png[16:24]) == (512, 512)
