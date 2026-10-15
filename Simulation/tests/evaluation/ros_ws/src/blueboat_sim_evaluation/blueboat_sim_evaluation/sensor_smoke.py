@@ -97,8 +97,10 @@ class SensorSmoke(Node):
         pose = self.boat_odom.pose.pose
         rotation = inverse_rotation(pose.orientation).T
         camera = np.array([pose.position.x, pose.position.y, pose.position.z]) + rotation @ np.array([0.35, 0.0, 0.4])
-        point = buoy["marker_plane_center"]
-        delta = np.array([point["x"], point["y"], point["z"]]) - camera
+        buoy_pose = self.entity_truth[buoy["evaluation_key"]].pose.pose
+        point = np.array([buoy_pose.position.x, buoy_pose.position.y, buoy_pose.position.z])
+        point += inverse_rotation(buoy_pose.orientation).T @ np.array([0.311, 0.0, 0.75])
+        delta = point - camera
         return float((inverse_rotation(pose.orientation) @ delta)[0])
 
     def inspect(self, triple):
@@ -161,6 +163,11 @@ class SensorSmoke(Node):
             expected = entity["model_pose"]
             actual = odom.pose.pose.position
             assert math.dist((actual.x, actual.y, actual.z), (expected["x"], expected["y"], expected["z"])) <= 0.01
+            boat = self.boat_odom.pose.pose.position
+            bearing = np.array([boat.x - actual.x, boat.y - actual.y, 0.0])
+            if np.linalg.norm(bearing) > 1e-6:
+                normal = inverse_rotation(odom.pose.pose.orientation).T @ np.array([1.0, 0.0, 0.0])
+                assert float(normal @ (bearing / np.linalg.norm(bearing))) >= math.cos(math.radians(1.0)), f"buoy {entity['evaluation_key']} marker is not facing the boat"
         for parent, child in (("base_link", "camera_0_link"), ("camera_0_link", "camera_0_optical_frame")):
             assert self.tf_buffer.can_transform(parent, child, rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=2.0)), f"missing public TF {parent}->{child}"
         print(f"RGB-D PASS: 100 exact triples at {rate:.2f} Hz; deferred ArUco, canonical depth, entity-keyed truth, and public TF verified")
