@@ -2,8 +2,6 @@
 """Monitor-only Gazebo truth visualization. Never publishes public TF."""
 import math
 import re
-import time
-from collections import deque
 from pathlib import Path
 
 import yaml
@@ -12,7 +10,6 @@ import numpy as np
 import rclpy
 from geometry_msgs.msg import Point, TransformStamped
 from nav_msgs.msg import Odometry
-from rclpy.clock import Clock, ClockType
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
@@ -46,73 +43,18 @@ class SimulationView(Node):
         self.subscriptions_by_topic = {}
         self.info = None
         self.last_image = None
-        self.info_arrival = None
-        self.image_arrivals = deque(maxlen=120)
-        self.image_encoding = "waiting"
         self.publish_camera_mount()
         # RViz clears its TF buffer when simulation time jumps backwards.
         self.create_timer(1.0, lambda: self.static.publish(self.camera_tf))
         self.create_subscription(Odometry, '/blueboat/ground_truth/odometry',
                                  lambda msg: self.on_pose(msg, 'base_link'), 10)
         self.create_subscription(CameraInfo, '/sensors/camera_0/color/camera_info',
-                                 self.on_camera_info, qos_profile_sensor_data)
+                                 lambda msg: setattr(self, 'info', msg), qos_profile_sensor_data)
         self.create_subscription(Image, '/sensors/camera_0/color/image_raw',
-                                 self.on_image, qos_profile_sensor_data)
+                                 lambda msg: setattr(self, 'last_image', msg), qos_profile_sensor_data)
         self.create_timer(1.0, self.discover)
         self.create_timer(0.25, self.draw_image)
-        # Arrival health must still update when simulation time is paused.
-        self.wall_clock = Clock(clock_type=ClockType.STEADY_TIME)
-        self.create_timer(0.5, self.draw_camera_status, clock=self.wall_clock)
         self.get_logger().info('Simulation truth view active on private /monitor/simulation topics')
-
-    def on_camera_info(self, msg):
-        self.info = msg
-        self.info_arrival = time.monotonic()
-
-    def on_image(self, msg):
-        self.last_image = msg
-        self.image_encoding = msg.encoding
-        self.image_arrivals.append(time.monotonic())
-
-    def camera_status(self, now):
-        """Summarize live CameraInfo and wall-clock arrivals for the scene label."""
-        while self.image_arrivals and now - self.image_arrivals[0] > 2.0:
-            self.image_arrivals.popleft()
-        image_live = bool(self.image_arrivals)
-        info_live = self.info_arrival is not None and now - self.info_arrival <= 2.0
-        arrivals = self.image_arrivals
-        hz = ((len(arrivals) - 1) / (arrivals[-1] - arrivals[0])
-              if len(arrivals) > 1 and arrivals[-1] > arrivals[0] else 0.0)
-        state = f'RGB {hz:.1f} Hz' if image_live else 'RGB STALE / waiting'
-        state += ' | info receiving' if info_live else ' | info STALE / waiting'
-        info = self.info
-        if info is None:
-            return 'camera_0 | waiting for CameraInfo\n' + state, False
-        try:
-            image_geometry(info, 1, 1)
-            if info.width <= 0 or info.height <= 0 or info.header.frame_id != 'camera_0_optical_frame':
-                raise ValueError('invalid dimensions or optical frame')
-        except ValueError:
-            return 'camera_0 | invalid CameraInfo\n' + state, False
-        fx, fy, cx, cy = info.k[0], info.k[4], info.k[2], info.k[5]
-        hfov = math.degrees(math.atan2(cx, fx) + math.atan2(info.width - cx, fx))
-        vfov = math.degrees(math.atan2(cy, fy) + math.atan2(info.height - cy, fy))
-        text = (f'camera_0 | {info.width}x{info.height} {self.image_encoding}\n'
-                f'fx {fx:.1f} fy {fy:.1f} | cx {cx:.1f} cy {cy:.1f}\n'
-                f'FoV {hfov:.1f} x {vfov:.1f} deg | {info.distortion_model}\n{state}')
-        return text, image_live and info_live
-
-    def draw_camera_status(self):
-        text, healthy = self.camera_status(time.monotonic())
-        label = self.marker('base_link', 'camera/calibration', Marker.TEXT_VIEW_FACING,
-                            rclpy.time.Time().to_msg())
-        label.text = text
-        label.pose.position.x = -1.5
-        label.pose.position.y, label.pose.position.z = -2.5, 1.5
-        label.scale.z = 0.25
-        label.color = (ColorRGBA(r=0.8, g=1.0, b=0.8, a=1.0) if healthy
-                       else ColorRGBA(r=1.0, g=0.7, b=0.1, a=1.0))
-        self.markers.publish(MarkerArray(markers=[label]))
 
     def publish_camera_mount(self):
         # Read the Adapter's canonical calibration contract, mounted read-only by

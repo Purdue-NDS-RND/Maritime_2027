@@ -68,3 +68,10 @@ indicators. Its health timer continues while simulation time is paused.
 No Adapter calibration, sensor configuration or transform definitions changed.
 The earlier full-suite shutdown abort above remains unresolved; this follow-up
 is not a new passing full-suite result.
+
+## Display clarification
+
+Removed the numeric calibration/status text from the 3D scene at the user's
+request. CameraInfo still supplies the calibrated viewing geometry; optical
+axes, the live image plane, and the lower-left image remain. The camera-status
+text helper and its focused tests were removed.
