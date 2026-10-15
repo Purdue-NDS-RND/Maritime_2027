@@ -1,0 +1,46 @@
+name: maritime-monitor
+
+services:
+  shell:
+    image: ${MONITOR_IMAGE:-maritime-monitor:jazzy}
+    build:
+      context: ..
+      dockerfile: container/Dockerfile
+    network_mode: host
+    init: true
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+      ROS_STATIC_PEERS: ${ROS_STATIC_PEERS:-}
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+    working_dir: /logs
+    volumes:
+      - type: bind
+        source: ../logs
+        target: /logs
+      - type: bind
+        source: ${MONITOR_OVERLAY_DIR:-../config/empty-overlay}
+        target: /overlay
+        read_only: true
+        bind:
+          create_host_path: false
+    restart: "no"
+
+  gui:
+    extends:
+      service: shell
+    environment:
+      DISPLAY: ${DISPLAY:-}
+      XAUTHORITY: /tmp/monitor.xauth
+      QT_X11_NO_MITSHM: "1"
+      LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - type: bind
+        source: ${MONITOR_XAUTH_FILE:-/tmp/monitor-missing.xauth}
+        target: /tmp/monitor.xauth
+        read_only: true
+        bind:
+          create_host_path: false
+    command: ["rviz2", "-d", "/opt/monitor/config/rviz/default.rviz"]

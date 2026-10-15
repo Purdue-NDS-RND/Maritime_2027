@@ -33,3 +33,13 @@ make smoke
 
 See the [simulator README](Simulation/README.md) for setup, operation, testing,
 and simulator-specific documentation.
+
+## ROS 2 tools
+
+[`Monitor/`](Monitor/README.md) provides an independent ROS 2 shell, RViz2,
+graph/image inspection, and bag recording for simulation or hardware ROS graphs:
+
+```bash
+make -C Monitor shell
+make -C Monitor rviz-sim
+```
