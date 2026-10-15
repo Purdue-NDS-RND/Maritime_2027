@@ -40,6 +40,6 @@ and simulator-specific documentation.
 graph/image inspection, and bag recording for simulation or hardware ROS graphs:
 
 ```bash
-Monitor/scripts/monitor shell
-USE_SIM_TIME=true Monitor/scripts/monitor rviz
+make -C Monitor shell
+make -C Monitor rviz-sim
 ```

@@ -9,8 +9,9 @@ Each invocation runs a disposable container; multiple terminals can coexist.
 From the repository root on native Linux with Docker Engine and Compose:
 
 ```bash
-Monitor/scripts/monitor build
-Monitor/scripts/monitor shell
+cd Monitor
+make build     # First setup, and after updating this directory
+make shell
 # Inside the shell (ROS is already sourced):
 ros2 topic list
 ros2 topic info /some/topic --verbose
@@ -19,14 +20,56 @@ ros2 topic hz /some/topic
 ros2 node list
 ```
 
-The first session also builds the image if absent. Commands can run directly:
+All following host commands run from `Monitor/`. From the repository root, use
+`make -C Monitor TARGET` instead. Running `make` alone prints help. The first
+session also builds the image if absent.
+
+Start your target ROS system separately, then open tools in additional terminals:
 
 ```bash
-Monitor/scripts/monitor shell ros2 topic list
-Monitor/scripts/monitor shell ros2 run tf2_ros tf2_echo base_link camera_0_link
-USE_SIM_TIME=true Monitor/scripts/monitor rviz
-Monitor/scripts/monitor gui rqt_graph
+make topics            # Quick topic listing
+make nodes             # Quick node listing
+make rviz-sim          # Simulation or bag playback publishing /clock
+make rviz              # Hardware / wall time
+make graph             # rqt_graph
 ```
+
+Each shell or GUI is independent. Exit Bash with `exit` or Ctrl-D; close a GUI
+window to end its container. You do not need a separate monitor shutdown command.
+These commands do not start or stop the target ROS system.
+
+## Settings and arguments
+
+Most runs need only the right clock mode and the same ROS domain as the target:
+
+```bash
+make rviz-sim ROS_DOMAIN_ID=0
+make shell ROS_DOMAIN_ID=0
+make rviz ROS_DOMAIN_ID=12 LIBGL_ALWAYS_SOFTWARE=1
+```
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `ROS_DOMAIN_ID` | `0` | Match the target ROS graph. |
+| `USE_SIM_TIME` | `false` | RViz clock; `rviz-sim` always forces `true`. |
+| `LIBGL_ALWAYS_SOFTWARE` | `0` | Set `1` if GPU rendering fails. |
+| `ARGS` | Empty | Extra arguments, or the command for `make shell`. |
+
+Arguments use normal shell quoting inside the Make variable:
+
+```bash
+make shell ARGS='ros2 topic echo /mavros/state --once'
+make shell ARGS='ros2 run tf2_ros tf2_echo base_link camera_0_link'
+make topics ARGS='--no-daemon'
+make rviz-sim ARGS='-d /logs/my-view.rviz'
+make build ARGS='--no-cache'
+```
+
+`make build` updates the image; launch a new tool session to use it. Existing
+sessions keep their original image. For less common tools, the launcher remains
+available: `./scripts/monitor gui COMMAND [ARG ...]` or
+`./scripts/monitor shell COMMAND [ARG ...]`. All existing launcher environment
+settings also work with Make.
 
 GUI modes need a local X11 or XWayland display and host `xauth`. The launcher
 copies the current display cookie into a private temporary file and removes it
@@ -60,17 +103,17 @@ a separate tree in this view. No transform is fabricated to join them. The saved
 Top down view and toolbar Measure tool help inspect planar geometry and distances.
 The preset includes no goal-setting tools or simulation-truth subscriptions.
 For targets outside the Adapter contract, change the topics and fixed frame.
-Use `USE_SIM_TIME=true` when the target publishes `/clock`; hardware defaults to
+Use `make rviz-sim` when the target publishes `/clock`; hardware defaults to
 wall time. Other GUI tools accept their usual ROS arguments separately.
 
 ## Choose the ROS graph
 
 ```bash
-ROS_DOMAIN_ID=12 Monitor/scripts/monitor shell
-ROS_DOMAIN_ID=12 USE_SIM_TIME=false Monitor/scripts/monitor rviz
+make shell ROS_DOMAIN_ID=12
+make rviz ROS_DOMAIN_ID=12 USE_SIM_TIME=false
 # Optional explicit peers; keep the semicolon-separated value quoted:
 ROS_DOMAIN_ID=12 ROS_STATIC_PEERS='192.168.1.20;192.168.1.21' \
-    Monitor/scripts/monitor shell
+    make shell
 ```
 
 The image uses Fast DDS with explicit UDP transport and host networking. It does
@@ -90,8 +133,8 @@ for local test graphs.
 
 For another machine on the LAN, run Monitor on your workstation and connect to
 the target's ROS graph. For a remote terminal, SSH into the Docker host, then run
-`Monitor/scripts/monitor shell`. No SSH daemon runs inside the image. Remote GUI
-forwarding and browser desktops are outside this initial setup.
+`make -C Monitor shell` from the repository root. No SSH daemon runs inside the
+image. Remote GUI forwarding and browser desktops are outside this initial setup.
 
 Shell access has the normal ROS ability to publish and call services; this is not
 a read-only security boundary. Host networking is intended for trusted tooling.
@@ -101,7 +144,7 @@ compatible Jazzy workspace install tree (built without symlinks into absent sour
 or build directories):
 
 ```bash
-MONITOR_OVERLAY_DIR=/absolute/path/to/install Monitor/scripts/monitor shell
+MONITOR_OVERLAY_DIR=/absolute/path/to/install make shell
 ```
 
 The tree is mounted read-only at `/overlay` and sourced automatically. Any extra
@@ -115,26 +158,29 @@ Dockerfile using the selected image tag.
 by Git. Other container files, including shell history, disappear on exit.
 
 ```bash
-Monitor/scripts/monitor shell ros2 bag record -o /logs/camera-run --topics \
+make shell
+# Inside the container:
+ros2 bag record -o /logs/camera-run --topics \
     /sensors/camera_0/color/image_raw /sensors/camera_0/depth/image_rect_raw \
     /sensors/camera_0/color/camera_info /tf /tf_static
-Monitor/scripts/monitor shell ros2 bag info /logs/camera-run
+# Stop recording with Ctrl-C, then inspect it:
+ros2 bag info /logs/camera-run
 ```
 
 Choose existing topic names with `ros2 topic list`. Record only the topics you
 need, especially over a bandwidth-limited link. Saved RViz configurations can go
-under `/logs`; reopen with `Monitor/scripts/monitor rviz -d /logs/my-view.rviz`.
+under `/logs` using File → Save Config As; reopen from the host with
+`make rviz ARGS='-d /logs/my-view.rviz'` (or `make rviz-sim` for simulation time).
 
 ## Validate
 
 Run the repository's existing static checks before building:
 
 ```bash
-(cd Simulation && make validate)
-bash -n Monitor/scripts/monitor Monitor/scripts/smoke Monitor/container/entrypoint.sh
-Monitor/scripts/monitor config --quiet
-Monitor/scripts/monitor build
-Monitor/scripts/smoke
+(cd ../Simulation && make validate)
+make validate
+make build
+make smoke
 ```
 
 The smoke test uses a root publisher and a host-user subscriber in independent
