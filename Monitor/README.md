@@ -36,9 +36,30 @@ map `/dev/dri` and its video/render groups when available. Set
 `LIBGL_ALWAYS_SOFTWARE=1` to skip GPU mapping and use Mesa software rendering.
 NVIDIA-specific runtime integration is not configured.
 
-RViz starts with `base_link` as its fixed frame, Grid and TF enabled, and disabled
-Image and PointCloud2 displays. Select the target's fixed frame and actual topics,
-then enable the displays you need. The default subscribes to no simulation truth.
+RViz starts in `base_link` with a metre grid, TF axes, and the public camera color
+view enabled. The preset uses the shared Adapter contract, so the same names work
+for simulation and conforming hardware:
+
+| Display | Topic / frame | Starts enabled |
+|---|---|---|
+| TF and metre grid | `base_link`, `/tf`, `/tf_static` | Yes |
+| Camera 0 RGB | `/sensors/camera_0/color/image_raw` | Yes |
+| Camera 0 depth | `/sensors/camera_0/depth/image_rect_raw` | No |
+| FCU odometry trail | `/mavros/local_position/odom`, fixed frame `map` | No |
+
+Camera subscriptions use best-effort, volatile QoS with queue depth 1. Depth uses
+a fixed 0–20 metre grayscale display range; change Min/Max Value for your scene.
+This is a viewing scale, not a sensor limit. Depth opens an additional pane when
+enabled; resize or float the pane as needed. For a second camera, duplicate a
+display and change `camera_0` to `camera_1`.
+
+Enable the odometry display and change Global Options → Fixed Frame to `map`
+to inspect the FCU position/orientation trail (up to 50 samples). The Adapter does
+not publish a dynamic `map → base_link` transform, so camera/body TF may appear as
+a separate tree in this view. No transform is fabricated to join them. The saved
+Top down view and toolbar Measure tool help inspect planar geometry and distances.
+The preset includes no goal-setting tools or simulation-truth subscriptions.
+For targets outside the Adapter contract, change the topics and fixed frame.
 Use `USE_SIM_TIME=true` when the target publishes `/clock`; hardware defaults to
 wall time. Other GUI tools accept their usual ROS arguments separately.
 
@@ -95,7 +116,8 @@ by Git. Other container files, including shell history, disappear on exit.
 
 ```bash
 Monitor/scripts/monitor shell ros2 bag record -o /logs/camera-run --topics \
-    /camera_0/color/image_raw /camera_0/depth/image_raw /tf /tf_static
+    /sensors/camera_0/color/image_raw /sensors/camera_0/depth/image_rect_raw \
+    /sensors/camera_0/color/camera_info /tf /tf_static
 Monitor/scripts/monitor shell ros2 bag info /logs/camera-run
 ```
 
