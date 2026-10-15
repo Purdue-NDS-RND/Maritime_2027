@@ -1,0 +1,7 @@
+*
+!container/
+!container/Dockerfile
+!container/entrypoint.sh
+!container/bashrc
+!config/
+!config/**
