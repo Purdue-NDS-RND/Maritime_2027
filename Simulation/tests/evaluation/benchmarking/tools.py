@@ -54,6 +54,7 @@ def main():
     parser.add_argument("--rate", type=float, default=os.environ.get("RATE") or 1.0)
     parser.add_argument("--domain", type=int, default=os.environ.get("REPLAY_DOMAIN_ID") or 97)
     parser.add_argument("--name", help="Unique output directory name; generated when omitted")
+    parser.add_argument("--pose-clock", choices=("auto", "source", "recorded-reference"), default=os.environ.get("POSE_CLOCK") or "auto")
     parser.add_argument("--pose-time-offset", type=float, default=os.environ.get("POSE_TIME_OFFSET_S") or 0.)
     args = parser.parse_args()
     try:
@@ -119,7 +120,7 @@ def main():
             command += ["--network", "host", "--ipc", "host", "-e", f"ROS_DOMAIN_ID={args.domain}",
                         "-e", "FASTRTPS_DEFAULT_PROFILES_FILE=/dataset/transport.xml", IMAGE,
                         "--dataset", "/dataset", "--output", f"/results/{name}",
-                        "--method", args.method, "--rate", str(args.rate), "--pose-time-offset", str(args.pose_time_offset)]
+                        "--method", args.method, "--rate", str(args.rate), "--pose-time-offset", str(args.pose_time_offset), "--pose-clock", args.pose_clock]
         # Resolve the exact local image before launch; record revision including dirty state.
         provenance = {
             "image_id": subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", IMAGE], text=True).strip(),

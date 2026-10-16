@@ -186,7 +186,8 @@ def benchmark(path):
     method = choose("Method [1: depth, 2: RGB triangulation, 3: RGB persistent map]: ", ("1", "2", "3"), "3")
     offset = 0.
     if method == "3":
-        print("Requires acquisition-time pose alignment. Offset means pose stamp + offset = image stamp.")
+        print("Recorded FCU time references recover simulation clock differences automatically.\n"
+              "Leave offset at 0 for automatic recovery; a verified manual offset overrides it.")
         offset = ask("Known pose clock offset in seconds [0]: ", "0", float)
     rate = ask("Playback speed [1]: ", "1", cli.positive_number)
     capture = json.loads((path / "dataset.json").read_text())["capture_domain"]

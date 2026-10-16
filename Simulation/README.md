@@ -1,7 +1,7 @@
 # ArduPilot BlueBoat Docker Simulator
 
 [RGB-only persistent buoy mapping](docs/RGB_BUOY_MAPPING.md):
-`make benchmark RECORDING=your_run METHOD=rgb_mapping` (requires aligned acquisition times).
+`make benchmark RECORDING=your_run METHOD=rgb_mapping` (recovers recorded simulation/FCU clock differences automatically).
 
 Launch an autonomous surface boat simulation with one command:
 

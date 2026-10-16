@@ -1,6 +1,7 @@
 """Run ordinary ROS nodes against a bag and record their output topics."""
 
 import argparse
+import copy
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
@@ -10,6 +11,7 @@ import signal
 import subprocess
 import time
 
+from nav_msgs.msg import Odometry
 from maritime_interfaces.msg import BuoyEstimateArray
 from maritime_localization.depth import DepthLocalizer
 from maritime_localization.mapping import MappingSettings
@@ -22,6 +24,7 @@ from rosgraph_msgs.msg import Clock
 import yaml
 
 from results import export_results
+from clock_alignment import calibrate, ALIGNED_POSE, ns
 
 
 IMAGE = "/sensors/camera_0/color/image_raw"
@@ -53,7 +56,7 @@ def stop(process, group=True):
             process.wait()
 
 
-def run(dataset, destination, method, rate, pose_time_offset_s=0.):
+def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="auto"):
     metadata = json.loads((dataset / "dataset.json").read_text())
     if metadata["status"] != "complete":
         raise ValueError("Recording must be complete")
@@ -68,17 +71,23 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0.):
                     for entry in bag_metadata["rosbag2_bagfile_information"]["topics_with_message_count"]}
     if any(topic_counts.get(topic, 0) == 0 for topic in input_topics):
         raise ValueError("Recording is missing required camera, pose, or mounting-transform input")
+    alignment = calibrate(dataset, pose_clock, pose_time_offset_s) if method == "rgb_mapping" else None
     destination.mkdir(parents=True, exist_ok=False)
+    if alignment:
+        (destination / "clock-alignment.json").write_text(json.dumps(alignment.report, indent=2)+"\n")
     report = dict(status="starting", method=method, recording=metadata["name"],
                   created_at=datetime.now(timezone.utc).isoformat(),
                   algorithm_implemented=True,
                   algorithm_parameters=asdict(MappingSettings() if method == "rgb_mapping" else
                                              (DepthLocalizer if method == "depth" else TriangulationLocalizer)().settings),
                   pose_time_offset_s=pose_time_offset_s,
+                  pose_clock=alignment.report if alignment else {"mode": "source", "offset_s": pose_time_offset_s},
                   rate=rate, ros_domain=domain,
                   source_rgb_frames=topic_counts[IMAGE], input_topics=input_topics,
-                  assumptions={"output_frame": "map", "pose_source": POSE,
-                               "timing": ("acquisition-time pose interpolation with explicit clock offset" if method == "rgb_mapping"
+                  assumptions={"output_frame": "map", "pose_source": ALIGNED_POSE if alignment else POSE,
+                               "source_pose_topic": POSE,
+                               "timing": ("recorded-reference clock normalization then acquisition-time pose interpolation" if alignment else
+                                          "acquisition-time pose interpolation with explicit clock offset" if method == "rgb_mapping"
                                           else "latest received inputs; no timestamp synchronization"),
                                "observation_point": "2D bounding-box center approximates buoy center",
                                "truth_frame_alignment": "provisional; no accuracy scoring"})
@@ -96,6 +105,26 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0.):
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     previous = {sig: signal.signal(sig, interrupt) for sig in (signal.SIGINT, signal.SIGTERM)}
     probe = Node("benchmark_supervisor")
+    aligned_rows = []
+    alignment_publisher = None
+    def publish_aligned_pose(message):
+        output = copy.deepcopy(message)
+        try:
+            target = alignment.convert(ns(message.header.stamp))
+        except ValueError:
+            report['clock_rejected_poses'] = report.get('clock_rejected_poses', 0)+1
+            return
+        output.header.stamp.sec, output.header.stamp.nanosec = divmod(target, 1_000_000_000)
+        # Include provisional timing uncertainty in the normalized pose covariance.
+        twist = message.twist.twist
+        speed2 = sum(value**2 for value in (twist.linear.x, twist.linear.y, twist.linear.z))
+        turn2 = sum(value**2 for value in (twist.angular.x, twist.angular.y, twist.angular.z))
+        sigma2 = alignment.report['timing_uncertainty_floor_s']**2
+        for axis in range(3):
+            output.pose.covariance[axis*7] += speed2*sigma2
+            output.pose.covariance[(axis+3)*7] += turn2*sigma2
+        aligned_rows.append((ns(message.header.stamp), target))
+        alignment_publisher.publish(output)
     last_output = time.monotonic()
     def output_received(_):
         nonlocal last_output
@@ -121,22 +150,30 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0.):
         until = time.monotonic() + 1.5
         while time.monotonic() < until:
             spin()
-        occupied = [topic for topic in input_topics + ["/clock", DETECTIONS, ESTIMATES]
+        occupied = [topic for topic in input_topics + ["/clock", DETECTIONS, ESTIMATES, ALIGNED_POSE]
                     if probe.count_publishers(topic)]
         if occupied:
             raise ValueError(f"Replay domain already has publishers: {occupied}")
         # The recorder does not subscribe to data until it has received /clock.
         # Hold at the bag's first time during startup, then hand clock ownership
         # to the player before any input observations are published.
+        if alignment:
+            alignment_publisher = probe.create_publisher(Odometry, ALIGNED_POSE, qos_profile_sensor_data)
+            probe.create_subscription(Odometry, POSE, publish_aligned_pose, qos_profile_sensor_data)
+            print(f"Clock recovery: {alignment.report['reference_count']} FCU references; "
+                  f"max reference residual {alignment.report['reference_residual_max_s']*1000:.1f} ms", flush=True)
         start_ns = max(1, bag_metadata["rosbag2_bagfile_information"]["starting_time"]["nanoseconds_since_epoch"])
         initial_clock = Clock()
         initial_clock.clock.sec, initial_clock.clock.nanosec = divmod(start_ns, 1_000_000_000)
         clock = probe.create_publisher(Clock, "/clock", qos_profile_sensor_data)
         nodes = start("nodes", ["ros2", "launch", "maritime_localization", "pipeline.launch.py",
-                                f"method:={method}", "use_sim_time:=true", f"pose_time_offset_s:={pose_time_offset_s}"])
+                                f"method:={method}", "use_sim_time:=true", f"pose_time_offset_s:={pose_time_offset_s}",
+                                f"pose_topic:={ALIGNED_POSE if alignment else POSE}"])
         # Results are small standard ROS outputs, with a deeper recorder queue.
         result_topics = [DETECTIONS, ESTIMATES]
         if method == "rgb_mapping":
+            if alignment:
+                result_topics.append(ALIGNED_POSE)
             result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/costmap",
                               "/mapping/markers", "/mapping/diagnostics"]
         qos = {topic: dict(reliability="best_effort", durability="volatile", history="keep_last", depth=100)
@@ -154,7 +191,7 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0.):
             ready = (probe.count_publishers(DETECTIONS) == 1 and probe.count_publishers(ESTIMATES) == 1
                      and probe.count_subscribers(DETECTIONS) >= 2 and probe.count_subscribers(ESTIMATES) >= 2
                      and all(probe.count_subscribers(topic) >= 1 for topic in input_topics))
-            if ready:
+            if ready and (not alignment or probe.count_subscribers(ALIGNED_POSE) >= 2):
                 break
             if time.monotonic() > deadline:
                 counts = {topic: probe.count_subscribers(topic) for topic in input_topics + [DETECTIONS, ESTIMATES]}
@@ -209,6 +246,13 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0.):
                 report.update(export_results(destination))
             except Exception as error:
                 report["export_error"] = str(error)
+        if alignment:
+            report['clock_aligned_poses'] = len(aligned_rows)
+            import csv
+            with (destination / 'pose-clock.csv').open('w') as stream:
+                writer = csv.writer(stream)
+                writer.writerow(['source_pose_timestamp_ns', 'aligned_pose_timestamp_ns'])
+                writer.writerows(aligned_rows)
         save()
         for log in logs:
             log.close()
@@ -225,6 +269,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--method", choices=("depth", "triangulation", "rgb_mapping"), default="rgb_mapping")
     parser.add_argument("--rate", type=float, default=1.0)
+    parser.add_argument("--pose-clock", choices=("auto", "source", "recorded-reference"), default="auto")
     parser.add_argument("--pose-time-offset", type=float, default=0.)
     args = parser.parse_args()
     if not -float("inf") < args.pose_time_offset < float("inf"):
@@ -232,7 +277,7 @@ def main():
     if not 0 < args.rate < float("inf"):
         parser.error("rate must be finite and positive")
     try:
-        run(args.dataset, args.output, args.method, args.rate, args.pose_time_offset)
+        run(args.dataset, args.output, args.method, args.rate, args.pose_time_offset, args.pose_clock)
     except InterruptedError:
         raise SystemExit(130)
 

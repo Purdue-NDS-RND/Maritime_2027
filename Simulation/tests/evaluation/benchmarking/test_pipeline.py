@@ -14,7 +14,7 @@ from nav_msgs.msg import Odometry
 import numpy as np
 from rclpy.serialization import serialize_message
 import rosbag2_py
-from sensor_msgs.msg import CameraInfo
+from sensor_msgs.msg import CameraInfo, TimeReference
 from tf2_msgs.msg import TFMessage
 import yaml
 
@@ -22,7 +22,7 @@ import pipeline
 from test_perception import scene
 
 
-def fixture(dataset, rgb_only=False):
+def fixture(dataset, rgb_only=False, recover_clock=False):
     dataset.mkdir()
     (dataset / "dataset.json").write_text(json.dumps(dict(name="fixture", status="complete", capture_domain=0)))
     (dataset / "quality.json").write_text(json.dumps(dict(passed=True)))
@@ -51,6 +51,8 @@ def fixture(dataset, rgb_only=False):
              "/tf_static": "tf2_msgs/msg/TFMessage"}
     if rgb_only:
         del types[pipeline.DEPTH]
+    if recover_clock:
+        types["/mavros/time_reference"] = "sensor_msgs/msg/TimeReference"
     writer = rosbag2_py.SequentialWriter()
     writer.open(rosbag2_py.StorageOptions(uri=str(dataset / "bag"), storage_id="mcap"),
                 rosbag2_py.ConverterOptions("cdr", "cdr"))
@@ -79,15 +81,23 @@ def fixture(dataset, rgb_only=False):
                 continue
             message.header.stamp.sec = 10 + index // 10
             message.header.stamp.nanosec = (index % 10) * 100_000_000
+            if recover_clock and topic == pipeline.POSE:
+                source_stamp = 1_790_000_000_000_000_000 + round(stamp*1.4)
+                message.header.stamp.sec, message.header.stamp.nanosec = divmod(source_stamp, 1_000_000_000)
+                reference = TimeReference(source='fcu')
+                reference.header.stamp = message.header.stamp
+                reference.time_ref.sec, reference.time_ref.nanosec = divmod(
+                    1_789_000_000_000_000_000+stamp, 1_000_000_000)
+                writer.write('/mavros/time_reference', serialize_message(reference), stamp)
             writer.write(topic, serialize_message(message), stamp)
     del writer
 
 
 class PipelineTests(unittest.TestCase):
-    def check_method(self, method):
+    def check_method(self, method, recover_clock=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            fixture(root / "dataset", rgb_only=method == "rgb_mapping")
+            fixture(root / "dataset", rgb_only=method == "rgb_mapping", recover_clock=recover_clock)
             result = root / "result"
             try:
                 report = pipeline.run(root / "dataset", result, method, 1.)
@@ -109,6 +119,11 @@ class PipelineTests(unittest.TestCase):
             self.assertAlmostEqual(statistics.median(float(row["x_m"]) for row in rows), expected[0], delta=.25)
             self.assertAlmostEqual(statistics.median(float(row["y_m"]) for row in rows), expected[1], delta=.05)
             if method == "rgb_mapping":
+                if recover_clock:
+                    self.assertEqual(report['pose_clock']['mode'], 'recorded-reference')
+                    self.assertGreater(report['clock_aligned_poses'], 0)
+                    self.assertTrue((result/'clock-alignment.json').exists())
+                    self.assertTrue((result/'pose-clock.csv').exists())
                 self.assertNotIn(pipeline.DEPTH, report["input_topics"])
                 self.assertFalse(any('ground_truth' in topic for topic in report['input_topics']))
                 final = json.loads((result / "final_map.json").read_text())
@@ -127,6 +142,9 @@ class PipelineTests(unittest.TestCase):
                 self.assertTrue((result / "observations.csv").exists())
                 self.assertTrue(all(row["depth_timestamp_ns"] == "0" for row in rows))
             self.assertTrue((result / "bag/metadata.yaml").is_file())
+
+    def test_rgb_map_recovers_different_rate_pose_clock(self):
+        self.check_method("rgb_mapping", recover_clock=True)
 
     def test_rgb_map_from_bag_with_no_depth_topic(self):
         self.check_method("rgb_mapping")

@@ -25,23 +25,42 @@ then **RGB persistent map**. The benchmark starts the same detector and mapper
 used live, plays only RGB/calibration/odometry/static-TF inputs, records results,
 and exports them. A source bag with no depth topic is supported and tested.
 
-**Timing matters for this method.** Unlike the earlier experimental baselines,
-this mapper interpolates vessel pose at image acquisition time. Camera and pose
-stamps must share a clock, or have an independently established constant offset:
+**Timing matters for this method.** The mapper interpolates vessel pose at image
+acquisition time. Replay defaults to `POSE_CLOCK=auto`: compatible source clocks
+are preserved; when epoch-time MAVROS and simulation-time images differ, the
+supervisor recovers a clock bridge from recorded `/mavros/time_reference` data.
+This is replay input normalization; the production mapper is unchanged.
+
+For `Sample_1`, the plain command above now works. One constant offset was
+insufficient: the source ROS clock advanced at a different rate from simulation.
+Recovery interpolates the recorded ROS→FCU time pairs and subtracts the median
+FCU→simulation epoch difference measured at the recorded reference messages.
+It rejects reference resets, gaps and excessive inconsistency. It never fits
+clock parameters to buoy positions, images, depth, or simulator truth.
+
+Original source bags remain unchanged. Normalized poses are published and recorded
+under `/benchmark/vessel/odometry`, with original→normalized stamp pairs in
+`pose-clock.csv` and all calibration knots and quality checks in
+`clock-alignment.json`. The run report states the actual pose input and clock mode.
+Recorded reference receipt delay and common timing bias are unmeasured; the
+observed reference residual is **not** a bound on acquisition-time accuracy.
+Normalized pose covariance includes a provisional 20 ms timing-uncertainty floor
+projected through the recorded linear/angular speed. This is an explicit modeling
+assumption, not a measured latency guarantee.
+
+To disable recovery and require original acquisition stamps:
 
 ```bash
-make benchmark RECORDING=your_run METHOD=rgb_mapping POSE_TIME_OFFSET_S=-123.5
+make benchmark RECORDING=Sample_1 METHOD=rgb_mapping POSE_CLOCK=source
 ```
 
-The convention is **pose source stamp + offset = image stamp**. The example
-number is illustrative. Do not copy it for `Sample_1`, infer synchronization from
-callback arrival, or tune an offset to make buoy positions look correct. A
-constant offset cannot repair clock drift or resets. The offset is stored in the
-report and observation records; source bags and headers remain unchanged.
-`Sample_1` was recorded with simulation-time images and epoch-time MAVROS poses;
-zero offset cannot produce acquisition-time associations. Without a verified
-clock relationship this run should report missing inputs, not a plausible map.
-No Adapter/MAVROS clock settings have been changed by this implementation.
+That strict mode still rejects this recording's mismatched clocks. To force
+reference recovery use `POSE_CLOCK=recorded-reference`. A verified constant offset
+for another recording can instead be supplied with `POSE_TIME_OFFSET_S`; its
+convention is **pose source stamp + offset = image stamp**. A nonzero manual
+offset disables automatic recovery. Do not combine a manual offset with forced
+reference recovery. No Adapter/MAVROS clock settings have been changed; live
+operation still requires compatible source timestamps or a verified offset.
 
 For live topics, in an environment with the autonomy ROS workspace sourced:
 
@@ -76,6 +95,7 @@ Benchmark runs use and record the defaults.
 | `map_history.csv` | Time series of all metric records, including tentative/stale states |
 | `observations.csv` | World bearings, camera origins, uncertainty, pose brackets, offset, and assignment decisions |
 | `estimates.csv`, `scatter.png` | **Confirmed, newly updated** XY points for the existing benchmark interface |
+| `clock-alignment.json`, `pose-clock.csv` | Replay clock bridge and original/normalized pose timestamp pairs, when recovery is needed |
 | `report.json`, `summary.json`, `provenance.json` | Settings, played inputs, counters, source revision/hashes and exact image ID |
 | `nodes.log`, `player.log`, `recorder.log` | Runtime evidence and errors |
 
@@ -194,12 +214,19 @@ clock/origin reset, memory bounds, and covariance coverage on synthetic random
 noise. These establish software behavior in controlled data, not on-water accuracy
 or measured Jetson throughput. Simulator truth remains evaluation-only.
 
-Validation of this implementation: `make validate`, 70 benchmark tests, 34
-mapper tests against the installed autonomy image without runtime-source mounts,
-and 11 recording-menu tests passed. The no-depth RGB replay fixture produced
-one confirmed buoy at the known XY location, with stable identity and positive
-covariance; a deliberately false truth topic in its source bag was not played.
-An actual `Sample_1` replay at zero clock offset produced 754 waiting-input
-outputs, zero ready frames and zero coordinates, and correctly marked the run
-incomplete. Its report retained the clock-alignment rejection reasons. This is
-input-gate evidence, not an accuracy result for that recording.
+The original mapper validation passed 70 benchmark tests, 34 installed-image mapper
+tests and 11 menu tests. Clock-recovery regression coverage additionally exercises
+large epochs, different clock rates, endpoints, missing references, clock resets,
+remote-clock drift rejection, strict source mode, and complete RGB replay with
+synthetic different-rate pose clocks. The no-depth fixture includes a deliberately
+false truth topic that is not played.
+
+A successful `Sample_1` run is saved at
+`logs/benchmarks/Sample_1/rgb_mapping-20261016T164510488182Z/`: 753 localization
+outputs, 735 ready frames, 36 confirmed XY updates, two confirmed world tracks,
+zero algorithm errors, and an exported scatter plot. It used all 98 FCU time
+references; maximum observed reference inconsistency was about 5.7 ms. Final red
+and green estimates were approximately `(7.01, 1.53)` and `(7.00, -1.43)` metres
+in MAVROS `map`. Counts can vary slightly with ROS delivery; these are runtime
+results, not ground-truth accuracy scores. Strict source-clock replay remains a
+negative test and produces no coordinates for this dataset.

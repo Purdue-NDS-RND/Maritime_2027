@@ -1,6 +1,8 @@
 # Record and replay a buoy run
 
 For the report-based persistent **RGB-only map**, use `METHOD=rgb_mapping`.
+Replay now recovers compatible simulation clock bridges from recorded FCU time
+references automatically; `Sample_1` runs without a manually supplied offset.
 See [RGB buoy mapping](RGB_BUOY_MAPPING.md) for commands, timing requirements,
 map exports, lifecycle and verification.
 
