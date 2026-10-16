@@ -35,6 +35,15 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Depth: 2
+    - Class: rviz_default_plugins/MarkerArray
+      Name: RGB map estimates (provisional truth alignment)
+      Enabled: true
+      Topic:
+        Value: /monitor/mapping/markers
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
     - Class: rviz_default_plugins/CameraInfo
       Name: Camera 0 calibration
       Enabled: true

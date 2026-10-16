@@ -90,6 +90,7 @@ if [[ $action == rviz || $action == rviz-sim ]]; then
         preset=simulation
         run_options+=(-v "$PROJECT_DIR/../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/config/camera_contract.yaml:/opt/monitor/simulation-camera.yaml:ro")
     fi
+    run_options+=(-v "$PROJECT_DIR/config/rviz/$preset.rviz:/opt/monitor/config/rviz/$preset.rviz:ro")
     view_args=(-d "/opt/monitor/config/rviz/$preset.rviz")
     for argument in "$@"; do
         case "$argument" in

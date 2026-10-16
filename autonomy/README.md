@@ -4,6 +4,14 @@ Persistent RGB-only mapping is available through `pipeline.launch.py method:=rgb
 See [RGB mapping operation and design](../Simulation/docs/RGB_BUOY_MAPPING.md).
 It uses acquisition-time vessel poses, robust bearing initialization, and per-buoy EKFs.
 
+For live teleop observation, leave Simulation bringup unchanged and run
+`make -C autonomy mapping-build`, then `make -C autonomy mapping` from the repository
+root. This optional foreground session launches detection/mapping plus a top-down
+popup with estimated means, covariance ellipses, history and a provisional truth
+overlay. It also adds estimates to the existing `make -C Monitor rviz-sim` view.
+See [live RGB mapping](docs/LIVE_RGB_MAPPING.md) for commands, timing assumptions,
+headless operation and validation.
+
 This image contains no MAVROS runtime, GeographicLib datasets, FCU transport,
 Gazebo bridge, camera driver, scenario manifest, or simulation evaluator.
 
