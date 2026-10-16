@@ -183,7 +183,11 @@ def benchmark(path):
         print("\nThis recording is incomplete. Inspect its details first.")
         return
     print("\nRuns the selected positioning method and saves map XY estimates, CSV, and scatter plot.")
-    method = choose("Method [1: depth, 2: RGB triangulation]: ", ("1", "2"), "1")
+    method = choose("Method [1: depth, 2: RGB triangulation, 3: RGB persistent map]: ", ("1", "2", "3"), "3")
+    offset = 0.
+    if method == "3":
+        print("Requires acquisition-time pose alignment. Offset means pose stamp + offset = image stamp.")
+        offset = ask("Known pose clock offset in seconds [0]: ", "0", float)
     rate = ask("Playback speed [1]: ", "1", cli.positive_number)
     capture = json.loads((path / "dataset.json").read_text())["capture_domain"]
     def domain_number(value):
@@ -194,7 +198,8 @@ def benchmark(path):
     domain = ask("Replay ROS domain [97]: ", "97", domain_number)
     tool = cli.SIMULATION / "tests/evaluation/benchmarking/tools.py"
     run_foreground([sys.executable, str(tool), "run", "--recording", path.name,
-                    "--method", "depth" if method == "1" else "triangulation",
+                    "--method", {"1": "depth", "2": "triangulation", "3": "rgb_mapping"}[method],
+                    "--pose-time-offset", str(offset),
                     "--rate", str(rate), "--domain", str(domain)])
 
 

@@ -12,6 +12,7 @@ import time
 
 from maritime_interfaces.msg import BuoyEstimateArray
 from maritime_localization.depth import DepthLocalizer
+from maritime_localization.mapping import MappingSettings
 from maritime_localization.triangulation import TriangulationLocalizer
 import rclpy
 from rclpy.node import Node
@@ -52,7 +53,7 @@ def stop(process, group=True):
             process.wait()
 
 
-def run(dataset, destination, method, rate):
+def run(dataset, destination, method, rate, pose_time_offset_s=0.):
     metadata = json.loads((dataset / "dataset.json").read_text())
     if metadata["status"] != "complete":
         raise ValueError("Recording must be complete")
@@ -70,12 +71,15 @@ def run(dataset, destination, method, rate):
     destination.mkdir(parents=True, exist_ok=False)
     report = dict(status="starting", method=method, recording=metadata["name"],
                   created_at=datetime.now(timezone.utc).isoformat(),
-                  algorithm_implemented=(DepthLocalizer if method == "depth" else TriangulationLocalizer).implemented,
-                  algorithm_parameters=asdict((DepthLocalizer if method == "depth" else TriangulationLocalizer)().settings),
+                  algorithm_implemented=True,
+                  algorithm_parameters=asdict(MappingSettings() if method == "rgb_mapping" else
+                                             (DepthLocalizer if method == "depth" else TriangulationLocalizer)().settings),
+                  pose_time_offset_s=pose_time_offset_s,
                   rate=rate, ros_domain=domain,
                   source_rgb_frames=topic_counts[IMAGE], input_topics=input_topics,
                   assumptions={"output_frame": "map", "pose_source": POSE,
-                               "timing": "latest received inputs; no timestamp synchronization",
+                               "timing": ("acquisition-time pose interpolation with explicit clock offset" if method == "rgb_mapping"
+                                          else "latest received inputs; no timestamp synchronization"),
                                "observation_point": "2D bounding-box center approximates buoy center",
                                "truth_frame_alignment": "provisional; no accuracy scoring"})
     (destination / "detector.yaml").write_bytes(
@@ -129,15 +133,19 @@ def run(dataset, destination, method, rate):
         initial_clock.clock.sec, initial_clock.clock.nanosec = divmod(start_ns, 1_000_000_000)
         clock = probe.create_publisher(Clock, "/clock", qos_profile_sensor_data)
         nodes = start("nodes", ["ros2", "launch", "maritime_localization", "pipeline.launch.py",
-                                f"method:={method}", "use_sim_time:=true"])
+                                f"method:={method}", "use_sim_time:=true", f"pose_time_offset_s:={pose_time_offset_s}"])
         # Results are small standard ROS outputs, with a deeper recorder queue.
+        result_topics = [DETECTIONS, ESTIMATES]
+        if method == "rgb_mapping":
+            result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/costmap",
+                              "/mapping/markers", "/mapping/diagnostics"]
         qos = {topic: dict(reliability="best_effort", durability="volatile", history="keep_last", depth=100)
-               for topic in (DETECTIONS, ESTIMATES)}
+               for topic in result_topics}
         qos_path = destination / "result-qos.yaml"
         qos_path.write_text(yaml.safe_dump(qos))
         recorder = start("recorder", ["ros2", "bag", "record", "--storage", "mcap", "--use-sim-time",
                                       "--disable-keyboard-controls", "--qos-profile-overrides-path", str(qos_path),
-                                      "--output", str(destination / "bag"), "--topics", DETECTIONS, ESTIMATES])
+                                      "--output", str(destination / "bag"), "--topics", *result_topics])
         deadline = time.monotonic() + 30
         while True:
             spin()
@@ -177,7 +185,10 @@ def run(dataset, destination, method, rate):
         stop(recorder)
         report.update(export_results(destination))
         if not report["localization_arrays"] or not report["inputs_ready_arrays"]:
-            raise RuntimeError("No localization outputs with assembled inputs were recorded")
+            raise RuntimeError("No localization outputs with assembled inputs were recorded; "
+                               f"input details: {report.get('localization_details', {})}")
+        if report.get("map_paused"):
+            raise RuntimeError("Mapping session paused; inspect final_map.json and diagnostics")
         if report["localization_statuses"].get("error", 0):
             raise RuntimeError("Localization reported errors; inspect the result bag")
         report["status"] = "complete"
@@ -212,13 +223,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--method", choices=("depth", "triangulation"), default="depth")
+    parser.add_argument("--method", choices=("depth", "triangulation", "rgb_mapping"), default="rgb_mapping")
     parser.add_argument("--rate", type=float, default=1.0)
+    parser.add_argument("--pose-time-offset", type=float, default=0.)
     args = parser.parse_args()
+    if not -float("inf") < args.pose_time_offset < float("inf"):
+        parser.error("pose time offset must be finite")
     if not 0 < args.rate < float("inf"):
         parser.error("rate must be finite and positive")
     try:
-        run(args.dataset, args.output, args.method, args.rate)
+        run(args.dataset, args.output, args.method, args.rate, args.pose_time_offset)
     except InterruptedError:
         raise SystemExit(130)
 

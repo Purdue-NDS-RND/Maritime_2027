@@ -17,28 +17,13 @@ from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros import Buffer, TransformException, TransformListener
 from vision_msgs.msg import Detection2DArray
 
+from maritime_localization.geometry import rigid_transform
 from maritime_localization.depth import DepthLocalizer, DepthSettings
 from maritime_localization.interfaces import Observation
 from maritime_localization.triangulation import TriangulationLocalizer, TriangulationSettings
 from maritime_perception.aruco import BoundingBox
 
 
-def rigid_transform(position, quaternion):
-    """Homogeneous transform from a ROS position/translation and quaternion."""
-    xyz = np.array([position.x, position.y, position.z], dtype=float)
-    q = np.array([quaternion.x, quaternion.y, quaternion.z, quaternion.w], dtype=float)
-    norm = np.linalg.norm(q)
-    if not np.isfinite(xyz).all() or not np.isfinite(q).all() or norm < 1e-12:
-        raise ValueError("Pose must have finite coordinates and a nonzero quaternion")
-    x, y, z, w = q / norm
-    matrix = np.eye(4)
-    matrix[:3, :3] = [
-        [1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)],
-        [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)],
-        [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)],
-    ]
-    matrix[:3, 3] = xyz
-    return matrix
 
 
 class BuoyLocalizerNode(Node):

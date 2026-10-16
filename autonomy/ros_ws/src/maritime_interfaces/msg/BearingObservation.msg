@@ -1,0 +1,9 @@
+string observation_id
+string camera_id
+string category
+float64 origin_x
+float64 origin_y
+float64 world_bearing_rad
+float64 bearing_variance
+string world_id
+string decision

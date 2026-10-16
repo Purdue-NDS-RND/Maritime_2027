@@ -6,6 +6,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3-opencv \
+        python3-scipy \
+        ros-jazzy-visualization-msgs \
+        ros-jazzy-diagnostic-msgs \
         ros-jazzy-cv-bridge \
         ros-jazzy-vision-msgs \
         ros-jazzy-tf2-ros-py \

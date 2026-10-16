@@ -1,5 +1,9 @@
 # Onboard Autonomy
 
+Persistent RGB-only mapping is available through `pipeline.launch.py method:=rgb_mapping`.
+See [RGB mapping operation and design](../Simulation/docs/RGB_BUOY_MAPPING.md).
+It uses acquisition-time vessel poses, robust bearing initialization, and per-buoy EKFs.
+
 This image contains no MAVROS runtime, GeographicLib datasets, FCU transport,
 Gazebo bridge, camera driver, scenario manifest, or simulation evaluator.
 

@@ -1,35 +1,64 @@
-"""The same detector/localizer launch for live topics and recorded topics."""
+"""Shared live/replay pipeline. RGB mapping has one manager for all cameras."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, EmitEvent, OpaqueFunction, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
+def nodes(context):
+    def value(name):
+        return LaunchConfiguration(name).perform(context)
+    method = value('method')
+    cameras = [value('camera')]
+    if value('second_camera'):
+        if method != 'rgb_mapping' or value('second_camera') in cameras:
+            raise ValueError('second_camera requires rgb_mapping and a distinct camera name')
+        cameras.append(value('second_camera'))
+    use_sim_time = ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)
+    result = []
+    for camera in cameras:
+        result.append(Node(package='maritime_perception', executable='aruco_detector',
+            namespace=f'perception/{camera}', output='screen',
+            parameters=[PathJoinSubstitution([FindPackageShare('maritime_perception'), 'config', 'aruco.yaml']),
+                        {'use_sim_time': use_sim_time, 'publish_debug_image': ParameterValue(
+                            LaunchConfiguration('publish_debug_image'), value_type=bool)}],
+            remappings=[('image', f'/sensors/{camera}/color/image_raw')]))
+    parameters = [{'use_sim_time': use_sim_time}]
+    if value('mapper_parameters'):
+        parameters.append(value('mapper_parameters'))
+    if method == 'rgb_mapping':
+        parameters.append({'cameras': cameras, 'pose_time_offset_s': ParameterValue(
+            LaunchConfiguration('pose_time_offset_s'), value_type=float)})
+        result.append(Node(package='maritime_localization', executable='rgb_buoy_mapper',
+            namespace='localization', output='screen', parameters=parameters,
+            remappings=[('vessel/odometry', value('pose_topic'))]))
+    else:
+        parameters.append({'method': method})
+        camera = cameras[0]
+        result.append(Node(package='maritime_localization', executable='buoy_localizer',
+            namespace='localization', output='screen', parameters=parameters,
+            remappings=[('detections', f'/perception/{camera}/detections'),
+                        ('camera_info', f'/sensors/{camera}/color/camera_info'),
+                        ('depth', f'/sensors/{camera}/depth/image_rect_raw'),
+                        ('vessel/odometry', value('pose_topic'))]))
+    return result
+
+
 def generate_launch_description():
-    camera = LaunchConfiguration("camera")
-    use_sim_time = LaunchConfiguration("use_sim_time")
     return LaunchDescription([
-        DeclareLaunchArgument("camera", default_value="camera_0"),
-        DeclareLaunchArgument("method", default_value="depth", choices=["depth", "triangulation"]),
-        DeclareLaunchArgument("use_sim_time", default_value="false"),
-        DeclareLaunchArgument("pose_topic", default_value="/mavros/local_position/odom"),
-        DeclareLaunchArgument("publish_debug_image", default_value="false"),
-        RegisterEventHandler(OnProcessExit(on_exit=[EmitEvent(event=Shutdown(reason="Pipeline node exited"))])),
-        Node(package="maritime_perception", executable="aruco_detector",
-             namespace=["perception/", camera], output="screen",
-             parameters=[PathJoinSubstitution([FindPackageShare("maritime_perception"), "config", "aruco.yaml"]),
-                         {"use_sim_time": use_sim_time,
-                          "publish_debug_image": LaunchConfiguration("publish_debug_image")}],
-             remappings=[("image", ["/sensors/", camera, "/color/image_raw"])]),
-        Node(package="maritime_localization", executable="buoy_localizer",
-             namespace="localization", output="screen",
-             parameters=[{"method": LaunchConfiguration("method"), "use_sim_time": use_sim_time}],
-             remappings=[("detections", ["/perception/", camera, "/detections"]),
-                         ("camera_info", ["/sensors/", camera, "/color/camera_info"]),
-                         ("depth", ["/sensors/", camera, "/depth/image_rect_raw"]),
-                         ("vessel/odometry", LaunchConfiguration("pose_topic"))]),
+        DeclareLaunchArgument('camera', default_value='camera_0'),
+        DeclareLaunchArgument('second_camera', default_value=''),
+        DeclareLaunchArgument('method', default_value='rgb_mapping', choices=['depth', 'triangulation', 'rgb_mapping']),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument('pose_topic', default_value='/mavros/local_position/odom'),
+        DeclareLaunchArgument('pose_time_offset_s', default_value='0.0'),
+        DeclareLaunchArgument('mapper_parameters', default_value=''),
+        DeclareLaunchArgument('publish_debug_image', default_value='false'),
+        RegisterEventHandler(OnProcessExit(on_exit=[EmitEvent(event=Shutdown(reason='Pipeline node exited'))])),
+        OpaqueFunction(function=nodes),
     ])

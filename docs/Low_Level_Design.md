@@ -65,12 +65,18 @@ No ArUco/PnP pose or known-size range estimation is implemented. The optional
 debug image labels recognized categories only. The default autonomy service
 still runs its bootstrap placeholder. A shared ROS detector/localizer launch,
 XY output messages, and replay/result-recording tools are described in the
-[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). The localizer currently
-assembles the latest received state/calibration/depth with no timestamp
-synchronization, and uses MAVROS `map` coordinates. Depth positioning and temporal RGB triangulation with category/bearing
-association are implemented as baseline methods; accuracy scoring remains deferred. Box centers approximate
-buoy centers. The draft sections below describe the wider target design,
-including stronger timing requirements deferred from this initial scaffold.
+[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). The `depth` and `triangulation` baselines assemble latest-received inputs in
+MAVROS `map` coordinates. The report-based `rgb_mapping` method instead uses
+acquisition-time pose interpolation, robust angular NLS initialization, a shared
+world-track manager with gated global assignment, persistent XY EKFs and
+covariance/lifecycle output. It has no depth subscription. Semantic maps, derived
+costmaps, RViz markers, diagnostics and replay exports are implemented; see the
+[RGB mapping guide](../Simulation/docs/RGB_BUOY_MAPPING.md) for timing gates,
+assumptions and verification. The default autonomy service remains guarded.
+Absolute accuracy, physical-camera integration, on-water covariance calibration,
+mission clearance and joint pose estimation remain unvalidated. Box centers
+approximate buoy centers. Sections below retain the wider target design;
+report-based RGB mapping is an explicit depth-free implementation path.
 
 Draft: place the detector in `autonomy/ros_ws/src/maritime_perception`, with
 launch integration in `maritime_bringup`. Use OpenCV for ArUco detection,

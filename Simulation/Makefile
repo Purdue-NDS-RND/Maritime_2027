@@ -14,7 +14,7 @@ recording-info:
 replay:
 	python3 recordings/recordings.py replay
 
-export METHOD
+export METHOD POSE_TIME_OFFSET_S
 .PHONY: benchmark-build benchmark-test detect benchmark benchmark-offline
 
 benchmark-build:

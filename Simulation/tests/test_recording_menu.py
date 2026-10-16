@@ -117,8 +117,18 @@ class MenuTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             menu.benchmark(path)
         args = run.call_args.args[0]
-        self.assertEqual(args[-8:], ["--recording", "gate-pass", "--method", "triangulation",
-                                     "--rate", "0.5", "--domain", "98"])
+        self.assertEqual(args[-10:], ["--recording", "gate-pass", "--method", "triangulation",
+                                      "--pose-time-offset", "0.0", "--rate", "0.5", "--domain", "98"])
+
+    def test_rgb_map_selects_explicit_clock_offset(self):
+        path = self.dataset()
+        with patch("builtins.input", side_effect=["3", "-123.5", "1", "97"]), \
+                patch.object(menu, "run_foreground", return_value=0) as run, \
+                contextlib.redirect_stdout(io.StringIO()):
+            menu.benchmark(path)
+        args = run.call_args.args[0]
+        self.assertEqual(args[args.index("--method")+1], "rgb_mapping")
+        self.assertEqual(args[args.index("--pose-time-offset")+1], "-123.5")
 
 
 class EntryPointTests(unittest.TestCase):

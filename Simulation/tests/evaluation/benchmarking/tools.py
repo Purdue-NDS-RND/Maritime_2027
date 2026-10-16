@@ -49,11 +49,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("build", "test", "detect", "run", "offline"))
     parser.add_argument("--recording", default=os.environ.get("RECORDING"))
-    parser.add_argument("--method", choices=("depth", "triangulation"),
-                        default=os.environ.get("METHOD") or "depth")
+    parser.add_argument("--method", choices=("depth", "triangulation", "rgb_mapping"),
+                        default=os.environ.get("METHOD") or "rgb_mapping")
     parser.add_argument("--rate", type=float, default=os.environ.get("RATE") or 1.0)
     parser.add_argument("--domain", type=int, default=os.environ.get("REPLAY_DOMAIN_ID") or 97)
     parser.add_argument("--name", help="Unique output directory name; generated when omitted")
+    parser.add_argument("--pose-time-offset", type=float, default=os.environ.get("POSE_TIME_OFFSET_S") or 0.)
     args = parser.parse_args()
     try:
         if args.command == "build":
@@ -72,6 +73,8 @@ def main():
                 'source /etc/maritime_autonomy_setup.bash && python3 -m unittest discover -s /opt/benchmark -p "test_*.py" -v',
             ]))
         dataset, metadata = recording(args.recording)
+        if not -float("inf") < args.pose_time_offset < float("inf"):
+            raise ValueError("POSE_TIME_OFFSET_S must be finite")
         if not 0 < args.rate < float("inf"):
             raise ValueError("RATE must be finite and positive")
         if args.command != "offline" and (not 0 <= args.domain <= 232 or args.domain == metadata["capture_domain"]):
@@ -116,7 +119,7 @@ def main():
             command += ["--network", "host", "--ipc", "host", "-e", f"ROS_DOMAIN_ID={args.domain}",
                         "-e", "FASTRTPS_DEFAULT_PROFILES_FILE=/dataset/transport.xml", IMAGE,
                         "--dataset", "/dataset", "--output", f"/results/{name}",
-                        "--method", args.method, "--rate", str(args.rate)]
+                        "--method", args.method, "--rate", str(args.rate), "--pose-time-offset", str(args.pose_time_offset)]
         # Resolve the exact local image before launch; record revision including dirty state.
         provenance = {
             "image_id": subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", IMAGE], text=True).strip(),

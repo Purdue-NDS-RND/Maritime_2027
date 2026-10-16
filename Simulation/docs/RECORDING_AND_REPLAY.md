@@ -1,5 +1,9 @@
 # Record and replay a buoy run
 
+For the report-based persistent **RGB-only map**, use `METHOD=rgb_mapping`.
+See [RGB buoy mapping](RGB_BUOY_MAPPING.md) for commands, timing requirements,
+map exports, lifecycle and verification.
+
 Record one manually driven simulation run and reuse its ROS messages while
 developing buoy detection, positioning, and mapping algorithms. Playback does
 not need Gazebo, SITL, MAVROS, or the Adapter. This first milestone provides

@@ -7,13 +7,15 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/maritime_localization"]),
         ("share/maritime_localization", ["package.xml"]),
+        ("share/maritime_localization/config", ["config/rgb_mapping.yaml"]),
         ("share/maritime_localization/launch", ["launch/pipeline.launch.py"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="Maritime 2027",
     maintainer_email="maintainer@example.com",
-    description="Depth and temporal RGB buoy positioning",
+    description="Buoy positioning and persistent RGB bearing-only mapping",
     license="Apache-2.0",
-    entry_points={"console_scripts": ["buoy_localizer = maritime_localization.node:main"]},
+    entry_points={"console_scripts": ["buoy_localizer = maritime_localization.node:main",
+                                       "rgb_buoy_mapper = maritime_localization.mapping_node:main"]},
 )

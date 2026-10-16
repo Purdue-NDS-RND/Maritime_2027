@@ -1,5 +1,9 @@
 # Develop buoy positioning methods from a recording
 
+For the report-based persistent **RGB-only map**, use `METHOD=rgb_mapping`.
+See [RGB buoy mapping](RGB_BUOY_MAPPING.md) for commands, timing requirements,
+map exports, lifecycle and verification.
+
 Benchmarking plays the input bag through the same ROS detector and localization
 nodes intended for live operation, then records their output in a separate bag.
 The detector produces **2D ArUco marker bounding boxes**. Both depth and temporal RGB triangulation produce buoy XY estimates in the
