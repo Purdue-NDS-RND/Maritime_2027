@@ -14,6 +14,7 @@ for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
 done
 python_sources=(
     scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
+    recordings/*.py tests/test_recordings.py tests/test_recording_menu.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/setup.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/launch/bringup.launch.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py

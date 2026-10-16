@@ -125,6 +125,11 @@ for that baseline.
 
 ## Logs and state
 
+To save sensor/state data for algorithm development, use `make record` to open
+the recording tools menu. It handles capture, inspection, replay, and RViz.
+See [recording and replay](RECORDING_AND_REPLAY.md) for the full workflow,
+recorded topics, RViz viewing, and the camera/MAVROS clock limitation.
+
 Every run writes:
 
 - `gazebo-<timestamp>.log` for physics, rendering, and plugins;

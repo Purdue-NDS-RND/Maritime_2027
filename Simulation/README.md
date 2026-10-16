@@ -78,6 +78,7 @@ make rebuild   # Build from scratch without Docker's build cache
 make validate  # Check scripts, assets, pins, and Compose configuration
 make smoke     # Test a running boat through MAVLink UDP 14551
 make teleop    # Arm and drive with the keyboard through pymavlink; QGC optional
+make record    # Open recording, dataset inspection, replay, and RViz menu
 make ros-build # Build simulator, simulation adapter, and autonomy images
 make sensor-smoke # Check RGB-D, ArUco visibility, depth, timing, and TF
 make mavros-smoke # Check the FCU control path through MAVROS
@@ -102,6 +103,12 @@ Other layouts are `one`, `multi`, and `repeated_red` (two visible red-category
 buoys). Add `BUOY_SEED=42` for repeatable pose
 randomization. See [RGB-D and buoy scenarios](docs/RGBD_AND_BUOY_SCENARIOS.md)
 for topics, frames, tests, and boundaries.
+
+For repeatable inputs while developing buoy-position algorithms, see
+[recording and replay](docs/RECORDING_AND_REPLAY.md). Record a manual run once,
+then replay its sensor, boat-state, and truth messages in ROS and RViz.
+`make record` opens the terminal menu for all of these actions. Explicit
+`NAME`/`RECORDING` commands remain available for automation.
 
 For calm water, use:
 

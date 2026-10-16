@@ -1,4 +1,18 @@
+.DEFAULT_GOAL := run
+
 .PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd buoy-tracking-smoke down logs
+
+export NAME RECORDING DURATION RATE START_PAUSED REPLAY_DOMAIN_ID
+.PHONY: record recording-info replay
+
+record:
+	@python3 recordings/recordings.py record
+
+recording-info:
+	python3 recordings/recordings.py info
+
+replay:
+	python3 recordings/recordings.py replay
 
 run:
 	@./scripts/run.sh
