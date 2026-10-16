@@ -178,6 +178,26 @@ def stop_viewer(viewer, project):
                 viewer.wait()
 
 
+def benchmark(path):
+    if json.loads((path / "dataset.json").read_text())["status"] != "complete":
+        print("\nThis recording is incomplete. Inspect its details first.")
+        return
+    print("\nPositioning methods are placeholders: this verifies the ROS pipeline and saves outputs.")
+    method = choose("Method [1: depth, 2: RGB triangulation]: ", ("1", "2"), "1")
+    rate = ask("Playback speed [1]: ", "1", cli.positive_number)
+    capture = json.loads((path / "dataset.json").read_text())["capture_domain"]
+    def domain_number(value):
+        domain = int(value)
+        if not 0 <= domain <= 232 or domain == capture:
+            raise ValueError("Choose a domain from 0 to 232 different from the capture domain.")
+        return domain
+    domain = ask("Replay ROS domain [97]: ", "97", domain_number)
+    tool = cli.SIMULATION / "tests/evaluation/benchmarking/tools.py"
+    run_foreground([sys.executable, str(tool), "run", "--recording", path.name,
+                    "--method", "depth" if method == "1" else "triangulation",
+                    "--rate", str(rate), "--domain", str(domain)])
+
+
 def browse():
     path = select_recording()
     if path is None:
@@ -185,13 +205,15 @@ def browse():
     while True:
         print(f"\n{name_heading(path)}\n  1) Inspect quality and run details\n"
               "  2) Replay in this terminal\n  3) Replay with RViz\n"
-              "  4) Show recorder log\n  q) Back")
+              "  4) Show recorder log\n  5) Run ROS localization benchmark\n  q) Back")
         try:
-            selection = choose("Choose [1]: ", ("1", "2", "3", "4"), "1")
+            selection = choose("Choose [1]: ", ("1", "2", "3", "4", "5"), "1")
             if selection == "1":
                 cli.show_info(path)
             elif selection in ("2", "3"):
                 replay(path, with_viewer=selection == "3")
+            elif selection == "5":
+                benchmark(path)
             else:
                 print("\n" + "\n".join((path / "recorder.log").read_text().splitlines()[-60:]))
             ask("\nPress Enter to return to this recording... ")
@@ -210,9 +232,10 @@ def main():
         while True:
             print("\n  BlueBoat recording tools\n  ------------------------\n"
                   "  1) Record a new run\n  2) Browse recordings / replay / RViz\n"
-                  "  3) Build or update recording tools\n  4) Help\n  q) Quit\n")
+                  "  3) Build or update recording tools\n  4) Help\n"
+                  "  5) Build or update benchmark tools\n  q) Quit\n")
             try:
-                selection = choose("Choose [1]: ", ("1", "2", "3", "4"), "1")
+                selection = choose("Choose [1]: ", ("1", "2", "3", "4", "5"), "1")
             except Cancelled:
                 return
             try:
@@ -222,6 +245,8 @@ def main():
                     browse()
                 elif selection == "3":
                     run_foreground(["make", "-C", str(cli.SIMULATION.parent / "Monitor"), "build"])
+                elif selection == "5":
+                    run_foreground(["make", "benchmark-build"])
                 else:
                     print("\nRecord a running buoy scenario while driving with teleop or QGroundControl.\n"
                           "Browse saved runs to inspect their quality, replay, or open replay with RViz.\n"

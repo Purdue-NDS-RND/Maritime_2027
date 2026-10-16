@@ -110,6 +110,16 @@ class MenuTests(unittest.TestCase):
                          "label=com.docker.compose.project=maritime-recording-view-test")
         self.assertEqual(stop.call_args.args[0], ["docker", "stop", "--timeout", "5", "viewer-container"])
 
+    def test_benchmark_selects_method_rate_and_isolated_domain(self):
+        path = self.dataset()
+        with patch("builtins.input", side_effect=["2", "0.5", "0", "98"]), \
+                patch.object(menu, "run_foreground", return_value=0) as run, \
+                contextlib.redirect_stdout(io.StringIO()):
+            menu.benchmark(path)
+        args = run.call_args.args[0]
+        self.assertEqual(args[-8:], ["--recording", "gate-pass", "--method", "triangulation",
+                                     "--rate", "0.5", "--domain", "98"])
+
 
 class EntryPointTests(unittest.TestCase):
     def environment(self):

@@ -11,14 +11,15 @@ diagnostic is intentionally warning-level, publishes no vehicle commands, and
 reports mission readiness false.
 
 `maritime_perception` adds an explicitly launched RGB-to-ArUco-box detector.
-`maritime_localization` contains interfaces for future depth and RGB
-triangulation methods; neither positioning method is implemented. These packages
+`maritime_localization` supplies a shared ROS wrapper and launch file for depth
+and RGB triangulation methods; both algorithms remain unimplemented.
+`maritime_interfaces` defines the shared XY position/status output. These packages
 have no simulator, truth, or vehicle-transport dependency. The detector is not
 added to the default simulation startup. See the
 [benchmark development guide](../Simulation/docs/BUOY_BENCHMARKS.md) for build,
-replay, and offline processing commands.
+ROS replay benchmarks, live-topic launching, and optional offline inspection.
 
-Run it only through the Simulation profile:
+Run the default bootstrap only through the Simulation profile:
 
 ```bash
 cd ../Simulation

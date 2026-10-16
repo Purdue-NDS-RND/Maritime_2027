@@ -8,5 +8,15 @@
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>maritime_perception</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>maritime_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
   <export><build_type>ament_python</build_type></export>
 </package>

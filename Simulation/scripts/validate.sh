@@ -24,6 +24,7 @@ python_sources=(
     ../autonomy/ros_ws/src/maritime_perception/maritime_perception/*.py
     ../autonomy/ros_ws/src/maritime_localization/setup.py
     ../autonomy/ros_ws/src/maritime_localization/maritime_localization/*.py
+    ../autonomy/ros_ws/src/maritime_localization/launch/*.py
     tests/evaluation/benchmarking/*.py
     ../tests/*.py
 )

@@ -7,6 +7,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/maritime_localization"]),
         ("share/maritime_localization", ["package.xml"]),
+        ("share/maritime_localization/launch", ["launch/pipeline.launch.py"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -14,4 +15,5 @@ setup(
     maintainer_email="maintainer@example.com",
     description="Buoy positioning interfaces; algorithms are not implemented",
     license="Apache-2.0",
+    entry_points={"console_scripts": ["buoy_localizer = maritime_localization.node:main"]},
 )

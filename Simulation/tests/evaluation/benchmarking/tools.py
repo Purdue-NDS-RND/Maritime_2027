@@ -1,4 +1,4 @@
-"""Host entry points for detector development and offline benchmark preparation."""
+"""Launch ROS replay benchmarks, development tools, or offline box inspection."""
 
 import argparse
 from datetime import datetime, timezone
@@ -47,10 +47,11 @@ def foreground(command):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("build", "test", "detect", "run"))
+    parser.add_argument("command", choices=("build", "test", "detect", "run", "offline"))
     parser.add_argument("--recording", default=os.environ.get("RECORDING"))
-    parser.add_argument("--method", choices=("detections", "depth", "triangulation"),
-                        default=os.environ.get("METHOD") or "detections")
+    parser.add_argument("--method", choices=("depth", "triangulation"),
+                        default=os.environ.get("METHOD") or "depth")
+    parser.add_argument("--rate", type=float, default=os.environ.get("RATE") or 1.0)
     parser.add_argument("--domain", type=int, default=os.environ.get("REPLAY_DOMAIN_ID") or 97)
     parser.add_argument("--name", help="Unique output directory name; generated when omitted")
     args = parser.parse_args()
@@ -70,18 +71,18 @@ def main():
                 "--entrypoint", "bash", IMAGE, "-c",
                 'source /etc/maritime_autonomy_setup.bash && python3 -m unittest discover -s /opt/benchmark -p "test_*.py" -v',
             ]))
-        if args.method != "detections":
-            raise ValueError(f"{args.method} positioning is not implemented; use METHOD=detections")
         dataset, metadata = recording(args.recording)
+        if not 0 < args.rate < float("inf"):
+            raise ValueError("RATE must be finite and positive")
+        if args.command != "offline" and (not 0 <= args.domain <= 232 or args.domain == metadata["capture_domain"]):
+            raise ValueError("Choose a domain from 0 to 232 different from the live capture domain")
         command = ["docker", "run", "--rm", "--init", "--user", f"{os.getuid()}:{os.getgid()}",
-                   "-e", "PYTHONDONTWRITEBYTECODE=1"]
+                   "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "MPLCONFIGDIR=/tmp/matplotlib"]
         # Source mounts let Python edits take effect without rebuilding images.
         for package in ("maritime_perception", "maritime_localization"):
             source = ROOT / "autonomy/ros_ws/src" / package
             command += ["-v", f"{source}:/opt/autonomy_ws/src/{package}:ro"]
         if args.command == "detect":
-            if not 0 <= args.domain <= 232 or args.domain == metadata["capture_domain"]:
-                raise ValueError("Choose a domain from 0 to 232 different from the live capture domain")
             command += ["--network", "host", "--ipc", "host",
                         "-e", f"ROS_DOMAIN_ID={args.domain}",
                         "-e", "FASTRTPS_DEFAULT_PROFILES_FILE=/dataset/transport.xml",
@@ -95,7 +96,8 @@ def main():
                         "-r image:=/sensors/camera_0/color/image_raw "
                         "-p use_sim_time:=true -p publish_debug_image:=true"]
             raise SystemExit(foreground(command))
-        name = safe_name(args.name or datetime.now(timezone.utc).strftime("detections-%Y%m%dT%H%M%S%fZ"))
+        prefix = "detections" if args.command == "offline" else args.method
+        name = safe_name(args.name or prefix + datetime.now(timezone.utc).strftime("-%Y%m%dT%H%M%S%fZ"))
         parent = SIMULATION / "logs/benchmarks" / dataset.name
         if parent.is_symlink():
             raise ValueError("Benchmark output parent must not be a symbolic link")
@@ -103,10 +105,18 @@ def main():
         if destination.exists() or destination.is_symlink():
             raise ValueError("Benchmark output already exists; choose a new name")
         parent.mkdir(parents=True, exist_ok=True)
-        command += ["--network", "none", "-v", f"{dataset}:/dataset:ro",
-                    "-v", f"{parent}:/results", "-v", f"{TOOLS}:/opt/benchmark:ro", IMAGE,
-                    "--dataset", "/dataset", "--output", f"/results/{name}",
-                    "--config", "/opt/autonomy_ws/src/maritime_perception/config/aruco.yaml"]
+        command += ["-v", f"{dataset}:/dataset:ro", "-v", f"{parent}:/results",
+                    "-v", f"{TOOLS}:/opt/benchmark:ro"]
+        if args.command == "offline":
+            command += ["--network", "none", "--entrypoint", "bash", IMAGE, "-c",
+                        "source /etc/maritime_autonomy_setup.bash && exec python3 /opt/benchmark/runner.py "
+                        '"$@"', "--", "--dataset", "/dataset", "--output", f"/results/{name}",
+                        "--config", "/opt/autonomy_ws/src/maritime_perception/config/aruco.yaml"]
+        else:
+            command += ["--network", "host", "--ipc", "host", "-e", f"ROS_DOMAIN_ID={args.domain}",
+                        "-e", "FASTRTPS_DEFAULT_PROFILES_FILE=/dataset/transport.xml", IMAGE,
+                        "--dataset", "/dataset", "--output", f"/results/{name}",
+                        "--method", args.method, "--rate", str(args.rate)]
         # Resolve the exact local image before launch; record revision including dirty state.
         provenance = {
             "image_id": subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", IMAGE], text=True).strip(),
@@ -114,8 +124,9 @@ def main():
             "repository_dirty": bool(subprocess.check_output(["git", "-C", str(ROOT), "status", "--porcelain"], text=True)),
             "source_sha256": {
                 str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-                for base in (PERCEPTION, ROOT / "autonomy/ros_ws/src/maritime_localization", TOOLS)
-                for path in sorted(base.rglob("*")) if path.suffix in (".py", ".yaml")
+                for base in (PERCEPTION, ROOT / "autonomy/ros_ws/src/maritime_localization",
+                             ROOT / "autonomy/ros_ws/src/maritime_interfaces", TOOLS)
+                for path in sorted(base.rglob("*")) if path.suffix in (".py", ".yaml", ".msg", ".xml", ".txt")
             },
         }
         result = foreground(command)

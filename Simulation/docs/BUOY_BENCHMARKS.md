@@ -1,9 +1,10 @@
 # Develop buoy positioning methods from a recording
 
-The working stage detects **2D ArUco marker bounding boxes**. Depth positioning
-and temporal RGB triangulation have interfaces only; selecting either method
-fails with an explicit "not implemented" error. Localization accuracy scoring
-is deferred.
+Benchmarking plays the input bag through the same ROS detector and localization
+nodes intended for live operation, then records their output in a separate bag.
+The detector produces **2D ArUco marker bounding boxes**. The depth and RGB
+triangulation algorithms remain placeholders: they publish `not_implemented`
+status with no invented coordinates. Localization accuracy scoring is deferred.
 
 Run these commands from `Simulation/`. Names are case-sensitive: the current
 user recording is `Sample_1`.
@@ -26,10 +27,51 @@ pending images, and an actual MCAP recording. Pose APIs are blocked during a
 detection test. A bag containing an unknown truth-message type verifies that
 the offline runner does not deserialize truth messages.
 
-## Process a recording offline
+## Run a ROS benchmark
 
 ```bash
-make benchmark RECORDING=Sample_1
+make benchmark RECORDING=Sample_1 METHOD=depth
+make benchmark RECORDING=Sample_1 METHOD=triangulation
+```
+
+Each command starts the detector, selected localizer, and output recorder;
+waits for their subscriptions; plays the recording once; drains pending outputs;
+then stops its own processes and exports the results. Normal playback speed is
+1. Use `RATE=0.5` to slow it down or `REPLAY_DOMAIN_ID=98` to select another
+isolated ROS domain. Stop with Ctrl-C to preserve a partial result and an
+`interrupted` report. The source recording is mounted read-only.
+
+You can also use `make record`: select **Browse recordings**, choose `Sample_1`,
+then **Run ROS localization benchmark**. The main menu has a benchmark-tools
+build action as well.
+
+Each run creates `logs/benchmarks/Sample_1/<method>-<UTC time>/` containing:
+
+| File | Contents |
+| --- | --- |
+| `bag/` | Recorded detection arrays and `/localization/buoys` updates |
+| `estimates.csv` | Source timestamp, frame, method, category, track ID, x/y metres, input pose/depth timestamps |
+| `scatter.png` | XY scatter plot, created only when estimates exist |
+| `report.json`, `summary.json` | Pipeline completion, method status, input/output counts, assumptions |
+| `detector.yaml`, `provenance.json` | Configuration, Git revision/dirty state, image ID, source hashes |
+| `source-dataset.json`, `source-quality.json` | Original recording identity and quality |
+| `nodes.log`, `player.log`, `recorder.log` | Runtime evidence and errors |
+
+For both placeholders, expect a result bag containing real detection/status
+messages, a CSV with its header only, and no scatter plot. A `complete` pipeline
+report means the launch/play/record/export path worked. It does **not** mean a
+positioning algorithm or its accuracy has been validated. Runs never overwrite
+prior results.
+
+The result recorder is ready before playback. The supervisor briefly publishes
+the recording's initial clock value during setup, then the player owns `/clock`.
+Only RGB, calibration, vessel odometry, mounting transforms, and (for the depth
+method) depth are played. No simulator truth is supplied to algorithm nodes.
+
+## Optional direct offline detection
+
+```bash
+make benchmark-offline RECORDING=Sample_1
 ```
 
 This reads every saved RGB image sequentially, without playback or Gazebo.
@@ -58,6 +100,22 @@ run retains an incomplete report. Reported detector timings exclude image
 conversion and bag I/O. Counts are not precision, recall, or position accuracy.
 
 ## Run the ROS detector against replay
+
+For manual development of the full pipeline, use the shared launch file inside
+a sourced ROS workspace or autonomy image:
+
+```bash
+ros2 launch maritime_localization pipeline.launch.py method:=depth use_sim_time:=true
+```
+
+Start bag playback separately on the same domain. For live topics, launch the
+**same file and nodes** with `use_sim_time:=false`. `pose_topic` defaults to
+`/mavros/local_position/odom`; `camera` defaults to `camera_0`. Live input
+transport/configuration must match the deployed Adapter. No simulator or bag
+reader is part of either algorithm node. The default simulation service still
+runs its original bootstrap; this launch is explicit.
+
+To inspect only the detector, without the localization wrapper:
 
 In terminal one:
 
@@ -104,27 +162,44 @@ confidence. No PnP, known-size marker range, or ArUco pose estimation is used.
 | --- | --- |
 | `autonomy/ros_ws/src/maritime_perception/` | Shared box detector, ROS wrapper, message conversion, parameter YAML |
 | `autonomy/ros_ws/src/maritime_localization/` | Observation/estimate data classes and two method skeletons |
+| `autonomy/ros_ws/src/maritime_interfaces/` | Common XY output messages for live and replay nodes |
 | `Simulation/tests/evaluation/benchmarking/` | Host launcher, offline runner, tests, replay comparison probe |
 
 Edit `maritime_perception/config/aruco.yaml` for the dictionary/category mapping.
 Supported categories are white, red, green, and blue; default IDs are 0–3.
 Restart the detector after configuration changes. Python sources/configuration
 are mounted from the checkout, so edits take effect on the next invocation.
-New dependencies or entry points require `make benchmark-build`.
+New dependencies, entry points, or message definitions require `make benchmark-build`.
 
 Methods are ordinary Python classes with `reset()` and
-`process(Observation) -> list[PositionEstimate]`. Observations describe boxes,
-image time/frame, calibration, optional registered depth, and optional camera
-pose in a named reference frame. The triangulation entry point rejects depth.
-There is no plugin registration framework. Start in `depth.py` or
-`triangulation.py` and extend the runner when implementing the method.
+`process(Observation) -> list[PositionEstimate]`. Implement `depth.py` or
+`triangulation.py`, then set its `implemented` flag to true. The ROS wrapper
+assembles observations and publishes the returned finite XY points in `map`.
+There is no separate benchmark implementation of the method. The triangulation
+node does not subscribe to depth and its method entry point also rejects depth.
 
-Before enabling methods, add exact RGB/depth matching and validated calibration
-to input assembly. Vessel-pose use also requires validated time correspondence
-and transforms. Camera headers currently use simulation time and MAVROS headers
-use Unix time; `use_sim_time` does not align them. Triangulation needs camera
-motion and cross-frame association. Estimating motion solely from RGB would
-require visual odometry. The current runner assembles detection inputs only.
+Current agreed assumptions:
+
+- Output points use the MAVROS local `map` frame, in metres. Pose position **and
+  orientation** come from `/mavros/local_position/odom`; the camera mounting
+  transform is composed with that pose. No truth-derived pose is used.
+- Inputs use their latest received values. There is no timestamp matching,
+  interpolation, or clock conversion. Original image, pose, and depth stamps
+  are retained. Camera simulation time and MAVROS Unix time remain different.
+- The 2D box center approximates the buoy center. Algorithms receive no ArUco
+  corners, physical marker size, or ArUco pose solution.
+- Replay normally runs at 1x. Delivered/processed/output counts are reported;
+  a repeated run is not promised to process an identical subset of images.
+- `map` and simulator truth coordinates appear close in `Sample_1`, but exact
+  alignment remains provisional. No position-accuracy score is computed yet.
+
+`/localization/buoys` is `maritime_interfaces/msg/BuoyEstimateArray`. Its header
+uses the source observation time and output coordinate frame. Each point has
+category, optional physical track ID, and x/y in metres. Array status is `ok`,
+`not_implemented`, `waiting_for_inputs`, or `error`; `inputs_ready` distinguishes
+successful input assembly from missing inputs. A marker category is never used
+as a physical track ID. An empty successful observation differs from an
+unimplemented method. Run state is reset by launching fresh nodes for each bag.
 
 Future scoring belongs in this simulation evaluator and may read recorded
 truth. Detectors and positioning methods must never consume truth. Distinguish
@@ -147,3 +222,11 @@ This is delivery/processing evidence, not detection accuracy.
 
 `replay_probe.py` compares ROS outputs with saved offline `detections.jsonl`
 at source timestamps, reporting frame counts separately from disagreements.
+
+The shared ROS localization pipeline was also exercised on `Sample_1`: the
+depth placeholder saved 754 detection/localization arrays (737 with assembled
+inputs), and triangulation saved 753 arrays (737 with assembled inputs), with
+no depth replay for triangulation. Every update reported `not_implemented`;
+both result bags finalized with zero coordinates. An interrupted run retained
+238 partial updates, exported its CSV, and recorded `interrupted` status. All
+temporary nodes, recorders, and players stopped cleanly.

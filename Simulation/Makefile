@@ -15,7 +15,7 @@ replay:
 	python3 recordings/recordings.py replay
 
 export METHOD
-.PHONY: benchmark-build benchmark-test detect benchmark
+.PHONY: benchmark-build benchmark-test detect benchmark benchmark-offline
 
 benchmark-build:
 	@python3 tests/evaluation/benchmarking/tools.py build
@@ -28,6 +28,9 @@ detect:
 
 benchmark:
 	@python3 tests/evaluation/benchmarking/tools.py run
+
+benchmark-offline:
+	@python3 tests/evaluation/benchmarking/tools.py offline
 
 run:
 	@./scripts/run.sh

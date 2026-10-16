@@ -8,6 +8,8 @@ RUN apt-get update \
         python3-opencv \
         ros-jazzy-cv-bridge \
         ros-jazzy-vision-msgs \
+        ros-jazzy-tf2-ros-py \
+        ros-jazzy-rosidl-default-generators \
     && python3 -c "import cv2; assert hasattr(cv2.aruco, 'detectMarkers')" \
     && rm -rf /var/lib/apt/lists/*
 

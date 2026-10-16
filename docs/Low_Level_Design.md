@@ -63,11 +63,14 @@ Implementation status: the explicitly launched 2D detector now lives in
 axis-aligned marker boxes and category labels; marker corners are discarded.
 No ArUco/PnP pose or known-size range estimation is implemented. The optional
 debug image labels recognized categories only. The default autonomy service
-still runs its bootstrap placeholder. An offline runner and two unimplemented
-positioning entry points are described in the
-[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). Launch integration,
-positioning, association, and scoring remain future work. The draft sections
-below describe the wider target design.
+still runs its bootstrap placeholder. A shared ROS detector/localizer launch,
+XY output messages, and replay/result-recording tools are described in the
+[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). The localizer currently
+assembles the latest received state/calibration/depth with no timestamp
+synchronization, and uses MAVROS `map` coordinates. The two positioning methods,
+association, and accuracy scoring remain unimplemented. Box centers approximate
+buoy centers. The draft sections below describe the wider target design,
+including stronger timing requirements deferred from this initial scaffold.
 
 Draft: place the detector in `autonomy/ros_ws/src/maritime_perception`, with
 launch integration in `maritime_bringup`. Use OpenCV for ArUco detection,

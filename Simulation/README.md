@@ -26,7 +26,7 @@ mechanisms, or a digital twin of the competition LPV.
 
 ## What starts
 
-For explicit ArUco box detection and offline processing of recordings, see
+For ROS replay through ArUco detection/localization nodes and saved results, see
 [Buoy benchmark development](docs/BUOY_BENCHMARKS.md). Depth and triangulation
 positioning are not implemented yet.
 
