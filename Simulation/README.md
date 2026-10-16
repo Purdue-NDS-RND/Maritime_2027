@@ -27,8 +27,8 @@ mechanisms, or a digital twin of the competition LPV.
 ## What starts
 
 For ROS replay through ArUco detection/localization nodes and saved results, see
-[Buoy benchmark development](docs/BUOY_BENCHMARKS.md). Depth and triangulation
-positioning are not implemented yet.
+[Buoy benchmark development](docs/BUOY_BENCHMARKS.md). Depth and temporal RGB triangulation
+produce map XY estimates through the same nodes used for live topics.
 
 - **Gazebo Harmonic** opens `blueboat_waves.sdf` and displays BlueBoat on an
   8 cm regular wave.

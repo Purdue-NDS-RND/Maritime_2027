@@ -1,10 +1,13 @@
 """A complete ROS launch/play/record/export pass using a small synthetic bag."""
 
+import csv
 import json
 from pathlib import Path
+import statistics
 import tempfile
 import unittest
 
+import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
@@ -50,6 +53,11 @@ def fixture(dataset):
     writer.write("/tf_static", serialize_message(static), 10_000_000_000)
     for index in range(20):
         stamp = 10_000_000_000 + index * 100_000_000
+        # A fixed target seen from translated cameras, with matching RGB/depth/pose.
+        image = bridge.cv2_to_imgmsg(cv2.warpAffine(scene(), np.float32([[1, 0, 4*index], [0, 1, 0]]),
+                                                   (420, 180), borderValue=(255, 255, 255)), encoding="bgr8")
+        image.header.frame_id = "camera_optical"
+        pose.pose.pose.position.x = index * -0.1
         for topic, message in ((pipeline.POSE, pose), (pipeline.INFO, info),
                                (pipeline.DEPTH, depth), (pipeline.IMAGE, image)):
             message.header.stamp.sec = 10 + index // 10
@@ -59,24 +67,36 @@ def fixture(dataset):
 
 
 class PipelineTests(unittest.TestCase):
-    def test_placeholder_ros_pipeline_records_statuses_and_empty_csv(self):
+    def check_method(self, method):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture(root / "dataset")
             result = root / "result"
             try:
-                report = pipeline.run(root / "dataset", result, "depth", 1.)
+                report = pipeline.run(root / "dataset", result, method, 1.)
             except Exception:
                 for log in sorted(result.glob("*.log")):
                     print(f"{log.name}:\n{log.read_text()}")
                 raise
             self.assertEqual(report["status"], "complete")
             self.assertGreater(report["inputs_ready_arrays"], 0)
-            self.assertEqual(report["estimates"], 0)
-            self.assertEqual(set(report["localization_statuses"]), {"not_implemented"})
-            self.assertEqual(len((result / "estimates.csv").read_text().splitlines()), 1)
-            self.assertFalse((result / "scatter.png").exists())
+            self.assertGreater(report["estimates"], 0)
+            self.assertIn("ok", report["localization_statuses"])
+            self.assertNotIn("error", report["localization_statuses"])
+            self.assertGreater(len((result / "estimates.csv").read_text().splitlines()), 1)
+            self.assertTrue((result / "scatter.png").exists())
+            with (result / "estimates.csv").open() as stream:
+                rows = list(csv.DictReader(stream))
+            # Latest-pose delivery may shift a sample by one 0.1 m vessel step.
+            self.assertAlmostEqual(statistics.median(float(row["x_m"]) for row in rows), -3.2625, delta=.25)
+            self.assertAlmostEqual(statistics.median(float(row["y_m"]) for row in rows), -.0125, delta=.05)
             self.assertTrue((result / "bag/metadata.yaml").is_file())
+
+    def test_depth_ros_pipeline_exports_points(self):
+        self.check_method("depth")
+
+    def test_rgb_triangulation_ros_pipeline_exports_points(self):
+        self.check_method("triangulation")
 
 
 if __name__ == "__main__":

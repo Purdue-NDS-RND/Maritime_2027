@@ -2,12 +2,13 @@
 <package format="3">
   <name>maritime_localization</name>
   <version>0.1.0</version>
-  <description>Buoy positioning interfaces; algorithms are not implemented.</description>
+  <description>Depth and temporal RGB buoy positioning.</description>
   <maintainer email="maintainer@example.com">Maritime 2027</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>maritime_perception</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
   <exec_depend>maritime_interfaces</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>nav_msgs</exec_depend>

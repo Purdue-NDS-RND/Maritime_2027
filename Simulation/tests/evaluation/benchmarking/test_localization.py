@@ -85,16 +85,18 @@ class LocalizationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "frame"):
             self.localizer.observation(self.message)
 
-    def test_placeholder_publishes_explicit_status_without_fabricating_points(self):
+    def test_depth_publishes_real_xy_with_original_headers(self):
         self.start("depth")
         # Record the actual message passed to ROS publication without transport timing.
         published = []
         self.localizer.publisher.publish = published.append
         self.localizer.receive(self.message)
         output, = published
-        self.assertEqual(output.status, "not_implemented")
+        self.assertEqual(output.status, "ok")
         self.assertTrue(output.inputs_ready)
-        self.assertEqual(output.estimates, [])
+        self.assertEqual(len(output.estimates), 1)
+        np.testing.assert_allclose([output.estimates[0].x, output.estimates[0].y],
+                                   [10.0125, 17.7375], atol=1e-6)
         self.assertEqual(output.header.stamp, self.message.header.stamp)
         self.assertEqual(output.header.frame_id, "map")
         self.assertEqual(output.vessel_pose_stamp.sec, 1_790_000_000)

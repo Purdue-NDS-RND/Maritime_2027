@@ -32,7 +32,7 @@ For the detector/localization workflow, use the selected recording's **Run ROS
 localization benchmark** action (build benchmark tools from the main menu
 first). It launches playback, the shared ROS nodes, and output recording.
 See [Buoy benchmark development](BUOY_BENCHMARKS.md) for output files and the
-current unimplemented positioning methods.
+depth and temporal RGB triangulation positioning methods.
 
 The menu was verified in a real terminal with a live capture, saved quality
 inspection, and replay with automatic RViz cleanup. The focused menu tests

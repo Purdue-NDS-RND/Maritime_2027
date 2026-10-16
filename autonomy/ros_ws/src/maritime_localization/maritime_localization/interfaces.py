@@ -1,4 +1,4 @@
-"""Shared input/output for future methods, independent of ROS and simulation."""
+"""Shared input/output for positioning methods, independent of ROS and simulation."""
 
 from dataclasses import dataclass
 

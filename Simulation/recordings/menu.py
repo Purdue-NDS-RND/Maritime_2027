@@ -182,7 +182,7 @@ def benchmark(path):
     if json.loads((path / "dataset.json").read_text())["status"] != "complete":
         print("\nThis recording is incomplete. Inspect its details first.")
         return
-    print("\nPositioning methods are placeholders: this verifies the ROS pipeline and saves outputs.")
+    print("\nRuns the selected positioning method and saves map XY estimates, CSV, and scatter plot.")
     method = choose("Method [1: depth, 2: RGB triangulation]: ", ("1", "2"), "1")
     rate = ask("Playback speed [1]: ", "1", cli.positive_number)
     capture = json.loads((path / "dataset.json").read_text())["capture_domain"]

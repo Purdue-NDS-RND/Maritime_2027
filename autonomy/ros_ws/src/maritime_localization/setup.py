@@ -13,7 +13,7 @@ setup(
     zip_safe=True,
     maintainer="Maritime 2027",
     maintainer_email="maintainer@example.com",
-    description="Buoy positioning interfaces; algorithms are not implemented",
+    description="Depth and temporal RGB buoy positioning",
     license="Apache-2.0",
     entry_points={"console_scripts": ["buoy_localizer = maritime_localization.node:main"]},
 )

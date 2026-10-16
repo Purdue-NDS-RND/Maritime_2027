@@ -1,5 +1,6 @@
 """ROS input/output wrapper. Algorithms consume ordinary Python observations."""
 
+from dataclasses import asdict
 import math
 import sys
 
@@ -16,9 +17,9 @@ from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros import Buffer, TransformException, TransformListener
 from vision_msgs.msg import Detection2DArray
 
-from maritime_localization.depth import DepthLocalizer
+from maritime_localization.depth import DepthLocalizer, DepthSettings
 from maritime_localization.interfaces import Observation
-from maritime_localization.triangulation import TriangulationLocalizer
+from maritime_localization.triangulation import TriangulationLocalizer, TriangulationSettings
 from maritime_perception.aruco import BoundingBox
 
 
@@ -47,7 +48,11 @@ class BuoyLocalizerNode(Node):
         methods = {"depth": DepthLocalizer, "triangulation": TriangulationLocalizer}
         if self.method_name not in methods:
             raise ValueError("method must be depth or triangulation")
-        self.method = methods[self.method_name]()
+        settings_type = DepthSettings if self.method_name == "depth" else TriangulationSettings
+        settings = settings_type(**{
+            name: self.declare_parameter(f"{self.method_name}.{name}", default).value
+            for name, default in asdict(settings_type()).items()})
+        self.method = methods[self.method_name](settings)
         self.method.reset()
         self.reference_frame = self.declare_parameter("reference_frame", "map").value
         self.body_frame = self.declare_parameter("body_frame", "base_link").value
@@ -66,7 +71,7 @@ class BuoyLocalizerNode(Node):
             self.subscriptions_owned.append(self.create_subscription(
                 Image, "depth", self.receive_depth, qos_profile_sensor_data))
         self.get_logger().info(f"method={self.method_name}; latest received inputs, no timestamp synchronization; "
-                               f"output frame={self.reference_frame}; algorithm implemented={self.method.implemented}")
+                               f"output frame={self.reference_frame}; parameters={asdict(settings)}")
 
     def receive_pose(self, message):
         self.pose = message

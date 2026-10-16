@@ -2,9 +2,8 @@
 
 Benchmarking plays the input bag through the same ROS detector and localization
 nodes intended for live operation, then records their output in a separate bag.
-The detector produces **2D ArUco marker bounding boxes**. The depth and RGB
-triangulation algorithms remain placeholders: they publish `not_implemented`
-status with no invented coordinates. Localization accuracy scoring is deferred.
+The detector produces **2D ArUco marker bounding boxes**. Both depth and temporal RGB triangulation produce buoy XY estimates in the
+MAVROS local `map` frame. Localization accuracy scoring is deferred.
 
 Run these commands from `Simulation/`. Names are case-sensitive: the current
 user recording is `Sample_1`.
@@ -57,11 +56,10 @@ Each run creates `logs/benchmarks/Sample_1/<method>-<UTC time>/` containing:
 | `source-dataset.json`, `source-quality.json` | Original recording identity and quality |
 | `nodes.log`, `player.log`, `recorder.log` | Runtime evidence and errors |
 
-For both placeholders, expect a result bag containing real detection/status
-messages, a CSV with its header only, and no scatter plot. A `complete` pipeline
-report means the launch/play/record/export path worked. It does **not** mean a
-positioning algorithm or its accuracy has been validated. Runs never overwrite
-prior results.
+A successful observation has status `ok`; it may contain zero points when no
+usable depth or triangulation geometry exists. A CSV and scatter plot contain
+only accepted estimates. `complete` means launch/play/record/export succeeded;
+it does **not** establish position accuracy. Runs never overwrite prior results.
 
 The result recorder is ready before playback. The supervisor briefly publishes
 the recording's initial clock value during setup, then the player owns `/clock`.
@@ -161,7 +159,7 @@ confidence. No PnP, known-size marker range, or ArUco pose estimation is used.
 | Location | Responsibility |
 | --- | --- |
 | `autonomy/ros_ws/src/maritime_perception/` | Shared box detector, ROS wrapper, message conversion, parameter YAML |
-| `autonomy/ros_ws/src/maritime_localization/` | Observation/estimate data classes and two method skeletons |
+| `autonomy/ros_ws/src/maritime_localization/` | Shared geometry, depth positioning, temporal RGB tracking/triangulation, ROS wrapper |
 | `autonomy/ros_ws/src/maritime_interfaces/` | Common XY output messages for live and replay nodes |
 | `Simulation/tests/evaluation/benchmarking/` | Host launcher, offline runner, tests, replay comparison probe |
 
@@ -172,11 +170,60 @@ are mounted from the checkout, so edits take effect on the next invocation.
 New dependencies, entry points, or message definitions require `make benchmark-build`.
 
 Methods are ordinary Python classes with `reset()` and
-`process(Observation) -> list[PositionEstimate]`. Implement `depth.py` or
-`triangulation.py`, then set its `implemented` flag to true. The ROS wrapper
+`process(Observation) -> list[PositionEstimate]`. The implementations are in `depth.py` and
+`triangulation.py`. The ROS wrapper
 assembles observations and publishes the returned finite XY points in `map`.
 There is no separate benchmark implementation of the method. The triangulation
 node does not subscribe to depth and its method entry point also rejects depth.
+
+## Positioning methods
+
+**Depth:** sample the central quarter of each box's width and height. Ignore
+nonfinite, zero, negative, or out-of-range depth. Require at least three valid
+pixels and 50% valid coverage, and reject patches whose 90th-to-10th percentile
+spread exceeds 0.5 m. Take the median optical-Z depth, undistort the box center,
+back-project through camera intrinsics, and apply camera-to-`map` mounting and
+vessel pose. Depth is optical Z, not radial range. Supported distortion models
+are `plumb_bob`, `rational_polynomial`, and `equidistant`.
+
+Depth outputs independent measurements with empty track IDs. It does not smooth
+points, merge repeated categories, or infer a hidden buoy center from the visible
+marker surface. The saved scatter therefore shows measurement spread.
+
+**RGB triangulation:** assume stationary targets. Associate categories using
+rotation-compensated world bearings, then predicted bearings once a track has a
+3D point. Matches must be mutual nearest neighbors with a 0.5 degree margin;
+ambiguous matches are skipped. Identical marker IDs never identify a track.
+Keep spatial keyframes every 0.15 m, at most 40 per track. Fit a 3D point by
+minimizing squared perpendicular distance to viewing rays and export its XY.
+Require at least three distinct camera positions, 1 m baseline, and 5 degrees
+parallax from the same pair,
+well-conditioned geometry, forward intersections, and at most 1 degree
+angular residual in every view. Accepted ranges are 0.2–80 m for both methods.
+Pure rotation and travel directly toward a target cannot provide useful range.
+
+Tracks expire after three seconds on the source image clock; capacity is 128.
+IDs are local to a run and can change after occlusion or ambiguous association.
+A camera/reference frame change or backwards image clock clears history.
+These are simple baseline association rules: nearby same-color buoys, abrupt
+view changes, moving buoys, and noisy vessel poses can cause missed or incorrect
+matches. Triangulation estimates refer to the observed box-center target; moving
+marker faces can violate the stationary-point approximation.
+
+Defaults live in the small `DepthSettings` and `TriangulationSettings` dataclasses.
+They are also ROS parameters named `depth.<setting>` or
+`triangulation.<setting>` on `buoy_localizer`. The benchmark uses defaults and
+saves them as `algorithm_parameters` in `report.json`; source hashes capture
+local edits. For example, change `min_baseline_m` in `TriangulationSettings`,
+then rerun the benchmark; Python edits do not need a rebuild. Live `ros2 run`
+can override with `--ros-args -p method:=triangulation
+-p triangulation.min_baseline_m:=0.75` and the appropriate topic remappings.
+
+Synthetic tests recover known XY points with transformed cameras and lens
+distortion, keep repeated categories separate when detection order changes,
+and reject pure rotation, parallel/behind-camera rays, ambiguous matches,
+invalid depth, and mixed surfaces. Both methods are also exercised through
+real ROS launch/play/record/export with a moving-camera fixture.
 
 Current agreed assumptions:
 
@@ -223,10 +270,18 @@ This is delivery/processing evidence, not detection accuracy.
 `replay_probe.py` compares ROS outputs with saved offline `detections.jsonl`
 at source timestamps, reporting frame counts separately from disagreements.
 
-The shared ROS localization pipeline was also exercised on `Sample_1`: the
-depth placeholder saved 754 detection/localization arrays (737 with assembled
-inputs), and triangulation saved 753 arrays (737 with assembled inputs), with
-no depth replay for triangulation. Every update reported `not_implemented`;
-both result bags finalized with zero coordinates. An interrupted run retained
-238 partial updates, exported its CSV, and recorded `interrupted` status. All
-temporary nodes, recorders, and players stopped cleanly.
+The initial placeholder runs verified recording and interruption handling. Both
+methods are now implemented; current algorithm verification is described below.
+
+With the implemented methods, `Sample_1` produced 756 depth measurements and
+141 triangulated measurements in full-speed ROS runs. Both finalized result
+bags, CSVs, and scatter plots with no algorithm errors; initial updates waited
+for calibration/pose/TF. Frame counts can vary with asynchronous delivery.
+
+Depth medians were approximately red `(6.66, 1.35)` m and green `(6.64, -1.57)` m.
+Triangulation was visibly less stable and biased: medians in that run were red
+`(5.91, 1.03)` m and green `(4.81, -1.75)` m. The saved scenario layout places
+buoy model origins at `(7, 1.5)` and `(7, -1.5)` m, while the observed marker
+surfaces are offset and rotate. This is a sanity comparison, **not** an accuracy
+score: truth-frame alignment and camera/pose timing remain unvalidated. Do not
+interpret geometric acceptance gates as a guarantee of accurate localization.

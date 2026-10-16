@@ -1,6 +1,7 @@
 """Run ordinary ROS nodes against a bag and record their output topics."""
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
@@ -70,6 +71,7 @@ def run(dataset, destination, method, rate):
     report = dict(status="starting", method=method, recording=metadata["name"],
                   created_at=datetime.now(timezone.utc).isoformat(),
                   algorithm_implemented=(DepthLocalizer if method == "depth" else TriangulationLocalizer).implemented,
+                  algorithm_parameters=asdict((DepthLocalizer if method == "depth" else TriangulationLocalizer)().settings),
                   rate=rate, ros_domain=domain,
                   source_rgb_frames=topic_counts[IMAGE], input_topics=input_topics,
                   assumptions={"output_frame": "map", "pose_source": POSE,

@@ -67,8 +67,8 @@ still runs its bootstrap placeholder. A shared ROS detector/localizer launch,
 XY output messages, and replay/result-recording tools are described in the
 [benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). The localizer currently
 assembles the latest received state/calibration/depth with no timestamp
-synchronization, and uses MAVROS `map` coordinates. The two positioning methods,
-association, and accuracy scoring remain unimplemented. Box centers approximate
+synchronization, and uses MAVROS `map` coordinates. Depth positioning and temporal RGB triangulation with category/bearing
+association are implemented as baseline methods; accuracy scoring remains deferred. Box centers approximate
 buoy centers. The draft sections below describe the wider target design,
 including stronger timing requirements deferred from this initial scaffold.
 

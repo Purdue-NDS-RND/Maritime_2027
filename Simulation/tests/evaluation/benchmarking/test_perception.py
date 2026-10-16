@@ -15,9 +15,6 @@ from rclpy.serialization import serialize_message
 import rosbag2_py
 from std_msgs.msg import Header
 
-from maritime_localization.depth import DepthLocalizer
-from maritime_localization.interfaces import Observation
-from maritime_localization.triangulation import TriangulationLocalizer
 from maritime_perception.aruco import ArucoBoxDetector, BoundingBox, annotate
 from maritime_perception.messages import detection_array
 
@@ -108,18 +105,6 @@ class DetectorTests(unittest.TestCase):
             calls = [node.func.attr for node in ast.walk(tree)
                      if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
             self.assertFalse(forbidden.intersection(calls), path)
-
-
-class ExtensionTests(unittest.TestCase):
-    def test_unimplemented_methods_fail_explicitly_and_triangulation_rejects_depth(self):
-        observation = Observation(1, "camera", (), np.eye(3), ())
-        for method in (DepthLocalizer(), TriangulationLocalizer()):
-            self.assertFalse(method.implemented)
-            method.reset()
-            with self.assertRaises(NotImplementedError):
-                method.process(observation)
-        with self.assertRaises(ValueError):
-            TriangulationLocalizer().process(Observation(1, "camera", (), np.eye(3), (), np.ones((2, 2))))
 
 
 class OfflineTests(unittest.TestCase):

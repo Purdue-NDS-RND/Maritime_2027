@@ -43,7 +43,7 @@ def run(dataset, destination, config_path, image_topic, preview_every):
         "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
         "source_quality": json.loads((dataset / "quality.json").read_text()),
         "opencv_version": cv2.__version__,
-        "note": "2D marker boxes only. No localization or accuracy scoring is implemented.",
+        "note": "Detector-only run: 2D marker boxes, without localization or accuracy scoring.",
     }
     (destination / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     bridge = CvBridge()
@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--preview-every", type=int, default=30, help="Save an annotated frame every N frames; 0 disables")
     args = parser.parse_args()
     if args.method != "detections":
-        parser.error(f"{args.method} positioning is not implemented; use detections")
+        parser.error(f"Use make benchmark METHOD={args.method} for ROS positioning; this tool exports detections only")
     if args.preview_every < 0:
         parser.error("preview-every must be nonnegative")
     run(args.dataset, args.output, args.config, args.image_topic, args.preview_every)

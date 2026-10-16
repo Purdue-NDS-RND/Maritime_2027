@@ -12,7 +12,8 @@ reports mission readiness false.
 
 `maritime_perception` adds an explicitly launched RGB-to-ArUco-box detector.
 `maritime_localization` supplies a shared ROS wrapper and launch file for depth
-and RGB triangulation methods; both algorithms remain unimplemented.
+and temporal RGB triangulation methods. Both produce map XY estimates;
+triangulation waits for sufficient translation and parallax.
 `maritime_interfaces` defines the shared XY position/status output. These packages
 have no simulator, truth, or vehicle-transport dependency. The detector is not
 added to the default simulation startup. See the
