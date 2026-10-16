@@ -26,6 +26,10 @@ mechanisms, or a digital twin of the competition LPV.
 
 ## What starts
 
+For explicit ArUco box detection and offline processing of recordings, see
+[Buoy benchmark development](docs/BUOY_BENCHMARKS.md). Depth and triangulation
+positioning are not implemented yet.
+
 - **Gazebo Harmonic** opens `blueboat_waves.sdf` and displays BlueBoat on an
   8 cm regular wave.
 - **ASV Wave Sim** calculates the water surface, buoyancy, and hydrodynamics.

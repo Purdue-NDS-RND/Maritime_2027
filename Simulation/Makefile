@@ -14,6 +14,21 @@ recording-info:
 replay:
 	python3 recordings/recordings.py replay
 
+export METHOD
+.PHONY: benchmark-build benchmark-test detect benchmark
+
+benchmark-build:
+	@python3 tests/evaluation/benchmarking/tools.py build
+
+benchmark-test:
+	@python3 tests/evaluation/benchmarking/tools.py test
+
+detect:
+	@python3 tests/evaluation/benchmarking/tools.py detect
+
+benchmark:
+	@python3 tests/evaluation/benchmarking/tools.py run
+
 run:
 	@./scripts/run.sh
 

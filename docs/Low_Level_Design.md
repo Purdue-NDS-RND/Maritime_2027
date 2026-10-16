@@ -58,6 +58,17 @@ corresponding repository migration or runtime validation is already complete.
 
 ### Package Responsibilities and Dependencies
 
+Implementation status: the explicitly launched 2D detector now lives in
+`autonomy/ros_ws/src/maritime_perception`. The shared detector returns only
+axis-aligned marker boxes and category labels; marker corners are discarded.
+No ArUco/PnP pose or known-size range estimation is implemented. The optional
+debug image labels recognized categories only. The default autonomy service
+still runs its bootstrap placeholder. An offline runner and two unimplemented
+positioning entry points are described in the
+[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). Launch integration,
+positioning, association, and scoring remain future work. The draft sections
+below describe the wider target design.
+
 Draft: place the detector in `autonomy/ros_ws/src/maritime_perception`, with
 launch integration in `maritime_bringup`. Use OpenCV for ArUco detection,
 `cv_bridge` for image conversion, and the standard `sensor_msgs` and

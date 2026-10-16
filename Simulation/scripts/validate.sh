@@ -20,6 +20,11 @@ python_sources=(
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/blueboat_sim_bringup/*.py
     ../autonomy/ros_ws/src/maritime_bringup/setup.py
     ../autonomy/ros_ws/src/maritime_bringup/maritime_bringup/*.py
+    ../autonomy/ros_ws/src/maritime_perception/setup.py
+    ../autonomy/ros_ws/src/maritime_perception/maritime_perception/*.py
+    ../autonomy/ros_ws/src/maritime_localization/setup.py
+    ../autonomy/ros_ws/src/maritime_localization/maritime_localization/*.py
+    tests/evaluation/benchmarking/*.py
     ../tests/*.py
 )
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
