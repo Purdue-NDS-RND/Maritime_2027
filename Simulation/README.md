@@ -1,7 +1,7 @@
 # ArduPilot BlueBoat Docker Simulator
 
 [RGB-only persistent buoy mapping](docs/RGB_BUOY_MAPPING.md):
-`make benchmark RECORDING=your_run METHOD=rgb_mapping` (recovers recorded simulation/FCU clock differences automatically).
+`make benchmark RECORDING=your_run METHOD=bearing_ekf` (recovers recorded simulation/FCU clock differences automatically).
 
 Launch an autonomous surface boat simulation with one command:
 
@@ -32,8 +32,8 @@ mechanisms, or a digital twin of the competition LPV.
 ## What starts
 
 For ROS replay through ArUco detection/localization nodes and saved results, see
-[Buoy benchmark development](docs/BUOY_BENCHMARKS.md). Depth and temporal RGB triangulation
-produce map XY estimates through the same nodes used for live topics.
+[Buoy benchmark development](docs/BUOY_BENCHMARKS.md). Bearing EKF Buoy Mapping
+produces persistent XY tracks through the same mapper used for live topics.
 
 - **Gazebo Harmonic** opens `blueboat_waves.sdf` and displays BlueBoat on an
   8 cm regular wave.

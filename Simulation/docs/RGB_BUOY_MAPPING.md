@@ -1,4 +1,4 @@
-# RGB-only persistent buoy mapping
+# Bearing EKF Buoy Mapping
 
 This implements the bearing-only version of `Maritime_Buoy_Localization_Final_Report.pdf`:
 2D detections → calibrated world bearings → robust multi-view initialization →
@@ -14,14 +14,16 @@ From `Simulation/`:
 
 ```bash
 make benchmark-build
-make benchmark RECORDING=Sample_1 METHOD=rgb_mapping
+make benchmark RECORDING=Sample_1 METHOD=bearing_ekf
 ```
 
-RGB mapping is the default for `make benchmark` and the shared pipeline launch on
-this branch. The earlier methods require an explicit `METHOD`.
+Bearing EKF Buoy Mapping is the sole localization implementation. `bearing_ekf`
+is the default for `make benchmark` and the shared pipeline launch. See the
+[package README](../../autonomy/ros_ws/src/maritime_localization/README.md) for
+topic contracts, all parameters, file responsibilities, and EKF equations.
 
-Or run `make record`, browse a recording, select **Run ROS localization benchmark**,
-then **RGB persistent map**. The benchmark starts the same detector and mapper
+Or run `make record`, browse a recording, select **Run ROS localization benchmark**
+to run **Bearing EKF Buoy Mapping**. The benchmark starts the same detector and mapper
 used live, plays only RGB/calibration/odometry/static-TF inputs, records results,
 and exports them. A source bag with no depth topic is supported and tested.
 
@@ -51,7 +53,7 @@ assumption, not a measured latency guarantee.
 To disable recovery and require original acquisition stamps:
 
 ```bash
-make benchmark RECORDING=Sample_1 METHOD=rgb_mapping POSE_CLOCK=source
+make benchmark RECORDING=Sample_1 METHOD=bearing_ekf POSE_CLOCK=source
 ```
 
 That strict mode still rejects this recording's mismatched clocks. To force
@@ -65,13 +67,13 @@ operation still requires compatible source timestamps or a verified offset.
 For live topics, in an environment with the autonomy ROS workspace sourced:
 
 ```bash
-ros2 launch maritime_localization pipeline.launch.py method:=rgb_mapping
+ros2 launch maritime_localization pipeline.launch.py method:=bearing_ekf
 ```
 
 For two calibrated cameras:
 
 ```bash
-ros2 launch maritime_localization pipeline.launch.py method:=rgb_mapping \
+ros2 launch maritime_localization pipeline.launch.py method:=bearing_ekf \
   camera:=camera_0 second_camera:=camera_1
 ```
 
@@ -80,13 +82,13 @@ isolated domain. Do not start another player alongside `make benchmark`.
 Optional `pose_topic:=/state/odometry` selects a project relay instead of the
 current `/mavros/local_position/odom` default. Frame checks remain enforced.
 `mapper_parameters:=/absolute/path/config.yaml` supplies ROS parameters; an
-example is installed at `share/maritime_localization/config/rgb_mapping.yaml`.
-Every `MappingSettings` field is exposed as `rgb_mapping.<field>` on the mapper.
+example is installed at `share/maritime_localization/config/bearing_ekf.yaml`.
+Every `MappingSettings` field is exposed as `bearing_ekf.<field>` on the mapper.
 Benchmark runs use and record the defaults.
 
 ## Files you get
 
-`Simulation/logs/benchmarks/<recording>/rgb_mapping-<run>/` contains:
+`Simulation/logs/benchmarks/<recording>/bearing_ekf-<run>/` contains:
 
 | Artifact | Meaning |
 | --- | --- |
@@ -180,8 +182,8 @@ Shared runtime code lives in `autonomy/ros_ws/src/maritime_localization/`:
 - `geometry.py`: calibration and rigid transforms shared with the earlier methods.
 
 Replay/evaluation code stays under `Simulation/tests/evaluation/benchmarking/`.
-The earlier `depth` and `triangulation` baselines remain selectable for comparison;
-`rgb_mapping` never subscribes to, plays, reads or falls back to their depth input.
+The former depth and basic triangulation baselines have been removed. The
+mapper never subscribes to depth or falls back to a depth algorithm.
 
 The report's optional historical refinement, joint pose estimation, moving-target
 tracker and autonomous routing are not part of this RGB-only mapper. Physical
@@ -214,7 +216,14 @@ clock/origin reset, memory bounds, and covariance coverage on synthetic random
 noise. These establish software behavior in controlled data, not on-water accuracy
 or measured Jetson throughput. Simulator truth remains evaluation-only.
 
-The original mapper validation passed 70 benchmark tests, 34 installed-image mapper
+After the `bearing_ekf` rename and baseline removal (2026-10-17), the rebuilt
+images passed 58 benchmark tests, 5 live mapping/viewer tests and 11 recording-menu
+tests. Both no-depth ROS replays produced confirmed updates, including the
+recorded-reference clock-recovery case. The installed localization package
+exposes only `buoy_mapper`. Static validation passed with Gazebo SDF checks
+skipped when the simulator image was unavailable to that invocation.
+
+Before the baseline removal and rename, the original validation passed 70 benchmark tests, 34 installed-image mapper
 tests and 11 menu tests. Clock-recovery regression coverage additionally exercises
 large epochs, different clock rates, endpoints, missing references, clock resets,
 remote-clock drift rejection, strict source mode, and complete RGB replay with
@@ -222,7 +231,7 @@ synthetic different-rate pose clocks. The no-depth fixture includes a deliberate
 false truth topic that is not played.
 
 A successful `Sample_1` run is saved at
-`logs/benchmarks/Sample_1/rgb_mapping-20261016T164510488182Z/`: 753 localization
+`logs/benchmarks/Sample_1/rgb_mapping-20261016T164510488182Z/` (historical pre-rename artifact): 753 localization
 outputs, 735 ready frames, 36 confirmed XY updates, two confirmed world tracks,
 zero algorithm errors, and an exported scatter plot. It used all 98 FCU time
 references; maximum observed reference inconsistency was about 5.7 ms. Final red

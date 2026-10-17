@@ -1,6 +1,6 @@
 # Record and replay a buoy run
 
-For the report-based persistent **RGB-only map**, use `METHOD=rgb_mapping`.
+For the report-based persistent **RGB-only map**, use `METHOD=bearing_ekf`.
 Replay now recovers compatible simulation clock bridges from recorded FCU time
 references automatically; `Sample_1` runs without a manually supplied offset.
 See [RGB buoy mapping](RGB_BUOY_MAPPING.md) for commands, timing requirements,
@@ -38,7 +38,7 @@ For the detector/localization workflow, use the selected recording's **Run ROS
 localization benchmark** action (build benchmark tools from the main menu
 first). It launches playback, the shared ROS nodes, and output recording.
 See [Buoy benchmark development](BUOY_BENCHMARKS.md) for output files and the
-depth and temporal RGB triangulation positioning methods.
+Bearing EKF Buoy Mapping workflow.
 
 The menu was verified in a real terminal with a live capture, saved quality
 inspection, and replay with automatic RViz cleanup. The focused menu tests

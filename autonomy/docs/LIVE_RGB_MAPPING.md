@@ -1,7 +1,7 @@
-# Live RGB mapping while teleoperating
+# Live Bearing EKF Buoy Mapping while teleoperating
 
 This is an optional foreground session on top of the existing simulation.
-It starts the production ArUco detector and RGB mapper, plus separate simulation
+It starts the production ArUco detector and Bearing EKF buoy mapper, plus separate simulation
 monitoring tools. It never starts, stops, arms, or drives the simulator.
 
 ## Run
