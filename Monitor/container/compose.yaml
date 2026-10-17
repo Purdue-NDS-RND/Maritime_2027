@@ -6,6 +6,8 @@ services:
     build:
       context: ..
       dockerfile: container/Dockerfile
+      additional_contexts:
+        maritime_interfaces: ../../autonomy/ros_ws/src/maritime_interfaces
     network_mode: host
     init: true
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"

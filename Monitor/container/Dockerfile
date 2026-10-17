@@ -11,10 +11,18 @@ RUN apt-get update \
         ros-jazzy-rmw-fastrtps-cpp \
         ros-jazzy-rosbag2 \
         ros-jazzy-mavros-msgs \
+        ros-jazzy-rosidl-default-generators \
         python3-numpy \
         python3-yaml \
         libgl1-mesa-dri \
     && rm -rf /var/lib/apt/lists/*
+
+# Compile the shared message definitions without depending on an autonomy image.
+COPY --from=maritime_interfaces . /opt/monitor/interfaces_ws/src/maritime_interfaces
+RUN source /opt/ros/jazzy/setup.bash \
+    && cd /opt/monitor/interfaces_ws \
+    && colcon build --packages-select maritime_interfaces \
+    && rm -rf build log src
 
 COPY container/entrypoint.sh /usr/local/bin/monitor-entrypoint
 COPY container/bashrc /etc/monitor.bashrc
