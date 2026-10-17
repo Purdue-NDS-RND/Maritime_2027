@@ -93,7 +93,7 @@ class PlotTests(unittest.TestCase):
         legend = plot.map.get_legend()
         for axis in (plot.map, plot.mean, plot.variance):
             axis.set_xlim(1., 2.)
-            axis.set_ylim(2., 4.)
+            axis.set_ylim(2., 3.)
         self.track.x = 6.
         self.node.history['buoy-1'].append((2., 6., 3., .1, .1))
         plot.draw()
@@ -102,7 +102,7 @@ class PlotTests(unittest.TestCase):
         self.assertEqual(plot.tracks['buoy-1'][1].get_xdata()[0], 6.)
         for axis in (plot.map, plot.mean, plot.variance):
             self.assertEqual(axis.get_xlim(), (1., 2.))
-            self.assertEqual(axis.get_ylim(), (2., 4.))
+            self.assertEqual(axis.get_ylim(), (2., 3.))
         plot.key(SimpleNamespace(key='a'))
         plot.key(SimpleNamespace(key='a'))
         plot.draw()
@@ -137,6 +137,30 @@ class PlotTests(unittest.TestCase):
         self.node.mapping.detail = 'Pose reset'
         self.plot.draw()
         self.assertIn('MAPPING PAUSED: Pose reset', self.plot.title.get_text())
+
+    def test_map_scale_and_panel_stay_stable_until_content_reaches_edge(self):
+        self.plot.draw()
+        limits = self.plot.map.get_xlim(), self.plot.map.get_ylim()
+        self.assertEqual(limits, ((-10., 10.), (-10., 10.)))
+        panel = self.plot.map.get_position().bounds
+        for x in (2., 5., 7.):
+            self.node.boat = (np.array([x, 0.]), 0.)
+            self.plot.draw()
+            self.assertEqual((self.plot.map.get_xlim(), self.plot.map.get_ylim()), limits)
+            np.testing.assert_allclose(self.plot.map.get_position().bounds, panel)
+        self.node.mapping.tracks.append(SimpleNamespace(world_id='buoy-2', category='green',
+            lifecycle='tentative', x=-3., y=-2., covariance=[.1, 0., 0., .1]))
+        self.node.history['buoy-2'] = []
+        self.plot.draw()
+        self.assertEqual((self.plot.map.get_xlim(), self.plot.map.get_ylim()), limits)
+        self.node.boat = (np.array([25., 0.]), 0.)
+        self.plot.draw()
+        expanded = self.plot.map.get_xlim(), self.plot.map.get_ylim()
+        self.assertGreater(expanded[0][1], 26.)
+        np.testing.assert_allclose(self.plot.map.get_position().bounds, panel)
+        self.node.boat = (np.array([0., 0.]), 0.)
+        self.plot.draw()
+        self.assertEqual((self.plot.map.get_xlim(), self.plot.map.get_ylim()), expanded)
 
 
 class LivePipelineTests(unittest.TestCase):
@@ -316,11 +340,10 @@ rclpy.shutdown()
             source.create_subscription(OccupancyGrid, '/monitor/mapping/occupancy_grid', late_grids.append, durable)
             spin(.3)
             self.assertTrue(late_grids, 'RViz late join must receive the retained grid')
-            plot = Plot(view)
-            plot.draw()
             # Save a representative UI with plausible truth in the display frame;
             # assertions above used false truth to test estimator isolation.
             view.truth['red_buoy'] = r @ np.array([5., 3.2625])+translation
+            plot = Plot(view)
             plot.draw()
             snapshot = os.environ.get('LIVE_MAPPING_SNAPSHOT', '/tmp/live-mapping-test.png')
             plot.figure.savefig(snapshot)

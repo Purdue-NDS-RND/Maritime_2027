@@ -204,6 +204,8 @@ class Plot:
         self.mean = self.figure.add_subplot(grid[0, 1])
         self.variance = self.figure.add_subplot(grid[1, 1])
         self.map.set(xlabel='map X (m)', ylabel='map Y (m)', aspect='equal')
+        # Keep the map panel square instead of resizing its box as data changes.
+        self.map.set_box_aspect(1)
         self.map.set_title('Buoy means, trails and 3-sigma covariance ellipses\n'
                            'a: toggle auto bounds | toolbar: zoom/pan')
         self.mean.set(title='Estimated mean over time', xlabel='seconds since first metric estimate', ylabel='position (m)')
@@ -240,8 +242,27 @@ class Plot:
                 for artist in artists.pop(identity):
                     artist.remove()
 
+    def expand_map_bounds(self):
+        """Grow in padded steps; never shrink or refit the view on each frame."""
+        ax = self.map
+        if not self.auto or not (ax.get_autoscalex_on() and ax.get_autoscaley_on()):
+            return
+        bounds = ax.dataLim.extents
+        if not np.isfinite(bounds).all():
+            return
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        centre = np.array([np.mean(xlim), np.mean(ylim)])
+        half_span = max(xlim[1]-xlim[0], ylim[1]-ylim[0])/2
+        needed = float(np.max(np.abs(bounds.reshape(2, 2)-centre)))
+        if needed < .9*half_span:
+            return
+        half_span = max(10., math.ceil(needed*1.2/10.)*10.)
+        ax.set_xlim(centre[0]-half_span, centre[0]+half_span, auto=True)
+        ax.set_ylim(centre[1]-half_span, centre[1]+half_span, auto=True)
+
     def draw(self):
         n, ax = self.node, self.map
+        limits = ax.get_xlim(), ax.get_ylim()
         path = np.asarray(n.path)
         self.path.set_data(path.T if len(path) else ([], []))
         if n.boat is not None:
@@ -317,8 +338,13 @@ class Plot:
         # for both history plots as well as the map; 'a' restores map auto bounds.
         for axis in (ax, self.mean, self.variance):
             axis.relim()
-            if axis is not ax or self.auto:
+            if axis is not ax:
                 axis.autoscale_view()
+        # Adding a new artist requests Matplotlib's usual tight autoscale.
+        # Keep our current view instead, then apply only the padded expansion.
+        ax.set_xlim(limits[0], auto=None)
+        ax.set_ylim(limits[1], auto=None)
+        self.expand_map_bounds()
         detail = n.diagnostic
         if not n.mapping:
             detail = 'Waiting for /mapping/buoys; start the pipeline and move the boat.'

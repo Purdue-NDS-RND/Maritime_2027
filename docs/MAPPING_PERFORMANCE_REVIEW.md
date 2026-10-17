@@ -180,3 +180,10 @@ cost, not live-session CPU reduction or GUI input latency.
 
 Median redraw time fell approximately 70% and 51%, respectively. Both runs used
 one OpenBLAS thread and the same host; timings still reflect shared system load.
+
+The map panel subsequently gained a fixed square shape and stable automatic
+bounds: it starts at 20×20 m, expands in padded 10 m half-span steps when content
+approaches an edge, and does not shrink as the boat returns or estimates refine.
+Toolbar zoom/pan still overrides automatic bounds; `a` can restore expansion.
+The nine-test live-viewer suite includes motion, adding a track, expansion and
+return motion checks for stable bounds and panel size.
