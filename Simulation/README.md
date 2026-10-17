@@ -14,6 +14,10 @@ open water, harbor/dock, one buoy, a red/green gate, multiple buoys, repeated re
 buoys, slalom, or camera only. Water applies independently to every scene. Press Enter
 for defaults or `q` to cancel. Buoy scenes then ask for an optional integer seed
 and automatically enable ROS/MAVROS; boat-only scenes offer optional ROS/MAVROS.
+Choose **single camera** (forward) or **dual camera** (-45/+45 degrees) in the
+setup menu. For an explicit selection, use `BOAT_MODEL=dual SCENARIO=gate make run`.
+The same RViz and RGB mapping launches handle both; see [camera boat guide](docs/DUAL_CAMERA.md).
+
 For automation, use e.g. `WATER=harsh SCENARIO=gate make run`. Explicit launches
 without `WATER` preserve their existing water defaults.
 

@@ -107,7 +107,8 @@ class BagTests(unittest.TestCase):
         classes = {"/clock": Clock, "/tf_static": TFMessage,
                    "/blueboat/ground_truth/tf_static": TFMessage, "/mavros/state": State,
                    "/mavros/imu/data": Imu, "/mavros/global_position/global": NavSatFix}
-        classes.update(dict(zip(self.session.CAMERA_TOPICS, (Image, Image, CameraInfo))))
+        for camera in self.session.camera_names(self.root):
+            classes.update(dict(zip(self.session.camera_topics(camera), (Image, Image, CameraInfo))))
         for topic in config["required"]:
             if topic == missing:
                 continue
@@ -131,11 +132,12 @@ class BagTests(unittest.TestCase):
                 if topic == self.session.CAMERA_TOPICS[1] and unmatched and index == 1:
                     message.header.stamp.nanosec += 50_000_000
                 if topic == "/tf_static" and not omit_transforms:
-                    for parent, child in (("base_link", "camera_0_link"), ("camera_0_link", "camera_0_optical_frame")):
-                        tf = TransformStamped()
-                        tf.header.frame_id, tf.child_frame_id = parent, child
-                        tf.transform.rotation.w = 1.0
-                        message.transforms.append(tf)
+                    for camera in self.session.camera_names(self.root):
+                        for parent, child in (("base_link", f"{camera}_link"), (f"{camera}_link", f"{camera}_optical_frame")):
+                            tf = TransformStamped()
+                            tf.header.frame_id, tf.child_frame_id = parent, child
+                            tf.transform.rotation.w = 1.0
+                            message.transforms.append(tf)
                 if topic == "/blueboat/ground_truth/odometry":
                     message.pose.pose.position.x = float(index)
                 writer.write(topic, serialize_message(message), 20_000_000_000 + index * 100_000_000)
@@ -150,6 +152,25 @@ class BagTests(unittest.TestCase):
         self.assertEqual(report["boat_displacement_m"], 2)
         self.assertIn("/blueboat/ground_truth/red_starboard/odometry", report["topics"])
         self.assertEqual(report["header_time_ranges_ns"]["/mavros/local_position/odom"][0], 1_792_109_695_000_000_000)
+
+    def test_dual_camera_checks_both_streams(self):
+        manifest = json.loads((self.root / 'scenario.manifest.json').read_text())
+        manifest['boat_model'] = 'dual'
+        (self.root / 'scenario.manifest.json').write_text(json.dumps(manifest))
+        self.write_bag()
+        report = self.session.inspect_bag(self.root)
+        self.assertTrue(report['passed'], report['errors'])
+        self.assertEqual(set(report['cameras']), {'camera_0', 'camera_1'})
+        self.assertAlmostEqual(report['cameras']['camera_1']['rate_hz'], 10.)
+
+    def test_missing_second_camera_fails_dual_recording(self):
+        manifest = json.loads((self.root / 'scenario.manifest.json').read_text())
+        manifest['boat_model'] = 'dual'
+        (self.root / 'scenario.manifest.json').write_text(json.dumps(manifest))
+        self.write_bag(missing='/sensors/camera_1/color/image_raw')
+        report = self.session.inspect_bag(self.root)
+        self.assertFalse(report['passed'])
+        self.assertTrue(any('camera_1' in error for error in report['errors']))
 
     def test_missing_buoy_truth_fails_dataset_check(self):
         missing = "/blueboat/ground_truth/red_starboard/odometry"

@@ -113,14 +113,10 @@ class Task06ContractTests(unittest.TestCase):
             BRINGUP / "launch" / "bringup.launch.py",
             ADAPTER / "ros_ws" / "src" / "blueboat_camera_adapter" / "src" / "camera_boundary.cpp",
         ])
-        for topic in (
-            "/sensors/camera_0/color/image_raw",
-            "/sensors/camera_0/depth/image_rect_raw",
-            "/sensors/camera_0/color/camera_info",
-        ):
-            self.assertIn(topic, sources)
-        self.assertIn("camera_0_link", sources)
-        self.assertIn("camera_0_optical_frame", sources)
+        for suffix in ('color/image_raw', 'depth/image_rect_raw', 'color/camera_info'):
+            self.assertIn('"/sensors/" + camera_ + "/' + suffix + '"', sources)
+        self.assertIn('f"{camera}_link"', sources)
+        self.assertIn('f"{camera}_optical_frame"', sources)
         self.assertIn("quiet_NaN", sources)
 
     def test_camera_diagnostics_use_aggregate_readiness_and_exact_reasons(self):
@@ -133,7 +129,7 @@ class Task06ContractTests(unittest.TestCase):
         self.assertNotIn('"invalid_color_content"', source)
         self.assertNotIn('"invalid_depth_content"', source)
         info_validator = source[source.index("std::string invalid_info_reason"):source.index("template<typename Queue>")]
-        self.assertIn('message.header.frame_id != kPrivateFrame) return "frame_mismatch"', info_validator)
+        self.assertIn('message.header.frame_id != private_frame_) return "frame_mismatch"', info_validator)
         self.assertIn('message.width == 0 || message.height == 0) return "invalid_dimensions"', info_validator)
         self.assertIn('return calibrated ? "" : "invalid_calibration"', info_validator)
 
@@ -241,7 +237,7 @@ class Task06ContractTests(unittest.TestCase):
 
     def test_camera_tf_contract_accepts_only_exact_public_chain(self):
         header = ADAPTER / "ros_ws" / "src" / "blueboat_camera_adapter" / "include" / "blueboat_camera_adapter" / "tf_validation.hpp"
-        source = f'''#include <cassert>\n#include "{header}"\nint main() {{\nusing blueboat_camera_adapter::valid_camera_transform;\nassert(valid_camera_transform("base_link", "camera_0_link", .35,0,.4,0,0,0,1));\nassert(valid_camera_transform("camera_0_link", "camera_0_optical_frame", 0,0,0,-.5,.5,-.5,.5));\nassert(!valid_camera_transform("world", "camera_0_link", .35,0,.4,0,0,0,1));\nassert(!valid_camera_transform("base_link", "camera_0_link", .36,0,.4,0,0,0,1));\nassert(!valid_camera_transform("camera_0_link", "camera_0_optical_frame", 0,0,0,0,0,0,1));\n}}'''
+        source = f'''#include <cassert>\n#include "{header}"\nint main() {{\nusing blueboat_camera_adapter::valid_camera_transform;\nassert(valid_camera_transform("base_link", "camera_0_link", .35,0,.4,0,0,0,1));\nassert(valid_camera_transform("camera_0_link", "camera_0_optical_frame", 0,0,0,-.5,.5,-.5,.5));\nassert(!valid_camera_transform("world", "camera_0_link", .35,0,.4,0,0,0,1));\nassert(!valid_camera_transform("base_link", "camera_0_link", .36,0,.4,0,0,0,1));\nassert(!valid_camera_transform("camera_0_link", "camera_0_optical_frame", 0,0,0,0,0,0,1));\nassert(valid_camera_transform("base_link", "camera_1_link", .35,.1,.4,0,0,std::sin(M_PI/8),std::cos(M_PI/8),"camera_1",.1,M_PI/4));\nassert(!valid_camera_transform("base_link", "camera_1_link", .35,.1,.4,0,0,-std::sin(M_PI/8),std::cos(M_PI/8),"camera_1",.1,M_PI/4));\nassert(valid_camera_transform("camera_1_link", "camera_1_optical_frame", 0,0,0,-.5,.5,-.5,.5,"camera_1",.1,M_PI/4));\nassert(!valid_camera_transform("camera_0_link", "camera_1_optical_frame", 0,0,0,-.5,.5,-.5,.5,"camera_1",.1,M_PI/4));\n}}'''
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "test.cpp"
             binary = Path(directory) / "test"

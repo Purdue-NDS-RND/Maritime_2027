@@ -22,7 +22,7 @@ def export_results(directory):
     reader.open(rosbag2_py.StorageOptions(uri=str(directory / "bag"), storage_id="mcap"),
                 rosbag2_py.ConverterOptions("cdr", "cdr"))
     reader.set_filter(rosbag2_py.StorageFilter(topics=[
-        "/perception/camera_0/detections", "/localization/buoys", "/mapping/buoys", "/mapping/observations"]))
+        "/perception/camera_0/detections", "/perception/camera_1/detections", "/localization/buoys", "/mapping/buoys", "/mapping/observations"]))
     statuses = Counter()
     details = Counter()
     detection_arrays = boxes = position_arrays = ready_arrays = 0
@@ -36,7 +36,7 @@ def export_results(directory):
                          "x_m", "y_m", "vessel_pose_timestamp_ns", "depth_timestamp_ns"])
         while reader.has_next():
             topic, data, _ = reader.read_next()
-            if topic == "/perception/camera_0/detections":
+            if topic in ("/perception/camera_0/detections", "/perception/camera_1/detections"):
                 message = deserialize_message(data, Detection2DArray)
                 detection_arrays += 1
                 boxes += len(message.detections)

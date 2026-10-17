@@ -21,6 +21,7 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
+            "camera_roster = blueboat_sim_bringup.camera_roster:main",
             "healthcheck = blueboat_sim_bringup.healthcheck:main",
             "diagnostics = blueboat_sim_bringup.diagnostics:main",
             "configure_mavros = blueboat_sim_bringup.configure_mavros:main",

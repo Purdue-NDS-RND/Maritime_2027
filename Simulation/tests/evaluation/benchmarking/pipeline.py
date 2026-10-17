@@ -66,6 +66,14 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
     bag_metadata = yaml.safe_load((dataset / "bag/metadata.yaml").read_text())
     topic_counts = {entry["topic_metadata"]["name"]: entry["message_count"]
                     for entry in bag_metadata["rosbag2_bagfile_information"]["topics_with_message_count"]}
+    manifest_path = dataset / 'scenario.manifest.json'
+    model = json.loads(manifest_path.read_text()).get('boat_model', 'single') if manifest_path.exists() else 'single'
+    if model not in ('single', 'dual'):
+        raise ValueError('unsupported boat model in recording')
+    cameras = ['camera_0', 'camera_1'] if model == 'dual' else ['camera_0']
+    detection_topics = [DETECTIONS.replace('camera_0', camera) for camera in cameras]
+    for camera in cameras[1:]:
+        input_topics += [IMAGE.replace('camera_0', camera), INFO.replace('camera_0', camera)]
     if any(topic_counts.get(topic, 0) == 0 for topic in input_topics):
         raise ValueError("Recording is missing required camera, pose, or mounting-transform input")
     alignment = calibrate(dataset, pose_clock, pose_time_offset_s)
@@ -79,7 +87,8 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
                   pose_time_offset_s=pose_time_offset_s,
                   pose_clock=alignment.report if alignment else {"mode": "source", "offset_s": pose_time_offset_s},
                   rate=rate, ros_domain=domain,
-                  source_rgb_frames=topic_counts[IMAGE], input_topics=input_topics,
+                  source_rgb_frames=sum(topic_counts[IMAGE.replace("camera_0", camera)] for camera in cameras),
+                  cameras=cameras, input_topics=input_topics,
                   assumptions={"output_frame": "map", "pose_source": ALIGNED_POSE if alignment else POSE,
                                "source_pose_topic": POSE,
                                "timing": ("recorded-reference clock normalization then acquisition-time pose interpolation" if alignment else
@@ -145,7 +154,7 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
         until = time.monotonic() + 1.5
         while time.monotonic() < until:
             spin()
-        occupied = [topic for topic in input_topics + ["/clock", DETECTIONS, ESTIMATES, ALIGNED_POSE]
+        occupied = [topic for topic in input_topics + detection_topics + ["/clock", ESTIMATES, ALIGNED_POSE]
                     if probe.count_publishers(topic)]
         if occupied:
             raise ValueError(f"Replay domain already has publishers: {occupied}")
@@ -162,10 +171,10 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
         initial_clock.clock.sec, initial_clock.clock.nanosec = divmod(start_ns, 1_000_000_000)
         clock = probe.create_publisher(Clock, "/clock", qos_profile_sensor_data)
         nodes = start("nodes", ["ros2", "launch", "maritime_localization", "pipeline.launch.py",
-                                f"method:={method}", "use_sim_time:=true", f"pose_time_offset_s:={pose_time_offset_s}",
+                                f"method:={method}", f"camera_layout:={model}", "use_sim_time:=true", f"pose_time_offset_s:={pose_time_offset_s}",
                                 f"pose_topic:={ALIGNED_POSE if alignment else POSE}"])
         # Results are small standard ROS outputs, with a deeper recorder queue.
-        result_topics = [DETECTIONS, ESTIMATES]
+        result_topics = detection_topics + [ESTIMATES]
         if alignment:
             result_topics.append(ALIGNED_POSE)
         result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/occupancy_grid", "/mapping/costmap",
@@ -182,8 +191,8 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
             spin()
             if nodes.poll() is not None or recorder.poll() is not None:
                 raise RuntimeError("Node launch or recorder exited; inspect nodes.log / recorder.log")
-            ready = (probe.count_publishers(DETECTIONS) == 1 and probe.count_publishers(ESTIMATES) == 1
-                     and probe.count_subscribers(DETECTIONS) >= 2 and probe.count_subscribers(ESTIMATES) >= 2
+            ready = (all(probe.count_publishers(topic) == 1 for topic in detection_topics) and probe.count_publishers(ESTIMATES) == 1
+                     and all(probe.count_subscribers(topic) >= 2 for topic in detection_topics) and probe.count_subscribers(ESTIMATES) >= 2
                      and all(probe.count_subscribers(topic) >= 1 for topic in input_topics))
             if ready and (not alignment or probe.count_subscribers(ALIGNED_POSE) >= 2):
                 break

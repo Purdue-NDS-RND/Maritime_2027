@@ -1,5 +1,6 @@
 """Live semantic check; run while the simulation view and gate scenario are active."""
 import time
+import argparse
 
 import rclpy
 from nav_msgs.msg import Odometry
@@ -10,7 +11,12 @@ from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer
 from visualization_msgs.msg import MarkerArray
 
-rclpy.init()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--dual', action='store_true')
+args = parser.parse_args()
+cameras = ['camera_0', 'camera_1'] if args.dual else ['camera_0']
+expected_static = {camera + suffix for camera in cameras for suffix in ('_link', '_optical_frame')}
+rclpy.init(args=[])
 node = Node('simulation_view_probe')
 transforms, static, markers, truth = {}, {}, {}, {}
 buffer = Buffer()
@@ -34,8 +40,9 @@ node.create_subscription(TFMessage, '/monitor/simulation/tf_static',
 node.create_subscription(MarkerArray, '/monitor/simulation/markers',
                          lambda msg: markers.update({(m.ns, m.id): m for m in msg.markers}), 10)
 calibration = {}
-node.create_subscription(CameraInfo, '/sensors/camera_0/color/camera_info',
-                         lambda msg: calibration.update(camera=msg), qos_profile_sensor_data)
+for camera in cameras:
+    node.create_subscription(CameraInfo, f'/sensors/{camera}/color/camera_info',
+        lambda msg, camera=camera: calibration.update({camera: msg}), qos_profile_sensor_data)
 node.create_subscription(Odometry, '/blueboat/ground_truth/odometry',
                          lambda msg: truth.update(boat=msg), 10)
 for name in ('buoy_1', 'buoy_2'):
@@ -45,7 +52,7 @@ deadline = time.monotonic() + 35
 while time.monotonic() < deadline:
     rclpy.spin_once(node, timeout_sec=.1)
     if (all(frame in transforms for frame in ('base_link', 'buoy/buoy_1', 'buoy/buoy_2')) and
-            len(static) == 2 and ('camera/image_plane', 0) in markers and len(truth) == 3 and calibration and
+            set(static) == expected_static and all((camera + '/image_plane', 0) in markers for camera in cameras) and len(truth) == 3 and calibration and
             any(endpoint.node_name in ('rviz', 'rviz2') for endpoint in
                 node.get_subscriptions_info_by_topic('/sensors/camera_0/color/camera_info'))):
         break
@@ -58,20 +65,21 @@ for name, frame in [('boat', 'base_link'), ('buoy_1', 'buoy/buoy_1'), ('buoy_2',
     assert max(abs(a.x-b.x), abs(a.y-b.y), abs(a.z-b.z)) < .05, (name, a, b)
     a, b = tf.transform.rotation, truth[name].pose.pose.orientation
     assert abs(a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w) > .99, name
-assert set(static) == {'camera_0_link', 'camera_0_optical_frame'}, static.keys()
-assert buffer.can_transform('world', 'camera_0_optical_frame', rclpy.time.Time()), 'Disconnected camera tree'
-assert static['camera_0_link'].header.frame_id == 'base_link'
-assert static['camera_0_optical_frame'].header.frame_id == 'camera_0_link'
-plane = markers['camera/image_plane', 0]
-assert plane.header.frame_id == 'camera_0_optical_frame'
-assert len(plane.points) == len(plane.colors) == 80 * 45 * 6
-assert all(abs(p.z - 1.5) < 1e-6 for p in plane.points)
-info = calibration['camera']
-assert abs(min(p.x for p in plane.points) + 1.5 * info.k[2] / info.k[0]) < 1e-5
-assert abs(max(p.y for p in plane.points) - 1.5 * (info.height - info.k[5]) / info.k[4]) < 1e-5
-assert plane.frame_locked
-assert len({(round(c.r, 2), round(c.g, 2), round(c.b, 2)) for c in plane.colors}) > 10
-assert len(markers['camera/frustum', 0].points) == 16
+assert set(static) == expected_static, static.keys()
+for camera in cameras:
+    assert buffer.can_transform('world', camera + '_optical_frame', rclpy.time.Time()), 'Disconnected camera tree'
+    assert static[camera + '_link'].header.frame_id == 'base_link'
+    assert static[camera + '_optical_frame'].header.frame_id == camera + '_link'
+    plane = markers[camera + '/image_plane', 0]
+    assert plane.header.frame_id == camera + '_optical_frame'
+    assert len(plane.points) == len(plane.colors) == 80 * 45 * 6
+    assert all(abs(p.z - 1.5) < 1e-6 for p in plane.points)
+    info = calibration[camera]
+    assert abs(min(p.x for p in plane.points) + 1.5 * info.k[2] / info.k[0]) < 1e-5
+    assert abs(max(p.y for p in plane.points) - 1.5 * (info.height - info.k[5]) / info.k[4]) < 1e-5
+    assert plane.frame_locked
+    assert len({(round(c.r, 2), round(c.g, 2), round(c.b, 2)) for c in plane.colors}) > 10
+    assert len(markers[camera + '/frustum', 0].points) == 16
 assert any(endpoint.node_name in ('rviz', 'rviz2') for endpoint in
            node.get_subscriptions_info_by_topic('/sensors/camera_0/color/camera_info')), \
     'RViz native CameraInfo display is not subscribed'
@@ -82,9 +90,9 @@ buffer.clear()
 deadline = time.monotonic() + 5
 while time.monotonic() < deadline:
     rclpy.spin_once(node, timeout_sec=.1)
-    if len(static) == 2 and buffer.can_transform('world', 'camera_0_optical_frame', rclpy.time.Time()):
+    if set(static) == expected_static and buffer.can_transform('world', 'camera_0_optical_frame', rclpy.time.Time()):
         break
-assert len(static) == 2, 'Static mount was not repeated after cache reset'
+assert set(static) == expected_static, 'Static mount was not repeated after cache reset'
 assert buffer.can_transform('world', 'camera_0_optical_frame', rclpy.time.Time()), 'Camera TF did not recover'
 for topic in ('/tf', '/tf_static'):
     assert all(p.node_name != 'monitor_simulation_view' for p in node.get_publishers_info_by_topic(topic)), f'Monitor published public TF on {topic}'

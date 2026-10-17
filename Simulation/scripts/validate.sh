@@ -14,6 +14,7 @@ for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
 done
 python_sources=(
     scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
+    scripts/render_boat.py tests/test_boat_models.py
     scripts/render_water.py tests/test_water_rendering.py tests/test_run_menu.py
     recordings/*.py tests/test_recordings.py tests/test_recording_menu.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/setup.py
@@ -150,6 +151,12 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
             -v "$PROJECT_DIR:/work:ro" -v "$tmp_dir:/validation:ro" \
             ardupilot-blueboat:4.7.0 -lc '
                 set -e
+                python3 /work/scripts/augment_blueboat_model.py \
+                    --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \
+                    --payload /work/models/blueboat_dual_rgbd/camera_payload.sdf \
+                    --output /tmp/blueboat_dual_rgbd/model.sdf --boat-model dual \
+                    --expected-sha256 fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57
+                gz sdf -k /tmp/blueboat_dual_rgbd/model.sdf >/dev/null
                 for sdf in /validation/*-resolved.sdf /work/models/aruco_buoy_id*/model.sdf /opt/boat_sim/models/blueboat_rgbd/model.sdf; do
                     gz sdf -k "$sdf" >/dev/null
                 done
@@ -163,3 +170,5 @@ else
 fi
 
 echo "Static validation passed."
+
+python3 -m unittest discover -s tests -p test_boat_models.py -q

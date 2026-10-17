@@ -160,8 +160,10 @@ def run_case(output, name):
                 command("docker", "cp", str(ROOT.parent / "tests" / filename),
                         f"{CONTAINERS[2]}:/tmp/{filename}")
             boundary = command("docker", "exec", CONTAINERS[2], "bash", "-lc",
-                               "source /etc/maritime_autonomy_setup.bash && python3 /tmp/ros_boundary_smoke.py --autonomy")
+                               "source /etc/maritime_autonomy_setup.bash && python3 /tmp/ros_boundary_smoke.py --autonomy",
+                               check=False)
             (output / "autonomy-boundary.log").write_text(boundary.stdout + boundary.stderr)
+            assert boundary.returncode == 0, boundary.stdout + boundary.stderr
             assert "BOUNDARY PASS:" in boundary.stdout
             before = command("docker", "inspect", "-f", "{{.Id}}", *CONTAINERS).stdout
             authority = (ROOT / "logs/active-xauth.path").read_text()

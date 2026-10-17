@@ -182,6 +182,13 @@ RUN python3 /opt/boat_sim/scripts/augment_blueboat_model.py \
       --output /opt/boat_sim/models/blueboat_rgbd/model.sdf \
       --expected-sha256 fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57
 
+RUN python3 /opt/boat_sim/scripts/augment_blueboat_model.py \
+      --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \
+      --payload /opt/boat_sim/models/blueboat_dual_rgbd/camera_payload.sdf \
+      --output /opt/boat_sim/models/blueboat_dual_rgbd/model.sdf \
+      --boat-model dual \
+      --expected-sha256 fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57
+
 ENV GZ_VERSION=harmonic \
     GZ_PARTITION=ardupilot_blueboat_starter \
     LD_LIBRARY_PATH=/opt/asv_wave_sim/install/lib \

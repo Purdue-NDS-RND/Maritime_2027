@@ -38,15 +38,21 @@ cameras:
       evidence_ref: simulation-camera-timing-2026-09-13
 ```
 
-For `environment: simulation`, `enabled_cameras` must equal exactly
-`[camera_0]`. For `environment: hardware`, it must equal exactly
-`[camera_0, camera_1]` in that order. A missing, extra, reordered, or duplicate
-entry is invalid. `cameras` must contain exactly the corresponding key set;
-mapping-key order has no meaning. Camera IDs must match
-`^camera_[0-9]+$`, remain assigned to the same physical mounting position
-across launches, and be enumerated by consumers from `enabled_cameras`.
-Consumers must not infer a camera count, probe sequential names, or branch on a
-camera make or model.
+For `environment: simulation`, the default `single` boat uses exactly
+`[camera_0]`; `dual` uses exactly `[camera_0, camera_1]` in that order. The dual
+mounts are x=0.35 m, z=0.40 m, y=-0.10/+0.10 m, yaw=-pi/4 and +pi/4
+respectively. For `environment: hardware`, the roster remains exactly
+`[camera_0, camera_1]`. A missing, extra, reordered, or duplicate entry is invalid.
+Camera IDs match `^camera_[0-9]+$` and refer to the selected deployment's mounting
+positions; switching boat layouts requires a new mapping session.
+
+Simulation publishes `/sensors/camera_roster` (`std_msgs/msg/String`, reliable,
+transient-local, depth 1) as JSON with `schema_version: 1` and `enabled_cameras`.
+This enumerates configured cameras independently of stream availability. The
+shared launch uses this metadata in `camera_layout:=auto`; explicit camera
+arguments remain available for legacy deployments without roster metadata.
+Conflicting or malformed rosters are rejected. This does not alter the frozen
+image, calibration, registration, timing, or per-camera diagnostic semantics.
 
 For hardware, `environment: hardware` and `use_sim_time: false` are fixed, but
 this common contract supplies no timing values. Hardware configuration adds a

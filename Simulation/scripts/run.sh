@@ -27,6 +27,7 @@ Explicit WORLD/SCENARIO selections and redirected input/output skip the menu.
 Environment:
   SCENARIO=one|gate|multi|repeated_red|slalom  Launch an RGB-D buoy scenario with ROS
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
+  BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat; enables ROS
   WATER=calm|normal|harsh  Override water independently of the world/scenario
   ROS_SIM=1                Enable ROS/MAVROS for a direct WORLD launch
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
@@ -120,6 +121,13 @@ for existing_container in ardupilot-blueboat-sim maritime-sim-adapter maritime-a
     fi
 done
 
+case "${BOAT_MODEL:-single}" in
+    single|dual) ;;
+    *) echo 'ERROR: BOAT_MODEL must be single or dual.' >&2; exit 2 ;;
+esac
+if [[ -n ${BOAT_MODEL:-} ]]; then
+    export ROS_SIM=1 CAMERA_ENABLED=1
+fi
 scenario=${SCENARIO:-}
 case "${WATER:-}" in
     ''|calm|normal|harsh) ;;
@@ -150,6 +158,7 @@ if [[ -n $scenario ]]; then
         --base-world worlds/blueboat_rgbd_base.sdf
         --output-world logs/generated-worlds/active.sdf
         --manifest logs/generated-worlds/active.manifest.json
+        --boat-model "${BOAT_MODEL:-single}"
     )
     if [[ -n ${BUOY_SEED:-} ]]; then
         render_args+=(--seed "$BUOY_SEED")
@@ -168,7 +177,7 @@ else
             python3 scripts/render_scenario.py --scenario logs/generated-worlds/direct.json \
                 --base-world worlds/blueboat_rgbd_base.sdf \
                 --output-world logs/generated-worlds/direct.sdf \
-                --manifest logs/generated-worlds/active.manifest.json
+                --manifest logs/generated-worlds/active.manifest.json --boat-model "${BOAT_MODEL:-single}"
             selected_world=${WORLD:-blueboat_waves.sdf}
             if [[ $selected_world == blueboat_rgbd_base.sdf ]]; then
                 export CAMERA_ENABLED=1
@@ -183,9 +192,18 @@ else
     esac
 fi
 
+if [[ -n ${BOAT_MODEL:-} ]]; then
+    boat_source="worlds/${WORLD:-blueboat_waves.sdf}"
+    [[ -z $scenario ]] || boat_source=logs/generated-worlds/active.sdf
+    python3 scripts/render_boat.py --source "$boat_source" --output logs/generated-worlds/boat.sdf --boat-model "$BOAT_MODEL" \
+        --manifest logs/generated-worlds/active.manifest.json
+    export WORLD=boat.sdf
+fi
+
 if [[ -n ${WATER:-} ]]; then
     water_source="worlds/${WORLD:-blueboat_waves.sdf}"
     [[ -z $scenario ]] || water_source=logs/generated-worlds/active.sdf
+    [[ -z ${BOAT_MODEL:-} ]] || water_source=logs/generated-worlds/boat.sdf
     water_args=(--source "$water_source" --output logs/generated-worlds/water.sdf --water "$WATER"
                 --metadata logs/generated-worlds/water.json)
     python3 scripts/render_water.py "${water_args[@]}"
@@ -198,6 +216,8 @@ if [[ $ros_enabled == 1 ]]; then
     export ADAPTER_ENVIRONMENT=simulation MARITIME_PREIMPLEMENTATION_PLACEHOLDER=1
 fi
 
+camera_model_dir=blueboat_rgbd
+[[ ${BOAT_MODEL:-single} != dual ]] || camera_model_dir=blueboat_dual_rgbd
 case $build_mode in
     no-cache)
         echo "Rebuilding $SIM_IMAGE without cache..."
@@ -211,7 +231,7 @@ case $build_mode in
         need_build=0
         if ! docker image inspect "$SIM_IMAGE" >/dev/null 2>&1; then
             need_build=1
-        elif [[ $CAMERA_ENABLED == 1 ]] && ! docker run --rm --entrypoint test "$SIM_IMAGE" -f /opt/boat_sim/models/blueboat_rgbd/model.sdf; then
+        elif [[ $CAMERA_ENABLED == 1 ]] && ! docker run --rm --entrypoint test "$SIM_IMAGE" -f "/opt/boat_sim/models/$camera_model_dir/model.sdf"; then
             need_build=1
         fi
         if [[ $ros_enabled == 1 ]]; then
@@ -314,6 +334,7 @@ if [[ ! -S /tmp/.X11-unix/X${display_number} ]]; then
 fi
 
 echo "Host IDs: uid=$HOST_UID gid=$HOST_GID video_gid=$VIDEO_GID render_gid=$RENDER_GID"
+echo "Boat model: ${BOAT_MODEL:-single}"
 echo "World: ${WORLD:-blueboat_waves.sdf}; scenario: ${scenario:-none}; display: $DISPLAY"
 echo "MAVLink: ${MAVLINK_QGC:-udp:127.0.0.1:14550} (QGC), ${MAVLINK_API:-udp:127.0.0.1:14551} (student API)"
 if [[ $ros_enabled == 1 ]]; then

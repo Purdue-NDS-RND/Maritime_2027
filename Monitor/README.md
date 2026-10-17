@@ -116,11 +116,11 @@ image once (`make build`), then run `make rviz-sim`. This opens a dedicated pres
 - Buoy frames, cylinders, heading arrows and names are discovered from live
   `/blueboat/ground_truth/<entity>/odometry` topics. Repeated marker IDs remain
   separate entities. No buoy topics means no buoy visuals.
-- The existing `base_link → camera_0_link → camera_0_optical_frame` attachment
-  is built from the Adapter's canonical camera mount contract, mounted read-only
-  into the Monitor. The optical rotation follows the same camera convention.
+- Camera attachments (`base_link → camera_N_link → camera_N_optical_frame`)
+  are copied from the Adapter's public static TF into the private Monitor tree.
+  Camera topics are discovered, so the same launch supports single and dual boats.
 - The native CameraInfo display subscribes to
-  `/sensors/camera_0/color/camera_info` and draws its calibrated viewing outline.
+  each discovered `/sensors/camera_N/color/camera_info` and draws its calibrated viewing outline.
   Optical axes show the image coordinate convention (Z forward, X right, Y down).
 - The full RGB image remains in the lower-left dock. A second, sampled RGB
   image appears on the camera viewing outline's far plane, 1.5 m ahead of the

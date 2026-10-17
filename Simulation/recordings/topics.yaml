@@ -13,6 +13,7 @@ required:
   - /mavros/global_position/global
   - /blueboat/ground_truth/odometry
 optional:
+  - /sensors/camera_roster
   - /tf
   - /blueboat/ground_truth/tf
   - /mavros/global_position/compass_hdg
@@ -53,3 +54,8 @@ qos:
     durability: transient_local
     history: keep_last
     depth: 100
+  /sensors/camera_roster:
+    reliability: reliable
+    durability: transient_local
+    history: keep_last
+    depth: 1

@@ -61,6 +61,12 @@ teleop:
 sensor-smoke:
 	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation sensor_smoke
 
+.PHONY: dual-camera-smoke
+dual-camera-smoke:
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T \
+		-v "$(abspath tests/dual_camera_smoke.py):/tmp/dual_camera_smoke.py:ro" \
+		-e SIMULATION_EVALUATION=1 evaluation python3 /tmp/dual_camera_smoke.py $(ARGS)
+
 mavros-smoke:
 	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 

@@ -13,7 +13,7 @@ menu_read() {
 }
 
 configure_simulation() {
-    local menu_answer selection seed ros_default
+    local menu_answer selection seed
     cat <<'EOF'
 
   BlueBoat simulation setup
@@ -77,22 +77,27 @@ EOF
             fi
             printf 'Please enter an integer, leave blank for the default, or q.\n'
         done
-    elif [[ $selection != 7 ]]; then
-        ros_default=n
-        case "${ROS_SIM:-0}" in
-            1|true|TRUE|yes|YES|on|ON) ros_default=y ;;
-        esac
-        while true; do
-            menu_read "Enable ROS/MAVROS (no camera in this world)? [y/n, default $ros_default]: "
-            case "${menu_answer:-$ros_default}" in
-                y|Y|yes|YES) export ROS_SIM=1; break ;;
-                n|N|no|NO) export ROS_SIM=0; break ;;
-                *) printf 'Please enter y, n, or q.\n' ;;
-            esac
-        done
     fi
 
-    printf '\nStarting with: WATER=%q ' "$WATER"
+    cat <<'EOF'
+
+  Boat model / camera layout
+  1) Single camera - forward facing (default)
+  2) Dual camera   - camera_0 starboard -45°, camera_1 port +45°
+
+EOF
+    while [[ -z ${BOAT_MODEL:-} ]]; do
+        menu_read 'Choose boat model [1]: '
+        case "${menu_answer:-1}" in
+            1) export BOAT_MODEL=single; break ;;
+            2) export BOAT_MODEL=dual; break ;;
+            *) printf 'Please enter 1 or 2, or q.\n' ;;
+        esac
+    done
+
+    export ROS_SIM=1
+
+    printf '\nStarting with: WATER=%q BOAT_MODEL=%q ' "$WATER" "$BOAT_MODEL"
     if [[ -n ${SCENARIO:-} ]]; then
         printf 'SCENARIO=%q ' "$SCENARIO"
         [[ -z ${BUOY_SEED:-} ]] || printf 'BUOY_SEED=%q ' "$BUOY_SEED"

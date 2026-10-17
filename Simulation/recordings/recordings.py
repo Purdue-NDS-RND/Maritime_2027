@@ -113,8 +113,9 @@ def show_info(destination):
         return
     report = json.loads(report_path.read_text())
     print(f"Duration: {report['duration_s']:.2f} sim seconds; size: {report['size_bytes'] / 1e6:.1f} MB")
-    print(f"Exact RGB-D triples: {report['rgbd']['matched']}; rate: {report['rgbd']['rate_hz']:.2f} Hz")
-    print(f"Unmatched RGB/depth/info: {list(report['rgbd']['unmatched'].values())}")
+    for camera, summary in report.get('cameras', {'camera_0': report['rgbd']}).items():
+        print(f"{camera}: Exact RGB-D triples: {summary['matched']}; rate: {summary['rate_hz']:.2f} Hz")
+        print(f"{camera}: Unmatched RGB/depth/info: {list(summary['unmatched'].values())}")
     print(f"Boat displacement: {report['boat_displacement_m']:.3f} m")
     losses = report.get("reported_transport_losses", "not saved; see recorder.log")
     print(f"Recorder-reported transport losses: {losses}")
