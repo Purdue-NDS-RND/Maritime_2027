@@ -19,7 +19,7 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTAINERS = ("ardupilot-blueboat-sim", "maritime-sim-adapter", "maritime-autonomy")
+CONTAINERS = ("ardupilot-blueboat-sim", "maritime-sim-adapter")
 
 
 def command(*args, check=True, timeout=60):
@@ -64,7 +64,7 @@ def launch(output, name, overrides=None):
     return process
 
 
-def ready(process, timeout=220):
+def ready(process, timeout=220, expected_scenario="one"):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         assert process.poll() is None, f"startup exited {process.returncode}"
@@ -83,9 +83,10 @@ def ready(process, timeout=220):
             fingerprint = hashlib.sha256((directory / "compose.yaml").read_bytes()).hexdigest()
             assert environment["RUN_CONFIG_SHA256"] == fingerprint
             assert f"configuration_sha256={fingerprint}" in recorded
-            assert "application_state=empty_simulation_placeholder" in recorded
+            assert "application_state=not_started" in recorded
             manifest = json.loads((directory / "scenario.manifest.json").read_text())
-            assert manifest["scenario"] == "one" and len(manifest["buoys"]) == 1
+            assert manifest["scenario"] == expected_scenario
+            assert len(manifest["buoys"]) == (1 if expected_scenario == "one" else 0)
             return {"run_id": environment["RUN_ID"], "configuration_sha256": fingerprint,
                     "identity": recorded}
         time.sleep(2)
@@ -135,6 +136,9 @@ else: raise AssertionError('parameter acknowledgment timeout')
 
 def run_case(output, name):
     overrides = {}
+    if name == "default_adapter":
+        overrides = {"SCENARIO": "", "ROS_SIM": "", "BOAT_MODEL": "",
+                     "WORLD": "blueboat_waves.sdf", "CAMERA_ENABLED": "0"}
     if name == "gazebo_startup":
         overrides = {"SCENARIO": "", "ROS_SIM": "1", "WORLD": "blueboat_waves.sdf",
                      "CAMERA_ENABLED": "1", "GAZEBO_STARTUP_TIMEOUT": "12",
@@ -154,15 +158,14 @@ def run_case(output, name):
             assert "ERROR:" in text and category in text, text[-1500:]
             assert "Stack startup passed" not in text
             return {"exit": code, "bounded_failed_startup": True}
-        identity = ready(process)
+        identity = ready(process, expected_scenario="camera_only" if name == "default_adapter" else "one")
+        if name == "default_adapter":
+            assert command("docker", "inspect", "maritime-autonomy", check=False).returncode != 0
+            stop(process)
+            return {"adapter_started_by_default": True, "autonomy_not_started": True, **identity}
         if name == "double_start":
-            for filename in ("ros_boundary_smoke.py", "boundary_contract.py"):
-                command("docker", "cp", str(ROOT.parent / "tests" / filename),
-                        f"{CONTAINERS[2]}:/tmp/{filename}")
-            boundary = command("docker", "exec", CONTAINERS[2], "bash", "-lc",
-                               "source /etc/maritime_autonomy_setup.bash && python3 /tmp/ros_boundary_smoke.py --autonomy",
-                               check=False)
-            (output / "autonomy-boundary.log").write_text(boundary.stdout + boundary.stderr)
+            boundary = command("make", "boundary-smoke", "ARGS=--require-no-autonomy", check=False)
+            (output / "adapter-boundary.log").write_text(boundary.stdout + boundary.stderr)
             assert boundary.returncode == 0, boundary.stdout + boundary.stderr
             assert "BOUNDARY PASS:" in boundary.stdout
             before = command("docker", "inspect", "-f", "{{.Id}}", *CONTAINERS).stdout
@@ -174,7 +177,7 @@ def run_case(output, name):
             assert (ROOT / "logs/active-xauth.path").read_text() == authority
             stop(process)
             return {"second_launch_exit": second.returncode, "active_stack_preserved": True,
-                    "autonomy_boundary_probe": "PASS", **identity}
+                    "adapter_only_boundary_probe": "PASS", **identity}
         if name in ("signal_int", "signal_term"):
             sig = signal.SIGINT if name == "signal_int" else signal.SIGTERM
             process.send_signal(sig)
@@ -182,8 +185,8 @@ def run_case(output, name):
             assert code == 128 + sig, code
             assert_clean()
             return {"exit": code, **identity}
-        if name in ("simulator_exit", "autonomy_exit"):
-            target = CONTAINERS[0] if name == "simulator_exit" else CONTAINERS[2]
+        if name in ("simulator_exit", "adapter_exit"):
+            target = CONTAINERS[0] if name == "simulator_exit" else CONTAINERS[1]
             # Stop just the selected required service. The launcher must notice
             # that exit, report failure, and tear down the remaining services.
             injected_at = time.monotonic()
@@ -264,9 +267,9 @@ def persistence(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cases", default="gazebo_startup,adapter_startup,simulator_exit,child_exit,autonomy_exit,camera_silence,fcu_silence,signal_int,signal_term,double_start,parameters")
+    parser.add_argument("--cases", default="default_adapter,gazebo_startup,adapter_startup,simulator_exit,child_exit,adapter_exit,camera_silence,fcu_silence,signal_int,signal_term,double_start,parameters")
     args = parser.parse_args()
-    allowed = {"gazebo_startup", "adapter_startup", "simulator_exit", "child_exit", "autonomy_exit", "camera_silence",
+    allowed = {"default_adapter", "gazebo_startup", "adapter_startup", "simulator_exit", "child_exit", "adapter_exit", "camera_silence",
                "fcu_silence", "signal_int", "signal_term", "double_start", "parameters"}
     if not set(args.cases.split(",")) <= allowed:
         parser.error("unknown lifecycle case")

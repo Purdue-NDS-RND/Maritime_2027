@@ -27,35 +27,26 @@ class ContainerBoundaries(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)["services"]
 
-    def test_simulation_connects_independent_adapter_and_autonomy(self):
+    def test_simulation_starts_adapter_without_autonomy(self):
         services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
-        self.assertEqual(set(services), {"simulator", "adapter", "autonomy"})
+        self.assertEqual(set(services), {"simulator", "adapter"})
         self.assertEqual(services["adapter"]["environment"]["FCU_URL"], "udp://:14552@")
-        self.assertNotIn("FCU_URL", services["autonomy"].get("environment", {}))
-        self.assertEqual(services["autonomy"]["environment"]["ADAPTER_ENVIRONMENT"], "simulation")
-        self.assertEqual(services["autonomy"]["environment"]["MARITIME_PREIMPLEMENTATION_PLACEHOLDER"], "1")
         contexts = set()
         for service in services.values():
             build = service["build"]
             context = Path(build["context"])
             self.assertTrue((context / build.get("dockerfile", "Dockerfile")).is_file())
             contexts.add(context)
-        self.assertEqual(len(contexts), 3)
+        self.assertEqual(len(contexts), 2)
         self.assertTrue(str(services["adapter"]["build"]["context"]).endswith("Adapter/simulation"))
-        self.assertNotIn("SCENARIO_MANIFEST", services["autonomy"].get("environment", {}))
-        self.assertFalse(services["autonomy"].get("volumes"))
+        self.assertNotIn("autonomy", services)
 
     def test_autonomy_has_only_environment_neutral_runtime(self):
         services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
-        autonomy = services["autonomy"]
-        self.assertEqual(set(autonomy["environment"]), {
-            "ROS_DOMAIN_ID", "ADAPTER_ENVIRONMENT", "MARITIME_PREIMPLEMENTATION_PLACEHOLDER",
-            "RUN_ID", "RUN_CONFIG_SHA256",
-        })
-        self.assertEqual(autonomy["environment"]["RUN_ID"], services["adapter"]["environment"]["RUN_ID"])
-        self.assertEqual(autonomy["environment"]["RUN_CONFIG_SHA256"], services["adapter"]["environment"]["RUN_CONFIG_SHA256"])
-        self.assertEqual(set(autonomy["depends_on"]), {"adapter"})
-        self.assertEqual(autonomy["depends_on"]["adapter"]["condition"], "service_healthy")
+        autonomy = self.config("deployment/compose.base.yaml")["autonomy"]
+        self.assertEqual(set(autonomy["environment"]), {"ROS_DOMAIN_ID"})
+        self.assertNotIn("depends_on", autonomy)
+        self.assertNotIn("autonomy", services)
         self.assertFalse(autonomy.get("devices"))
         self.assertFalse(autonomy.get("volumes"))
         self.assertFalse(autonomy.get("privileged", False))
@@ -77,7 +68,8 @@ class ContainerBoundaries(unittest.TestCase):
         # acceptance; this test makes no claim that a Docker build was run.
         services = self.config("Simulation/container/compose.yaml", "--profile", "ros")
         adapter = Path(services["adapter"]["build"]["context"])
-        autonomy = Path(services["autonomy"]["build"]["context"])
+        autonomy_service = self.config("deployment/compose.base.yaml")["autonomy"]
+        autonomy = Path(autonomy_service["build"]["context"])
         package = adapter / "ros_ws/src/blueboat_sim_bringup"
         dependencies = {item.text for item in ET.parse(package / "package.xml").getroot() if "depend" in item.tag}
         self.assertTrue({"mavros", "mavros_msgs"} <= dependencies)
@@ -109,8 +101,8 @@ class ContainerBoundaries(unittest.TestCase):
         for forbidden in ("mavros", "geographiclib", "fcu_url"):
             self.assertNotIn(forbidden, autonomy_dockerfile)
         self.assertFalse(list((autonomy / "ros_ws/src").rglob("mavros*")))
-        self.assertNotIn("FCU_URL", services["autonomy"]["environment"])
-        autonomy_health = " ".join(services["autonomy"]["healthcheck"]["test"])
+        self.assertNotIn("FCU_URL", autonomy_service["environment"])
+        autonomy_health = " ".join(autonomy_service["healthcheck"]["test"])
         self.assertIn("placeholder_healthcheck", autonomy_health)
         self.assertNotIn("mavros", autonomy_health.lower())
         for source in (autonomy / "ros_ws/src").rglob("*.py"):

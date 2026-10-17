@@ -71,7 +71,7 @@ mavros-smoke:
 	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 
 boundary-smoke:
-	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -v "$(abspath ../tests):/boundary-tests:ro" -e SIMULATION_EVALUATION=1 evaluation python3 /boundary-tests/ros_boundary_smoke.py
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -v "$(abspath ../tests):/boundary-tests:ro" -e SIMULATION_EVALUATION=1 evaluation python3 /boundary-tests/ros_boundary_smoke.py $(ARGS)
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
@@ -83,18 +83,10 @@ buoy-tracking-smoke:
 		-lc 'cmake -S /test -B /tmp/buoy-test && cmake --build /tmp/buoy-test -j2 && /tmp/buoy-test/buoy_tracking_test /tmp/tracking.sdf'
 
 lifecycle-smoke:
-	python3 tests/lifecycle_acceptance.py
+	python3 tests/lifecycle_acceptance.py $(ARGS)
 
 down:
 	./scripts/run.sh --down
 
 logs:
 	docker compose -f container/compose.yaml --profile ros logs -f
-
-.PHONY: navigation-build navigation navigation-test
-navigation-build:
-	python3 scripts/navigation.py build
-navigation:
-	python3 scripts/navigation.py run --task $(or $(TASK),slalom) $(ARGS)
-navigation-test:
-	python3 scripts/navigation.py test

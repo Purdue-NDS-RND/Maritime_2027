@@ -69,10 +69,10 @@ direct rendering fails, use:
 ```bash
 SOFTWARE_RENDERING=1 make run
 ```
-# Optional ROS 2 RGB-D setup
+# ROS 2 RGB-D setup
 
 ROS 2 is containerized; do not install ROS or MAVROS on the host. Build the
-simulator, adapter, and autonomy images with:
+simulator and Adapter images with:
 
 ```bash
 make ros-build
@@ -83,8 +83,10 @@ MAVROS, and GeographicLib datasets. The separate evaluation image installs
 OpenCV's ArUco module and MAVROS message types for explicit simulation-only
 smoke tests. The autonomy image has none of those environment-facing runtime
 dependencies.
-Use `ADAPTER_IMAGE` and `AUTONOMY_IMAGE` to override their image names; the former
-combined `ROS_IMAGE` setting is no longer used.
+Use `ADAPTER_IMAGE` to override the Adapter image. Build navigation separately
+with `make -C ../autonomy navigation-build`; start it with
+`make -C ../autonomy run ARGS=--evaluate`. The former combined `ROS_IMAGE`
+setting is no longer used.
 The build needs internet access and several additional gigabytes of Docker
 storage. Verify available storage with `docker system df` and `df -h` before a
 clean rebuild. Do not remove unrelated Docker data to make room.

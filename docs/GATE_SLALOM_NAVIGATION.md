@@ -16,22 +16,31 @@ validation of this simulation implementation.
 
 ## Run
 
-From `Simulation/`, first build and start the existing simulator:
+Build navigation from `autonomy/` once:
 
 ```bash
-make validate
+cd autonomy
 make navigation-build
+```
+
+Start Simulation and the Adapter in one terminal:
+
+```bash
+cd Simulation
 SCENARIO=slalom BOAT_MODEL=dual WATER=calm make run
 ```
 
-In another terminal, also in `Simulation/`:
+Start navigation in a second terminal:
 
 ```bash
-make navigation ARGS=--evaluate
+cd autonomy
+make run ARGS=--evaluate
 ```
 
-For the standalone gate, start with `SCENARIO=gate BOAT_MODEL=dual WATER=calm`
-and run `make navigation TASK=gate ARGS=--evaluate`. The runner requires a
+Simulation starts its Adapter by default, and starts no autonomy application.
+The old placeholder is no longer part of the Simulation stack.
+For the standalone gate, use `SCENARIO=gate` in Simulation and
+`make run TASK=gate ARGS=--evaluate` in autonomy. The runner requires a
 healthy simulator and Adapter. It waits for an observed gate before requesting
 GUIDED and arming an initially disarmed boat. It sends ENU desired velocity at
 up to 0.65 m/s. Completion, interruption and session timeout invoke a zero
@@ -46,7 +55,7 @@ all buoy side crossings and conservative footprint clearance, and requires the
 complete gate/turn/exit event sequence with observations from both cameras.
 A successful process launch or healthy container is not a navigation pass.
 
-`make navigation-test` runs the course-planning and existing autonomy boundary
+`make navigation-test` in `autonomy/` runs the course-planning and existing autonomy boundary
 tests on the host, plus RGB geometry and command-gate tests in isolated containers.
 It requires the built autonomy and evaluation images but no running simulator.
 
@@ -99,9 +108,12 @@ Navigation acceptance on October 17, 2026 used `BOAT_MODEL=dual WATER=calm`:
 - `make dual-camera-smoke`: both exact RGB-D streams and mount TF passed,
   with 30.3 Hz measured using source timestamps and the expected gate marker
   visible in each camera.
-- `make validate`, `make navigation-build`, `make navigation-test`, repository
+- `make validate` in Simulation, `make navigation-build` and `make navigation-test` in autonomy, repository
   boundary tests, and the complete `make verify-rgbd` suite passed. The latter
   includes original ArduPilot travel, stopping, return and disarm behavior.
+
+The validation above describes the navigation algorithm; startup ownership is now
+Simulation + Adapter in `Simulation/` and explicit navigation in `autonomy/`.
 
 Run-specific evidence remains under `Simulation/logs/`; no generated logs or
 scenario files are committed. To render a judged trajectory locally:

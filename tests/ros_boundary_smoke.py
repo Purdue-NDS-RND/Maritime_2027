@@ -17,12 +17,13 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_msgs.msg import TFMessage
 
-from boundary_contract import MISSION, PLACEHOLDER, REQUIRED_READY, diagnostic_level, validate_evidence
+from boundary_contract import MISSION, REQUIRED_READY, diagnostic_level, validate_adapter_evidence
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--autonomy", action="store_true")
+    parser.add_argument("--require-no-autonomy", action="store_true")
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
     rclpy.init(args=[])
@@ -75,19 +76,18 @@ def main():
             try:
                 assert received["triples"] >= 10 and received["connected"], f"missing cross-container data: {received}"
                 assert dict(node.get_topic_names_and_types()).get("/mavros/state") == ["mavros_msgs/msg/State"], "MAVROS State contract missing"
-                for name in REQUIRED_READY | {MISSION, PLACEHOLDER}:
+                for name in REQUIRED_READY | {MISSION}:
                     assert time.monotonic() - arrivals.get(name, 0) <= 2.0, f"stale diagnostics: {name}"
-                publishers = node.get_publisher_names_and_types_by_node("maritime_preimplementation_placeholder", "/")
-                subscribers = node.get_subscriber_names_and_types_by_node("maritime_preimplementation_placeholder", "/")
-                clients = node.get_client_names_and_types_by_node("maritime_preimplementation_placeholder", "/")
-                assert publishers, "placeholder node not discovered"
-                validate_evidence(diagnostics, shared_frames, [name for name, _ in publishers],
-                                  [name for name, _ in subscribers], [name for name, _ in clients])
+                validate_adapter_evidence(diagnostics, shared_frames)
+                if args.require_no_autonomy:
+                    nodes = {name for name, namespace in node.get_node_names_and_namespaces()}
+                    assert not nodes & {"maritime_preimplementation_placeholder", "gate_slalom_navigator"}, "Simulation started autonomy"
+                    assert not node.get_publishers_info_by_topic('/navigation/velocity'), "Navigation commands present at Simulation-only startup"
             except AssertionError as error:
                 failure = str(error)
                 failures[":".join(failure.split(":", 2)[:2])] += 1
                 continue
-            print(f"BOUNDARY PASS: {received['triples']} exact RGB-D triples received; source/FCU readiness observed; shared TF and non-commanding placeholder verified; mission remains unready")
+            print(f"BOUNDARY PASS: {received['triples']} exact RGB-D triples received; source/FCU readiness observed; shared TF verified; Adapter does not claim mission readiness")
             if args.autonomy:
                 print("AUTONOMY PROBE: MAVROS State graph type and FCU diagnostics verified; direct State decoding checked separately by evaluator")
             break

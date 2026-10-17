@@ -29,7 +29,7 @@ Environment:
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
   BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat; enables ROS
   WATER=calm|normal|harsh  Override water independently of the world/scenario
-  ROS_SIM=1                Enable ROS/MAVROS for a direct WORLD launch
+  ROS_SIM=1                Start Adapter/MAVROS by default; 0 opts out for bare SITL
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
 EOF
 }
@@ -80,7 +80,6 @@ RENDER_GID=${RENDER_GID:-$HOST_GID}
 export VIDEO_GID RENDER_GID
 export SIM_IMAGE=${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
 export ADAPTER_IMAGE=${ADAPTER_IMAGE:-maritime-sim-adapter:jazzy}
-export AUTONOMY_IMAGE=${AUTONOMY_IMAGE:-maritime-autonomy:jazzy}
 export EVALUATION_IMAGE=${EVALUATION_IMAGE:-maritime-sim-evaluation:jazzy}
 
 compose_files=(-f container/compose.yaml)
@@ -114,7 +113,7 @@ if ! flock -n 9; then
     echo "ERROR: another simulation launcher owns this project; use make down before starting a new run." >&2
     exit 1
 fi
-for existing_container in ardupilot-blueboat-sim maritime-sim-adapter maritime-autonomy; do
+for existing_container in ardupilot-blueboat-sim maritime-sim-adapter; do
     if docker container inspect "$existing_container" >/dev/null 2>&1; then
         echo "ERROR: existing project container $existing_container would be replaced; use make down first." >&2
         exit 1
@@ -146,6 +145,7 @@ if [[ -n ${BUOY_SEED:-} && -z $scenario ]]; then
     exit 2
 fi
 
+export ROS_SIM=${ROS_SIM:-1}
 ros_enabled=0
 if [[ -n $scenario ]]; then
     case "$scenario" in
@@ -213,7 +213,7 @@ fi
 profile_args=()
 if [[ $ros_enabled == 1 ]]; then
     profile_args=(--profile ros)
-    export ADAPTER_ENVIRONMENT=simulation MARITIME_PREIMPLEMENTATION_PLACEHOLDER=1
+    export ADAPTER_ENVIRONMENT=simulation
 fi
 
 camera_model_dir=blueboat_rgbd
@@ -235,7 +235,7 @@ case $build_mode in
             need_build=1
         fi
         if [[ $ros_enabled == 1 ]]; then
-            for ros_image in "$ADAPTER_IMAGE" "$AUTONOMY_IMAGE"; do
+            for ros_image in "$ADAPTER_IMAGE"; do
                 if ! docker image inspect "$ros_image" >/dev/null 2>&1; then
                     need_build=1
                 fi
@@ -338,7 +338,7 @@ echo "Boat model: ${BOAT_MODEL:-single}"
 echo "World: ${WORLD:-blueboat_waves.sdf}; scenario: ${scenario:-none}; display: $DISPLAY"
 echo "MAVLink: ${MAVLINK_QGC:-udp:127.0.0.1:14550} (QGC), ${MAVLINK_API:-udp:127.0.0.1:14551} (student API)"
 if [[ $ros_enabled == 1 ]]; then
-    echo "ROS 2: Simulation Adapter + pre-implementation autonomy bootstrap, domain ${ROS_DOMAIN_ID:-0}"
+    echo "ROS 2: Simulation Adapter (navigation starts separately from autonomy/), domain ${ROS_DOMAIN_ID:-0}"
 fi
 if pgrep -f '[Q]GroundControl' >/dev/null 2>&1; then
     echo "QGroundControl is running and should auto-connect on UDP 14550."
@@ -347,7 +347,7 @@ else
 fi
 
 # Save the resolved configuration and immutable scenario copy for this run.
-# Placeholder launches allocate no persistent observation or map state.
+# Simulation startup launches no perception, navigation, or mission processes.
 export RUN_CONFIG_SHA256=recording
 run_dir="logs/runs/$RUN_ID"
 mkdir -p "$run_dir"
@@ -359,7 +359,7 @@ fi
 if [[ -n ${WATER:-} ]]; then
     cp logs/generated-worlds/water.json "$run_dir/water.json"
 fi
-printf 'run_id=%s\nconfiguration_sha256=%s\napplication_state=empty_simulation_placeholder\n' \
+printf 'run_id=%s\nconfiguration_sha256=%s\napplication_state=not_started\n' \
     "$RUN_ID" "$RUN_CONFIG_SHA256" > "$run_dir/identity.txt"
 
 capture_failure() {
@@ -403,11 +403,8 @@ if [[ $ros_enabled == 1 ]]; then
     docker compose "${compose_files[@]}" --profile ros up -d --no-deps adapter
     wait_service adapter camera_calibration_tf_fcu maritime-sim-adapter
     required_containers+=(maritime-sim-adapter)
-    docker compose "${compose_files[@]}" --profile ros up -d --no-deps autonomy
-    wait_service autonomy placeholder_liveness maritime-autonomy
-    required_containers+=(maritime-autonomy)
 fi
-echo "Stack startup passed; placeholder mission/application readiness remains false. Run: $RUN_ID"
+echo "Stack startup passed; navigation is not started. Run: $RUN_ID"
 docker compose "${compose_files[@]}" "${profile_args[@]}" logs -f > "$run_dir/services.log" 2>&1 &
 log_pid=$!
 # Compose dependencies gate startup only. Continue supervising required services

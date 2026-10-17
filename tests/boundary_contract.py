@@ -13,6 +13,7 @@ EXPECTED_FRAMES = {
     ("camera_0_link", "camera_0_optical_frame"),
 }
 ALLOWED_FRAMES = EXPECTED_FRAMES | {
+    ("base_link", "camera_1_link"), ("camera_1_link", "camera_1_optical_frame"),
     ("map", "map_ned"), ("odom", "odom_ned"), ("base_link", "base_link_frd"),
 }
 
@@ -26,12 +27,8 @@ def diagnostic_level(level):
     return int(level)
 
 
-def validate_evidence(diagnostics, frames, placeholder_publishers, placeholder_subscribers, placeholder_clients):
-    """Reject readiness confusion and command capability using observed evidence.
-
-    diagnostics maps status names to (level, reason, key/value map). Caller
-    enforces arrival freshness independently; cached status is not liveness.
-    """
+def validate_adapter_evidence(diagnostics, frames):
+    """Validate the public Adapter without requiring an autonomy application."""
     for name in REQUIRED_READY:
         assert name in diagnostics, f"missing readiness evidence: {name}"
         level, reason, values = diagnostics[name]
@@ -40,6 +37,17 @@ def validate_evidence(diagnostics, frames, placeholder_publishers, placeholder_s
     level, reason, values = diagnostics[MISSION]
     assert level != 0 and reason == "mission_policy_unavailable", "Adapter claims mission readiness"
     assert values.get("source_ready") == "false", "Adapter claims mission readiness"
+    assert EXPECTED_FRAMES <= frames, f"missing camera TF: {frames}"
+    assert frames <= ALLOWED_FRAMES, f"truth or pose leaked to shared TF: {frames}"
+
+
+def validate_evidence(diagnostics, frames, placeholder_publishers, placeholder_subscribers, placeholder_clients):
+    """Reject readiness confusion and command capability using observed evidence.
+
+    diagnostics maps status names to (level, reason, key/value map). Caller
+    enforces arrival freshness independently; cached status is not liveness.
+    """
+    validate_adapter_evidence(diagnostics, frames)
     assert PLACEHOLDER in diagnostics, "missing placeholder diagnostic"
     level, reason, values = diagnostics[PLACEHOLDER]
     assert level == 1 and reason == "preimplementation_placeholder", "placeholder identity mismatch"
@@ -48,8 +56,6 @@ def validate_evidence(diagnostics, frames, placeholder_publishers, placeholder_s
         "mission_ready": "false", "vehicle_commands_permitted": "false",
     }.items():
         assert values.get(key) == expected, f"unsafe placeholder state: {key}"
-    assert EXPECTED_FRAMES <= frames, f"missing camera TF: {frames}"
-    assert frames <= ALLOWED_FRAMES, f"truth or pose leaked to shared TF: {frames}"
     assert set(placeholder_publishers) <= {"/diagnostics", "/rosout", "/parameter_events"}, "placeholder has command publisher"
     assert not placeholder_subscribers, "placeholder consumes application/truth inputs"
     assert not placeholder_clients, "placeholder has command client"

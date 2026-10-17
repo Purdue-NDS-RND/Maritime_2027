@@ -26,8 +26,7 @@ wait_for_health() {
     while ((SECONDS < deadline)); do
         sim_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' ardupilot-blueboat-sim 2>/dev/null || true)
         adapter_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' maritime-sim-adapter 2>/dev/null || true)
-        autonomy_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' maritime-autonomy 2>/dev/null || true)
-        [[ $sim_health == healthy && $adapter_health == healthy && $autonomy_health == healthy ]] && return 0
+        [[ $sim_health == healthy && $adapter_health == healthy ]] && return 0
         kill -0 "$runner_pid" 2>/dev/null || break
         sleep 2
     done
