@@ -35,6 +35,8 @@ class Mission:
         self.events = []
         self.next_id = 0
         self.departure = None
+        self.gate_plane_s = None
+        self.gate_width = None
 
     def observe(self, category, x, y, now):
         if category not in ('red', 'green') or not all(map(math.isfinite, (x, y, now))):
@@ -72,6 +74,24 @@ class Mission:
                     pairs.append((red, green))
         return pairs
 
+    def clearing_gate(self, x, y, yaw):
+        """Permit only the bounded stern-clearance leg of an observed gate.
+
+        Forward cameras naturally lose the gate behind the vessel. Fresh camera
+        streams and odometry are still required by the caller. The conservative
+        hull rectangle must fit between the observed buoys throughout this leg.
+        """
+        if (self.stage not in ('gate_a', 'gate_b') or self.target is None
+                or self.departure is not None or self.gate_plane_s is None):
+            return False
+        s, t = self.coordinates(x, y)
+        goal_s, goal_t = self.coordinates(*self.target)
+        angle = yaw-math.atan2(self.forward[1], self.forward[0])
+        half_width = .6*abs(math.cos(angle))+1.1*abs(math.sin(angle))
+        margin = self.gate_width/2-.6-half_width
+        return (self.gate_plane_s <= s <= goal_s+.15
+                and abs(t-goal_t) < margin)
+
     def update(self, x, y, yaw, now):
         if self.stage in ('complete', 'fault'):
             return None
@@ -86,6 +106,7 @@ class Mission:
             self.left = ((green.x-red.x)/width, (green.y-red.y)/width)
             self.forward = (self.left[1], -self.left[0])
             self.origin = ((red.x+green.x)/2, (red.y+green.y)/2)
+            self.gate_plane_s, self.gate_width = 0., width
             self.target = self.world(2.2, 0)
             self.active_ids = [red.identity, green.identity]
             self.stage = 'gate_a'
@@ -125,6 +146,8 @@ class Mission:
                 red, green = min(pairs, key=lambda p: sum(self.coordinates(b.x, b.y)[0] for b in p))
                 rs, rt = self.coordinates(red.x, red.y)
                 gs, gt = self.coordinates(green.x, green.y)
+                self.gate_plane_s = (rs+gs)/2
+                self.gate_width = abs(gt-rt)
                 self.target = self.world((rs+gs)/2-2.0, (rt+gt)/2)
                 self.departure = self.world((rs+gs)/2+2.2, (rt+gt)/2)
                 self.active_ids = [red.identity, green.identity]

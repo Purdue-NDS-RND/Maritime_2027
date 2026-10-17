@@ -76,8 +76,11 @@ It requires the built autonomy and evaluation images but no running simulator.
 - Live image and odometry **receipt times** are paired within 0.25 seconds.
   Processing drops frames older than 0.5 seconds. This approximation is for slow
   live simulation; it is not acquisition-time synchronization or a replay path.
-- Missing camera data (1.5 s), odometry (0.5 s), or marker observations (8 s)
-  cause zero desired velocity. No blind forward search is performed. Gates must
+- Missing camera data (1.5 s) or odometry (0.5 s) causes zero desired velocity.
+  Missing marker observations (8 s) also stops motion, except for the bounded
+  clearance leg after entering an already observed gate. That leg uses fresh
+  odometry and requires the conservative hull footprint to fit inside the
+  observed gate; it lets the stern clear after the markers leave the forward cameras. No blind forward search is performed. Gates must
   be 2.6-6 m wide and approximately perpendicular to the initial boat heading.
   Turn count defaults to four; the gate-only task configures zero.
 - The course is traversed in the direction established by the first gate. The

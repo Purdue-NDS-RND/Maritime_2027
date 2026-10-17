@@ -101,7 +101,7 @@ class Navigator(Node):
         if healthy:
             x, y = self.pose[:2, 3]
             yaw = math.atan2(self.pose[1, 0], self.pose[0, 0])
-            if now-self.vision_time < 8:
+            if now-self.vision_time < 8 or self.mission.clearing_gate(x, y, yaw):
                 target = self.mission.update(float(x), float(y), yaw, now)
                 reason = self.mission.stage
             else:

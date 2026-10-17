@@ -52,6 +52,22 @@ class CourseTests(unittest.TestCase):
         m.update(*transform(9.2, 0), angle, 6)
         self.assertEqual(m.stage, 'complete')
 
+    def test_only_committed_gate_clearance_can_outlive_marker_visibility(self):
+        m = Mission(turns=0)
+        self.assertFalse(m.clearing_gate(8, 0, 0))
+        for i in range(5):
+            m.observe('red', 7, -1.5, i)
+            m.observe('green', 7, 1.5, i)
+        m.update(0, 0, 0, 5)
+        self.assertFalse(m.clearing_gate(6.9, 0, 0))
+        self.assertTrue(m.clearing_gate(7.5, 0, 0))
+        self.assertFalse(m.clearing_gate(7.5, .4, 0))
+        self.assertFalse(m.clearing_gate(7.5, 0, math.pi/2))
+        self.assertFalse(m.clearing_gate(10, 0, 0))
+        m.update(9.2, 0, 0, 40)
+        self.assertEqual(m.stage, 'complete')
+        self.assertFalse(m.clearing_gate(9.2, 0, 0))
+
     def test_no_motion_without_confirmed_gate(self):
         m = Mission()
         for i in range(5):
