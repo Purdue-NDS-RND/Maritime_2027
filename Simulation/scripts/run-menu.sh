@@ -18,30 +18,49 @@ configure_simulation() {
 
   BlueBoat simulation setup
   -------------------------
-  1) Mild waves       - standard boat world (default)
-  2) Calm water       - no waves
-  3) Harbor and dock  - rough water, docking practice
-  4) Single buoy      - RGB-D camera and one marker buoy
-  5) Red/green gate   - RGB-D camera and a two-buoy gate
-  6) Multiple buoys   - RGB-D camera and four buoys
-  7) Repeated red     - RGB-D camera and two red buoys
-  8) Camera only     - RGB-D camera, no buoys
+  Water conditions
+  1) Calm            - flat water
+  2) Normal waves    - existing mild waves (default)
+  3) Harsh waves     - existing rough harbor waves
 
   Enter keeps the default. Type q at any prompt to cancel.
 
 EOF
+    while [[ -z ${WATER:-} ]]; do
+        menu_read 'Choose water [2]: '
+        case "${menu_answer:-2}" in
+            1) export WATER=calm; break ;;
+            2) export WATER=normal; break ;;
+            3) export WATER=harsh; break ;;
+            *) printf 'Please enter a number from 1 to 3, or q.\n' ;;
+        esac
+    done
+    printf '\nWater preset: %s\n' "$WATER"
+    cat <<'EOF'
+
+  Setup / scene
+  1) Open water      - boat only (default)
+  2) Harbor and dock - docking practice
+  3) Single buoy     - RGB-D camera and one marker buoy
+  4) Red/green gate  - RGB-D camera and a two-buoy gate
+  5) Multiple buoys  - RGB-D camera and four buoys
+  6) Repeated red    - RGB-D camera and two red buoys
+  7) Camera only    - RGB-D camera, no buoys
+  8) Slalom         - entry/exit gates and alternating red/green turns
+
+EOF
     while true; do
-        menu_read 'Choose a world [1]: '
+        menu_read 'Choose a scene [1]: '
         selection=${menu_answer:-1}
         case "$selection" in
             1) export WORLD=blueboat_waves.sdf; break ;;
-            2) export WORLD=blueboat_calm.sdf; break ;;
-            3) export WORLD=blueboat_harbor.sdf; break ;;
-            4) export SCENARIO=one; break ;;
-            5) export SCENARIO=gate; break ;;
-            6) export SCENARIO=multi; break ;;
-            7) export SCENARIO=repeated_red; break ;;
-            8) export WORLD=blueboat_rgbd_base.sdf ROS_SIM=1; break ;;
+            2) export WORLD=blueboat_harbor.sdf; break ;;
+            3) export SCENARIO=one; break ;;
+            4) export SCENARIO=gate; break ;;
+            5) export SCENARIO=multi; break ;;
+            6) export SCENARIO=repeated_red; break ;;
+            7) export WORLD=blueboat_rgbd_base.sdf ROS_SIM=1; break ;;
+            8) export SCENARIO=slalom; break ;;
             *) printf 'Please enter a number from 1 to 8, or q.\n' ;;
         esac
     done
@@ -58,7 +77,7 @@ EOF
             fi
             printf 'Please enter an integer, leave blank for the default, or q.\n'
         done
-    elif [[ $selection != 8 ]]; then
+    elif [[ $selection != 7 ]]; then
         ros_default=n
         case "${ROS_SIM:-0}" in
             1|true|TRUE|yes|YES|on|ON) ros_default=y ;;
@@ -73,7 +92,7 @@ EOF
         done
     fi
 
-    printf '\nStarting with: '
+    printf '\nStarting with: WATER=%q ' "$WATER"
     if [[ -n ${SCENARIO:-} ]]; then
         printf 'SCENARIO=%q ' "$SCENARIO"
         [[ -z ${BUOY_SEED:-} ]] || printf 'BUOY_SEED=%q ' "$BUOY_SEED"

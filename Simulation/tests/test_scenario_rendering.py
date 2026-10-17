@@ -16,6 +16,25 @@ BASE_WORLD = SIMULATION_ROOT / "worlds" / "blueboat_rgbd_base.sdf"
 
 
 class ScenarioRenderingTests(unittest.TestCase):
+    def test_slalom_has_entry_exit_gates_and_alternating_turns(self):
+        scenario = json.loads((SIMULATION_ROOT/'scenarios/slalom.json').read_text())
+        result, _, manifest_path = self.render(scenario)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        buoys = json.loads(manifest_path.read_text())['buoys']
+        self.assertEqual(len(buoys), 8)
+        self.assertEqual(len({b['evaluation_key'] for b in buoys}), 8)
+        for gate, x in (('a', 7.), ('b', 37.)):
+            pair = [b for b in buoys if b['name'].startswith(f'slalom_{gate}_')]
+            self.assertEqual({b['category'] for b in pair}, {'red', 'green'})
+            self.assertEqual({b['model_pose']['x'] for b in pair}, {x})
+            self.assertEqual({b['model_pose']['y'] for b in pair}, {-2., 2.})
+            self.assertEqual({b['category']: b['model_pose']['y'] for b in pair},
+                             {'red': -2., 'green': 2.})
+        turns = [b for b in buoys if 'turn' in b['name']]
+        self.assertEqual([b['category'] for b in turns], ['red', 'green', 'red', 'green'])
+        self.assertEqual([b['model_pose']['x'] for b in turns], [13., 19., 25., 31.])
+        self.assertTrue(all(b['model_pose']['y'] == 0. for b in turns))
+
     def render(self, scenario):
         temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(temporary_directory.cleanup)

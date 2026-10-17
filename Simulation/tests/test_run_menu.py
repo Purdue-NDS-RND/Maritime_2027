@@ -13,7 +13,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SELECTION_KEYS = ("WORLD", "SCENARIO", "BUOY_SEED", "ROS_SIM")
+SELECTION_KEYS = ("WORLD", "SCENARIO", "BUOY_SEED", "ROS_SIM", "WATER")
 
 
 class RunMenuTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class RunMenuTests(unittest.TestCase):
                 "if sys.argv[1:] == ['compose', 'version']: sys.exit(0)\n"
                 "Path(__file__).with_name('selection').write_text('SELECTED=' + "
                 "json.dumps({k: os.environ.get(k) "
-                "for k in ('WORLD', 'SCENARIO', 'BUOY_SEED', 'ROS_SIM')}) + '\\n')\n"
+                "for k in ('WORLD', 'SCENARIO', 'BUOY_SEED', 'ROS_SIM', 'WATER')}) + '\\n')\n"
                 "sys.exit(1)\n"
             )
             docker.chmod(0o755)
@@ -87,48 +87,52 @@ class RunMenuTests(unittest.TestCase):
         return json.loads(rows[0].removeprefix("SELECTED=")), output
 
     def test_direct_worlds_and_enter_defaults(self):
-        for answer, world in (("", "waves"), ("1", "waves"),
-                              ("2", "calm"), ("3", "harbor")):
-            with self.subTest(world=world, answer=answer):
-                values, _ = self.selected(answer + "\n\n")
-                self.assertEqual(values["WORLD"], f"blueboat_{world}.sdf")
-                self.assertEqual(values["ROS_SIM"], "0")
-                self.assertIsNone(values["SCENARIO"])
+        for water_answer, water in (("", "normal"), ("1", "calm"),
+                                    ("2", "normal"), ("3", "harsh")):
+            for answer, world in (("", "waves"), ("1", "waves"), ("2", "harbor")):
+                with self.subTest(world=world, water=water):
+                    values, output = self.selected(f"{water_answer}\n{answer}\n\n")
+                    self.assertEqual(values["WORLD"], f"blueboat_{world}.sdf")
+                    self.assertEqual(values["WATER"], water)
+                    self.assertEqual(values["ROS_SIM"], "0")
+                    self.assertIsNone(values["SCENARIO"])
+                    self.assertLess(output.index('Choose water'), output.index('Choose a scene'))
 
     def test_buoy_scenarios_and_seed(self):
-        for answer, scenario in ((4, "one"), (5, "gate"),
-                                 (6, "multi"), (7, "repeated_red")):
+        for answer, scenario in ((3, "one"), (4, "gate"),
+                                 (5, "multi"), (6, "repeated_red"), (8, "slalom")):
             for seed in ("", "42", "-7", "0"):
                 with self.subTest(scenario=scenario, seed=seed):
-                    values, output = self.selected(f"{answer}\n{seed}\n")
+                    values, output = self.selected(f"3\n{answer}\n{seed}\n")
+                    self.assertEqual(values["WATER"], "harsh")
                     self.assertEqual(values["SCENARIO"], scenario)
                     self.assertEqual(values["BUOY_SEED"], seed or None)
                     self.assertIsNone(values["WORLD"])
                     self.assertNotIn("Enable ROS/MAVROS", output)
 
     def test_camera_only(self):
-        values, _ = self.selected("8\n")
+        values, _ = self.selected("1\n7\n")
         self.assertEqual(values["WORLD"], "blueboat_rgbd_base.sdf")
         self.assertEqual(values["ROS_SIM"], "1")
 
     def test_invalid_answers_retry(self):
-        values, output = self.selected("bad\n9\n5\n1.5\n42\n")
+        values, output = self.selected("bad\n2\n9\n4\n1.5\n42\n")
         self.assertEqual(values["SCENARIO"], "gate")
         self.assertEqual(values["BUOY_SEED"], "42")
         self.assertIn("Please enter a number", output)
         self.assertIn("Please enter an integer", output)
-        values, output = self.selected("1\nmaybe\ny\n")
+        values, output = self.selected("2\n1\nmaybe\ny\n")
         self.assertEqual(values["ROS_SIM"], "1")
         self.assertIn("Please enter y, n", output)
 
     def test_existing_seed_and_ros_defaults(self):
-        values, _ = self.selected("5\n\n", {"BUOY_SEED": "17"})
+        values, _ = self.selected("2\n4\n\n", {"BUOY_SEED": "17"})
         self.assertEqual(values["BUOY_SEED"], "17")
-        values, _ = self.selected("1\n\n", {"ROS_SIM": "true"})
+        values, _ = self.selected("2\n1\n\n", {"ROS_SIM": "true"})
         self.assertEqual(values["ROS_SIM"], "1")
 
     def test_cancel_at_each_prompt(self):
-        for answers in ("q\n", "5\nQ\n", "1\nq\n"):
+        for answers in ("q\n", "2\nq\n", "2\n4\nQ\n", "2\n1\nq\n"):
             with self.subTest(answers=answers):
                 code, output = self.launch(answers)
                 self.assertEqual(code, 0, output)
@@ -141,22 +145,30 @@ class RunMenuTests(unittest.TestCase):
         self.assertIn("Setup cancelled", output)
 
     def test_explicit_configuration_skips_menu(self):
-        for values in ({"WORLD": "blueboat_calm.sdf"}, {"SCENARIO": "gate"}):
+        for values in ({"WORLD": "blueboat_calm.sdf"}, {"SCENARIO": "gate"},
+                       {"SCENARIO": "gate", "WATER": "harsh"}):
             code, output = self.launch(overrides=values)
             self.assertNotEqual(code, 0)
-            self.assertNotIn("Choose a world", output)
+            self.assertNotIn("Choose water", output)
             self.assertIn("SELECTED=", output)
+
+    def test_explicit_water_keeps_scene_selection(self):
+        values, output = self.selected('4\n\n', {'WATER': 'calm'})
+        self.assertEqual(values['WATER'], 'calm')
+        self.assertEqual(values['SCENARIO'], 'gate')
+        self.assertNotIn('Choose water', output)
+        self.assertIn('Choose a scene', output)
 
     def test_noninteractive_and_other_actions_skip_menu(self):
         for argument in ("--non-interactive", "--build-only", "--rebuild-only", "--down"):
             with self.subTest(argument=argument):
                 code, output = self.launch(argument=argument)
                 self.assertNotEqual(code, 0)
-                self.assertNotIn("Choose a world", output)
+                self.assertNotIn("Choose water", output)
                 self.assertIn("SELECTED=", output)
         code, output = self.launch(terminal=False)
         self.assertNotEqual(code, 0)
-        self.assertNotIn("Choose a world", output)
+        self.assertNotIn("Choose water", output)
 
 
 if __name__ == "__main__":

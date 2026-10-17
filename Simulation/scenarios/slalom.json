@@ -1,0 +1,14 @@
+{
+  "name": "slalom",
+  "description": "Reference-inspired Dodge slalom: enter gate A, weave past four alternating red/green centreline buoys, and exit gate B. Provisional 30 m course with 4 m gates; boat travels along +X. Fixed layout; red stays on the boat's right, green on its left.",
+  "buoys": [
+    {"name": "slalom_a_red", "marker_id": 1, "pose": {"x": 7.0, "y": -2.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_a_green", "marker_id": 2, "pose": {"x": 7.0, "y": 2.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_turn_1_red", "marker_id": 1, "pose": {"x": 13.0, "y": 0.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_turn_2_green", "marker_id": 2, "pose": {"x": 19.0, "y": 0.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_turn_3_red", "marker_id": 1, "pose": {"x": 25.0, "y": 0.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_turn_4_green", "marker_id": 2, "pose": {"x": 31.0, "y": 0.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_b_red", "marker_id": 1, "pose": {"x": 37.0, "y": -2.0, "z": 0.0, "yaw_deg": 180.0}},
+    {"name": "slalom_b_green", "marker_id": 2, "pose": {"x": 37.0, "y": 2.0, "z": 0.0, "yaw_deg": 180.0}}
+  ]
+}

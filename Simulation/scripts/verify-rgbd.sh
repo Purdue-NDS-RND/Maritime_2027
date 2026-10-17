@@ -47,6 +47,17 @@ run_case() {
     runner_pid=$!
     wait_for_health
     docker exec ardupilot-blueboat-sim gz model --list | tee "logs/verify-$scenario-models.txt"
+    python3 - "$scenario" <<'PY'
+import json
+from pathlib import Path
+import sys
+manifest = json.loads(Path('logs/generated-worlds/active.manifest.json').read_text())
+models = {line.strip()[2:] for line in Path(f'logs/verify-{sys.argv[1]}-models.txt').read_text().splitlines()
+          if line.strip().startswith('- ')}
+missing = {item['gazebo_model_name'] for item in manifest['buoys']} - models
+assert not missing, f'Scenario models missing from Gazebo: {sorted(missing)}'
+print(f"Scene roster PASS: {len(manifest['buoys'])} buoy entities present")
+PY
     if [[ $scenario == one || $scenario == gate || $scenario == repeated_red ]]; then
         docker exec ardupilot-blueboat-sim python3 /opt/boat_sim/scripts/gazebo_sensor_smoke.py
         make sensor-smoke
@@ -54,6 +65,12 @@ run_case() {
     if [[ $scenario == one ]]; then
         make boundary-smoke
         make mavros-smoke
+    fi
+    if [[ $scenario == slalom ]]; then
+        # Long-course markers intentionally occlude one another from the start.
+        # Check public RGB-D/TF and the full roster, without requiring every
+        # marker to be simultaneously visible to the existing sensor evaluator.
+        make boundary-smoke
     fi
     stop_run
 }
@@ -63,6 +80,7 @@ run_case one
 run_case gate
 run_case multi 42
 run_case repeated_red
+run_case slalom
 
 echo "=== Verifying original ArduPilot behavior with the augmented boat and no buoys ==="
 ROS_SIM=1 WORLD=blueboat_rgbd_base.sdf ./scripts/run.sh >logs/verify-camera-only.log 2>&1 &

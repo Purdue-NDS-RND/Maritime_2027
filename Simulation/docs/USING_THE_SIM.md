@@ -8,20 +8,42 @@ Run from the host terminal (QGroundControl is optional):
 make run
 ```
 
-The terminal menu offers mild waves (default), calm water, harbor/dock, single
-buoy, red/green gate, multiple buoys, repeated red buoys, and camera only. Type
-a number and press Enter, or just press Enter for mild waves. Type `q` at any
-prompt to cancel before startup. Invalid answers are re-prompted.
+The terminal menu first asks for water: **calm**, **normal waves** (default), or
+**harsh waves**. Then choose the scene: open water (default), harbor/dock, single
+buoy, red/green gate, multiple buoys, repeated red buoys, slalom, or camera only. Type
+`q` at any prompt to cancel before startup. Invalid answers are re-prompted.
+The water choice applies independently to every scene, including buoy scenes.
+Presets reuse the existing regular-wave settings: calm amplitude 0 m / period
+6 s; normal 0.08 m / 3 s; harsh 0.25 m / 3 s. These are simulation presets,
+not calibrated sea-state classifications. Both physics and surface rendering
+use the selected parameters. Source world files are never overwritten.
 
 For buoy scenarios, enter an optional integer seed to randomize buoy poses
 reproducibly, or leave it blank for the fixed layout. RGB-D choices enable
-ROS/MAVROS automatically. The three boat-only worlds ask whether to enable
+ROS/MAVROS automatically. Boat-only scenes ask whether to enable
 ROS/MAVROS, defaulting to off unless `ROS_SIM` is already enabled.
 
 Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
 launches (redirected input or output) keep the existing defaults and never
 prompt. Use `./scripts/run.sh --non-interactive` for default startup without a
 menu in a terminal. Builds and `make down` also never prompt.
+
+For explicit launches, combine water with a scene:
+
+```bash
+WATER=calm SCENARIO=gate make run
+WATER=normal SCENARIO=multi make run
+WATER=calm SCENARIO=slalom make run
+WATER=harsh WORLD=blueboat_harbor.sdf make run
+```
+
+Without `WATER`, explicit and noninteractive launches retain their original
+world-specific water defaults. Setting only `WATER` in an interactive terminal
+skips the water question and opens scene selection. Generated water worlds live
+under `logs/generated-worlds/`; each run records the chosen preset in its separate
+`water.json`. The Adapter's scene-manifest schema stays unchanged.
+See [water selection verification](WATER_SELECTION_VERIFICATION.md) for test scope
+and runtime results.
 
 Gazebo starts first. The launcher waits for an advancing world clock and the
 BlueBoat odometry topic before starting Rover SITL. QGroundControl receives

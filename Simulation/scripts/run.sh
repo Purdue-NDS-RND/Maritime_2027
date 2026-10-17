@@ -25,8 +25,9 @@ In a terminal, starting without WORLD or SCENARIO opens a quick setup menu.
 Explicit WORLD/SCENARIO selections and redirected input/output skip the menu.
 
 Environment:
-  SCENARIO=one|gate|multi|repeated_red  Render and launch an RGB-D buoy scenario with ROS
+  SCENARIO=one|gate|multi|repeated_red|slalom  Launch an RGB-D buoy scenario with ROS
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
+  WATER=calm|normal|harsh  Override water independently of the world/scenario
   ROS_SIM=1                Enable ROS/MAVROS for a direct WORLD launch
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
 EOF
@@ -120,6 +121,10 @@ for existing_container in ardupilot-blueboat-sim maritime-sim-adapter maritime-a
 done
 
 scenario=${SCENARIO:-}
+case "${WATER:-}" in
+    ''|calm|normal|harsh) ;;
+    *) echo 'ERROR: WATER must be calm, normal, or harsh.' >&2; exit 2 ;;
+esac
 if [[ -n $scenario && -n ${WORLD:-} ]]; then
     echo "ERROR: SCENARIO and WORLD are mutually exclusive." >&2
     exit 2
@@ -136,8 +141,8 @@ fi
 ros_enabled=0
 if [[ -n $scenario ]]; then
     case "$scenario" in
-        one|gate|multi|repeated_red) ;;
-        *) echo "ERROR: SCENARIO must be one, gate, multi, or repeated_red." >&2; exit 2 ;;
+        one|gate|multi|repeated_red|slalom) ;;
+        *) echo "ERROR: SCENARIO must be one, gate, multi, repeated_red, or slalom." >&2; exit 2 ;;
     esac
     mkdir -p logs/generated-worlds
     render_args=(
@@ -176,6 +181,15 @@ else
             ;;
         *) echo "ERROR: ROS_SIM must be a boolean value." >&2; exit 2 ;;
     esac
+fi
+
+if [[ -n ${WATER:-} ]]; then
+    water_source="worlds/${WORLD:-blueboat_waves.sdf}"
+    [[ -z $scenario ]] || water_source=logs/generated-worlds/active.sdf
+    water_args=(--source "$water_source" --output logs/generated-worlds/water.sdf --water "$WATER"
+                --metadata logs/generated-worlds/water.json)
+    python3 scripts/render_water.py "${water_args[@]}"
+    export WORLD=water.sdf
 fi
 
 profile_args=()
@@ -320,6 +334,9 @@ docker compose "${compose_files[@]}" "${profile_args[@]}" config > "$run_dir/com
 export RUN_CONFIG_SHA256=$(sha256sum "$run_dir/compose.yaml" | cut -d ' ' -f1)
 if [[ $ros_enabled == 1 && -f logs/generated-worlds/active.manifest.json ]]; then
     cp logs/generated-worlds/active.manifest.json "$run_dir/scenario.manifest.json"
+fi
+if [[ -n ${WATER:-} ]]; then
+    cp logs/generated-worlds/water.json "$run_dir/water.json"
 fi
 printf 'run_id=%s\nconfiguration_sha256=%s\napplication_state=empty_simulation_placeholder\n' \
     "$RUN_ID" "$RUN_CONFIG_SHA256" > "$run_dir/identity.txt"

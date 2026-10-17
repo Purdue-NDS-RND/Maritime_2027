@@ -9,11 +9,13 @@ Launch an autonomous surface boat simulation with one command:
 make run
 ```
 
-Choose a world from the terminal menu: mild waves, calm water, harbor/dock,
-one buoy, a red/green gate, multiple buoys, repeated red buoys, or camera only.
-Press Enter for the mild-wave default, or `q` to cancel. Buoy scenarios ask
-for an optional integer randomization seed and automatically enable ROS/MAVROS.
-Boat-only worlds offer an optional ROS/MAVROS connection.
+Choose water first: calm, normal waves (default), or harsh waves. Then select
+open water, harbor/dock, one buoy, a red/green gate, multiple buoys, repeated red
+buoys, slalom, or camera only. Water applies independently to every scene. Press Enter
+for defaults or `q` to cancel. Buoy scenes then ask for an optional integer seed
+and automatically enable ROS/MAVROS; boat-only scenes offer optional ROS/MAVROS.
+For automation, use e.g. `WATER=harsh SCENARIO=gate make run`. Explicit launches
+without `WATER` preserve their existing water defaults.
 
 Gazebo Harmonic simulates the official Blue Robotics BlueBoat model, mild
 surface waves, buoyancy, hydrodynamic drag, IMU data, and twin-thruster motion.
@@ -62,7 +64,7 @@ QGroundControl stays outside Docker. On this workstation it is located at:
    make run
    ```
 
-4. Choose a world (Enter for mild waves), then wait for Gazebo to show BlueBoat
+4. Choose water (Enter for normal waves), then a scene, then wait for Gazebo to show BlueBoat
    and for QGroundControl to connect.
 5. In a second terminal, exercise the simulator control acceptance test:
 
@@ -105,6 +107,10 @@ You can also select it from the `make run` menu. Explicit `WORLD` or `SCENARIO`
 values skip the menu, so existing commands still work. Redirected input/output
 also skips it; automation can use `./scripts/run.sh --non-interactive` to launch
 the defaults even in a terminal. Build-only and shutdown commands never prompt.
+
+The Dodge-style slalom is available with `WATER=calm SCENARIO=slalom make run`.
+It has entry/exit gates and four alternating red/green turn buoys; see the
+[scenario guide](scenarios/README.md) for provisional dimensions.
 
 Other layouts are `one`, `multi`, and `repeated_red` (two visible red-category
 buoys). Add `BUOY_SEED=42` for repeatable pose
