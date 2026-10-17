@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import unittest
+from types import SimpleNamespace
 
 sys.path.insert(0, '/opt/live')
 import cv2
@@ -67,6 +68,75 @@ class GeometryTests(unittest.TestCase):
 
 def stamp(message_stamp, value):
     message_stamp.sec, message_stamp.nanosec = divmod(value, 1_000_000_000)
+
+
+class PlotTests(unittest.TestCase):
+    def setUp(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        self.track = SimpleNamespace(world_id='buoy-1', category='red', lifecycle='confirmed',
+                                     x=4., y=3., covariance=[.2, 0., 0., .1])
+        self.node = SimpleNamespace(path=[np.array([0., 0.]), np.array([1., 0.])],
+            boat=(np.array([1., 0.]), 0.), alignment=DisplayAlignment(), truth={},
+            truth_arrivals={}, mapping=SimpleNamespace(tracks=[self.track], paused=False),
+            history={'buoy-1': [(0., 4., 3., .2, .1), (1., 4.1, 3., .1, .1)]},
+            diagnostic='Ready', map_arrival=time.monotonic(), clock_detail='Source stamps')
+        self.plot = Plot(self.node)
+
+    def tearDown(self):
+        self.plot.plt.close(self.plot.figure)
+
+    def test_updates_reuse_artists_and_preserve_toolbar_zoom(self):
+        plot = self.plot
+        plot.draw()
+        artists = tuple(plot.map.lines)
+        legend = plot.map.get_legend()
+        for axis in (plot.map, plot.mean, plot.variance):
+            axis.set_xlim(1., 2.)
+            axis.set_ylim(2., 4.)
+        self.track.x = 6.
+        self.node.history['buoy-1'].append((2., 6., 3., .1, .1))
+        plot.draw()
+        self.assertEqual(tuple(plot.map.lines), artists)
+        self.assertIs(plot.map.get_legend(), legend)
+        self.assertEqual(plot.tracks['buoy-1'][1].get_xdata()[0], 6.)
+        for axis in (plot.map, plot.mean, plot.variance):
+            self.assertEqual(axis.get_xlim(), (1., 2.))
+            self.assertEqual(axis.get_ylim(), (2., 4.))
+        plot.key(SimpleNamespace(key='a'))
+        plot.key(SimpleNamespace(key='a'))
+        plot.draw()
+        self.assertGreater(plot.map.get_xlim()[1], 6.)
+
+    def test_track_removal_and_truth_reset_remove_obsolete_artists(self):
+        self.node.alignment.set([0., 0.], 0., [0., 0.], 0.)
+        self.node.alignment_residual = 0.
+        self.node.truth['red_buoy'] = np.array([4., 3.])
+        self.node.truth_arrivals['red_buoy'] = time.monotonic()
+        self.plot.draw()
+        self.assertTrue(self.plot.truth)
+        self.node.mapping.tracks = []
+        self.node.alignment = DisplayAlignment()
+        self.plot.draw()
+        self.assertFalse(self.plot.tracks)
+        self.assertFalse(self.plot.truth)
+        self.assertEqual(len(self.plot.map.lines), 3)  # Boat, path, heading remain.
+        self.assertEqual(len(self.plot.mean.lines), 0)
+        self.assertIsNone(self.plot.mean.get_legend())
+        self.assertNotIn('buoy-1', [t.get_text() for t in self.plot.map.get_legend().get_texts()])
+
+    def test_lifecycle_and_stale_status_remain_visible(self):
+        self.plot.draw()
+        self.track.lifecycle = 'stale'
+        self.node.map_arrival -= 3.
+        self.plot.draw()
+        self.assertEqual(self.plot.tracks['buoy-1'][0].get_linestyle(), '--')
+        self.assertIn('stale', self.plot.map.get_legend().get_texts()[-1].get_text())
+        self.assertIn('MAP INPUT STALE', self.plot.title.get_text())
+        self.node.mapping.paused = True
+        self.node.mapping.detail = 'Pose reset'
+        self.plot.draw()
+        self.assertIn('MAPPING PAUSED: Pose reset', self.plot.title.get_text())
 
 
 class LivePipelineTests(unittest.TestCase):

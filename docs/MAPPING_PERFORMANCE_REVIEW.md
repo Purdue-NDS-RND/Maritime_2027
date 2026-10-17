@@ -146,3 +146,37 @@ boat, or perform a new accuracy benchmark. Runtime observations do not establish
 on-water accuracy. The practical next change is incremental popup rendering,
 with a before/after CPU and GUI responsiveness comparison at the same map size;
 the next diagnostic change is full-pipeline timing.
+
+## Popup implementation follow-up
+
+The popup now retains its artists and updates their data. Labels, grid setup,
+and subplot spacing are configured once; legends refresh when track membership,
+category, lifecycle, or truth visibility changes. Removed tracks and unavailable
+truth alignment remove their artists. Toolbar zoom persists on all three plots,
+and `a` restores automatic map bounds after zooming. Heading direction, covariance
+ellipses, history curves, truth age labels, and stale/paused status remain visible.
+The mapper and its numerical algorithms are unchanged.
+
+Validation uses `make -C autonomy mapping-test`: eight tests cover geometry,
+clock alignment, truth isolation, live RGB mapping, retained occupancy delivery,
+Tk on a virtual display, persistent plot updates, removal/reset, zoom, and status.
+The generated live-pipeline snapshot was visually inspected. `make validate`
+from `Simulation/` passed; Gazebo SDF checks were skipped because that sandboxed
+invocation could not access the simulator image. No image rebuild was needed:
+the live tooling mounts these Python files from the checkout. An already-open
+popup must be relaunched to load the updated class.
+
+A follow-up benchmark uses the original and updated `Plot` classes with the same
+synthetic state and Agg renderer, 20 measured draws after one warm-up. Local
+runner `Simulation/logs/mapping-review/profile_popup.py` accepts `PLOT_SOURCE` to
+select the baseline source saved from Git; raw results are `popup-before.txt`
+and `popup-after.txt` alongside the previous measurements. This measures rendering
+cost, not live-session CPU reduction or GUI input latency.
+
+| Tracks, each with 600 history samples | Before median / p95 | After median / p95 |
+| --- | ---: | ---: |
+| 2 | 269.79 / 438.16 ms | 81.13 / 121.63 ms |
+| 16 | 490.53 / 635.31 ms | 238.15 / 269.85 ms |
+
+Median redraw time fell approximately 70% and 51%, respectively. Both runs used
+one OpenBLAS thread and the same host; timings still reflect shared system load.

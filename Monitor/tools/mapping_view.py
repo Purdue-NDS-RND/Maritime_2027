@@ -203,67 +203,122 @@ class Plot:
         self.map = self.figure.add_subplot(grid[:, 0])
         self.mean = self.figure.add_subplot(grid[0, 1])
         self.variance = self.figure.add_subplot(grid[1, 1])
+        self.map.set(xlabel='map X (m)', ylabel='map Y (m)', aspect='equal')
+        self.map.set_title('Buoy means, trails and 3-sigma covariance ellipses\n'
+                           'a: toggle auto bounds | toolbar: zoom/pan')
+        self.mean.set(title='Estimated mean over time', xlabel='seconds since first metric estimate', ylabel='position (m)')
+        self.variance.set(title='Estimated marginal variance (not measured error)',
+                          xlabel='seconds since first metric estimate', ylabel='variance (m²)')
+        for axis in (self.map, self.mean, self.variance):
+            axis.grid(alpha=.2)
+        self.path, = self.map.plot([], [], color='.4', lw=1, label='Boat path')
+        self.boat, = self.map.plot([], [], 'ko', label='Boat (mapper pose)')
+        self.heading, = self.map.plot([], [], color='black', lw=2, markersize=9, markevery=[1])
+        self.tracks = {}
+        self.truth = {}
+        self.legend_signature = None
+        self.title = self.figure.suptitle('', fontsize=10)
+        self.footer = self.figure.text(.02, .015, '', fontsize=8)
+        # Reserve room once. Re-running tight_layout on every frame spends most
+        # of the redraw budget measuring unchanged labels and tick decorations.
+        self.figure.subplots_adjust(left=.07, right=.98, bottom=.14, top=.84,
+                                    wspace=.32, hspace=.65)
         self.auto = True
+        self.map.set_xlim(-10, 10, auto=True)
+        self.map.set_ylim(-10, 10, auto=True)
         self.figure.canvas.mpl_connect('key_press_event', self.key)
 
     def key(self, event):
         if event.key == 'a':
             self.auto = not self.auto
+            self.map.set_autoscale_on(self.auto)
+
+    @staticmethod
+    def prune(artists, active):
+        for identity in list(artists):
+            if identity not in active:
+                for artist in artists.pop(identity):
+                    artist.remove()
 
     def draw(self):
         n, ax = self.node, self.map
-        limits = ax.get_xlim(), ax.get_ylim()
-        for axis in (ax, self.mean, self.variance):
-            axis.clear()
-            axis.grid(alpha=.2)
-        ax.set(xlabel='map X (m)', ylabel='map Y (m)', aspect='equal')
-        ax.set_title('Buoy means, trails and 3-sigma covariance ellipses\n'
-                     'a: toggle auto bounds | toolbar: zoom/pan')
-        if n.path:
-            path = np.array(n.path)
-            ax.plot(path[:, 0], path[:, 1], color='.4', lw=1, label='Boat path')
-        if n.boat:
+        path = np.asarray(n.path)
+        self.path.set_data(path.T if len(path) else ([], []))
+        if n.boat is not None:
             xy, heading = n.boat
-            ax.plot(*xy, 'ko', label='Boat (mapper pose)')
-            ax.arrow(*xy, math.cos(heading), math.sin(heading), width=.05, color='black')
-        if n.alignment.r is not None:
-            for name, position in n.truth.items():
-                xy = n.alignment.point(position)
-                ax.plot(*xy, marker='x', ms=9, color='black')
-                age = time.monotonic()-n.truth_arrivals[name]
-                ax.annotate(name + (' [old]' if age > 2 else ''), xy, xytext=(4, -12),
-                            textcoords='offset points', fontsize=8)
-            ax.plot([], [], 'kx', label='Truth (provisional alignment)')
+            self.boat.set_data([xy[0]], [xy[1]])
+            self.heading.set_data([xy[0], xy[0]+math.cos(heading)],
+                                  [xy[1], xy[1]+math.sin(heading)])
+            self.heading.set_marker((3, 0, math.degrees(heading)-90))
+        else:
+            self.boat.set_data([], [])
+            self.heading.set_data([], [])
+        truth = n.truth if n.alignment.r is not None else {}
+        self.prune(self.truth, truth)
+        for name, position in truth.items():
+            if name not in self.truth:
+                dot, = ax.plot([], [], marker='x', ms=9, color='black', ls='none')
+                label = ax.annotate('', (0, 0), xytext=(4, -12), textcoords='offset points', fontsize=8)
+                self.truth[name] = (dot, label)
+            dot, label = self.truth[name]
+            xy = n.alignment.point(position)
+            dot.set_data([xy[0]], [xy[1]])
+            label.xy = xy
+            age = time.monotonic()-n.truth_arrivals[name]
+            label.set_text(name + (' [old]' if age > 2 else ''))
         tracks = n.mapping.tracks if n.mapping else []
+        self.prune(self.tracks, {track.world_id for track in tracks})
         for track in tracks:
+            identity = track.world_id
             color = COLORS.get(track.category, 'tab:orange')
+            if identity not in self.tracks:
+                line, = ax.plot([], [])
+                dot, = ax.plot([], [], 'o')
+                label = ax.annotate(identity, (0, 0), xytext=(5, 5), textcoords='offset points', fontsize=9)
+                trail, = ax.plot([], [], alpha=.5, lw=1)
+                means = [self.mean.plot([], [], ls=style, label=f'{identity} {name}')[0]
+                         for name, style in (('X', '-'), ('Y', '--'))]
+                variances = [self.variance.plot([], [], ls=style, label=f'{identity} {name}')[0]
+                             for name, style in (('var X', '-'), ('var Y', '--'))]
+                self.tracks[identity] = (line, dot, label, trail, *means, *variances)
+            line, dot, label, trail, *series = self.tracks[identity]
+            for artist in (line, dot, trail, *series):
+                artist.set_color(color)
             xy = np.array([track.x, track.y])
-            line = ellipse(xy, track.covariance)
-            ax.plot(*line, color=color, ls='--' if track.lifecycle != 'confirmed' else '-')
-            ax.plot(*xy, 'o', color=color, label=f'{track.world_id} {track.category} {track.lifecycle}')
-            ax.annotate(track.world_id, xy, xytext=(5, 5), textcoords='offset points', fontsize=9)
-            history = np.array(n.history[track.world_id])
-            if len(history):
-                ax.plot(history[:, 1], history[:, 2], color=color, alpha=.5, lw=1)
-                t = history[:, 0]-history[0, 0]
-                for column, label, style in ((1, 'X', '-'), (2, 'Y', '--')):
-                    self.mean.plot(t, history[:, column], color=color, ls=style,
-                                   label=f'{track.world_id} {label}')
-                for column, label, style in ((3, 'var X', '-'), (4, 'var Y', '--')):
-                    self.variance.plot(t, history[:, column], color=color, ls=style,
-                                       label=f'{track.world_id} {label}')
-        if not self.auto:
-            ax.set_xlim(limits[0])
-            ax.set_ylim(limits[1])
-        elif not n.path and not tracks:
-            ax.set_xlim(-10, 10)
-            ax.set_ylim(-10, 10)
-        self.mean.set(title='Estimated mean over time', xlabel='seconds since first metric estimate', ylabel='position (m)')
-        self.variance.set(title='Estimated marginal variance (not measured error)',
-                          xlabel='seconds since first metric estimate', ylabel='variance (m²)')
+            line.set_data(ellipse(xy, track.covariance))
+            line.set_linestyle('--' if track.lifecycle != 'confirmed' else '-')
+            dot.set_data([track.x], [track.y])
+            dot.set_label(f'{identity} {track.category} {track.lifecycle}')
+            label.xy = xy
+            history = np.asarray(n.history[identity])
+            trail.set_data(history[:, 1:3].T if len(history) else ([], []))
+            for column, artist in enumerate(series, 1):
+                artist.set_data((history[:, 0]-history[0, 0], history[:, column])
+                                if len(history) else ([], []))
+        signature = (tuple((t.world_id, t.category, t.lifecycle) for t in tracks), bool(truth))
+        if signature != self.legend_signature:
+            handles = [self.path, self.boat]
+            if truth:
+                # Use a real truth artist without adding an invisible data series.
+                handles.append(next(iter(self.truth.values()))[0])
+            labels = ['Boat path', 'Boat (mapper pose)']
+            if truth:
+                labels.append('Truth (provisional alignment)')
+            handles.extend(self.tracks[t.world_id][1] for t in tracks)
+            labels.extend(handle.get_label() for handle in handles[len(labels):])
+            ax.legend(handles, labels, loc='upper left', fontsize=7)
+            for axis in (self.mean, self.variance):
+                if tracks:
+                    axis.legend(loc='upper left', fontsize=7, ncol=2)
+                elif axis.get_legend() is not None:
+                    axis.get_legend().remove()
+            self.legend_signature = signature
+        # Toolbar zoom disables autoscaling on the axes it changes. Respect that
+        # for both history plots as well as the map; 'a' restores map auto bounds.
         for axis in (ax, self.mean, self.variance):
-            if axis.get_legend_handles_labels()[0]:
-                axis.legend(loc='best', fontsize=7)
+            axis.relim()
+            if axis is not ax or self.auto:
+                axis.autoscale_view()
         detail = n.diagnostic
         if not n.mapping:
             detail = 'Waiting for /mapping/buoys; start the pipeline and move the boat.'
@@ -273,11 +328,8 @@ class Plot:
             detail = 'MAP INPUT STALE: last result retained.\n'+detail
         alignment = ('Truth overlay waiting for time-matched boat poses' if n.alignment.r is None else
                      f'Provisional frozen truth alignment; boat discrepancy {n.alignment_residual:.2f} m')
-        self.figure.suptitle('RGB-only mapping | '+detail, fontsize=10)
-        if not hasattr(self, 'footer'):
-            self.footer = self.figure.text(.02, .015, '', fontsize=8)
+        self.title.set_text('RGB-only mapping | '+detail)
         self.footer.set_text(n.clock_detail+'\n'+alignment)
-        self.figure.tight_layout(rect=(0, .07, 1, .88))
         self.figure.canvas.draw_idle()
 
 
