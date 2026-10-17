@@ -192,6 +192,37 @@ class MappingNodeTests(unittest.TestCase):
         self.assertEqual(at(grids[-1], x, y), -1)
         self.assertEqual(at(grids[-1], x+10., y), 100)
 
+    def test_physical_occupancy_does_not_expand_with_covariance(self):
+        from test_mapping import mapped
+        self.node.mapper = mapped()
+        grids, maps, markers = [], [], []
+        self.node.grid_publisher.publish = grids.append
+        self.node.map_publisher.publish = maps.append
+        self.node.marker_publisher.publish = markers.append
+        track = self.node.mapper.snapshot()[0]
+        self.node.publish_map()
+        original = grids[-1].data[:]
+        track.covariance = np.eye(2)*25.
+        self.node.publish_map()
+        self.assertEqual(grids[-1].data, original)
+        np.testing.assert_array_equal(maps[-1].tracks[0].covariance, [25., 0., 0., 25.])
+        self.assertAlmostEqual(markers[-1].markers[1].scale.x, 30.)
+        self.assertTrue(set(original) <= {-1, 100})
+
+    def test_small_buoy_between_coarse_cell_centres_remains_occupied(self):
+        from test_mapping import mapped
+        self.node.mapper = mapped()
+        self.node.mapper.snapshot()[0].mean = np.array([10., 3.])
+        grids = []
+        self.node.grid_publisher.publish = grids.append
+        self.node.publish_map()
+        grid = grids[-1]
+        occupied = np.array(grid.data).reshape(grid.info.height, grid.info.width)
+        self.assertEqual(np.count_nonzero(occupied == 100), 4)
+        col = round((10.-grid.info.origin.position.x)/grid.info.resolution)
+        row = round((3.-grid.info.origin.position.y)/grid.info.resolution)
+        self.assertTrue(np.all(occupied[row-1:row+1, col-1:col+1] == 100))
+
     def test_unobserved_costmap_stays_unknown(self):
         maps, grids = [], []
         self.node.map_publisher.publish = maps.append

@@ -137,8 +137,61 @@ versus buoy-centre offsets and pose/clock errors can produce visible differences
 Truth subscriptions, frame alignment, plots and world-frame RViz overlays exist
 only in `Monitor/tools/mapping_view.py`. The mapper receives RGB detections,
 calibration, mounting TF, and vessel poses. No truth-derived TF is published to
-the production graph. The only visualization output is the private
-`/monitor/mapping/markers` topic.
+the production graph. Visualization outputs are the private
+`/monitor/mapping/markers` and `/monitor/mapping/occupancy_grid` topics.
+
+### Occupancy in RViz
+
+Run `make -C autonomy mapping` (or `mapping VIEW=none`) and
+`make -C Monitor rviz-sim`. The simulation preset enables **Buoy occupancy
+(provisional truth alignment)** automatically. Restart an already-open RViz to
+load the updated preset. No image/depth subscriptions or new TF are needed for
+the Map display.
+
+The mapper publishes `/mapping/occupancy_grid` in `map` at a target **10 Hz**,
+with **0.5 m cells**, **200 × 200 cells** covering a fixed 100 m square centred
+on the map origin. `/mapping/costmap` remains a compatibility alias. The viewer
+transforms only a display copy's origin/orientation into `world`, preserving
+all cell values, and publishes `/monitor/mapping/occupancy_grid` for RViz.
+It waits for the same frozen, time-matched boat alignment used by the markers.
+This alignment is provisional and display-only.
+
+Occupied cells (`100`) intersect the estimated physical discs of
+confirmed/stale/inconsistent buoys, centred on their means with the configured
+`footprint_radius_m` (default 0.35 m). There is no uncertainty or boat-clearance
+inflation in this grid. Cells intersecting a disc are occupied even when their
+centres fall outside it, so small buoys cannot disappear between coarse cells.
+Position covariance and lifecycle remain in `/mapping/buoys`, and the 3-sigma
+ellipses remain in RViz. A future navigation costmap should consume those buoy
+records to incorporate uncertainty, boat size and clearance.
+Regression checks require occupancy to stay unchanged when covariance grows,
+while buoy records and RViz ellipses retain that uncertainty. They also cover
+a buoy between four coarse cell centres and removal of old footprints after
+position refinement.
+All other cells remain unknown (`-1`); RGB buoy
+detections do not establish free water. Unresolved and tentative tracks do not
+occupy cells. Occupied footprints remain when a buoy leaves the image and are
+rebuilt at their current estimates, so position refinements leave no old trails.
+The grid continues to publish when no new detections arrive; its header retains
+the last processed image time. Publication frequency does not imply new sensor
+evidence at that frequency.
+
+Set `costmap_resolution_m`, `costmap_extent_m`, and `map_publish_hz` in mapper
+parameters before startup to adjust these defaults. The existing costmap
+parameter names are retained for compatibility.
+
+Validation on 2026-10-17: `Simulation validate`, `Monitor validate`, all 58
+benchmark tests, and all 5 live-mapping tests passed. The live tests require
+occupied cells, unknown cells, matching display-grid data, rotated origin
+placement, late joining, and at least 8 Hz delivered on both grid topics while
+a popup runs. With the live simulator, popup, and RViz running, an 8-second
+subscriber probe measured 10.000 Hz on `/mapping/occupancy_grid` and 10.024 Hz
+on `/monitor/mapping/occupancy_grid` (maximum observed gap 0.110 s). RViz's Map
+display rendered the 200 × 200 grid; screenshot:
+`Monitor/logs/occupancy-rviz-live.png`. That live session had no metric buoy
+tracks, so the screenshot shows unknown space; occupied-cell behavior was
+verified by the synthetic RGB pipeline tests. This does not measure field
+mapping accuracy.
 
 ## Validation
 

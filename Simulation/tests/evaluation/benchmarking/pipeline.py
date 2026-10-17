@@ -168,7 +168,7 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
         result_topics = [DETECTIONS, ESTIMATES]
         if alignment:
             result_topics.append(ALIGNED_POSE)
-        result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/costmap",
+        result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/occupancy_grid", "/mapping/costmap",
                           "/mapping/markers", "/mapping/diagnostics"]
         qos = {topic: dict(reliability="best_effort", durability="volatile", history="keep_last", depth=100)
                for topic in result_topics}

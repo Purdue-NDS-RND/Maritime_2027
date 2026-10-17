@@ -90,11 +90,14 @@ namespace. For example, without launch remapping, `vessel/odometry` under
 | `/localization/buoys` | `maritime_interfaces/msg/BuoyEstimateArray` | Per-frame status and **only confirmed tracks newly updated by that frame**. Includes method, readiness, detail, category, track ID, and XY. Sensor-data QoS. |
 | `/mapping/buoys` | `maritime_interfaces/msg/BuoyMap` | Authoritative RGB metric-map snapshot: session ID, paused/detail fields, unresolved count, and all tracks that have XY, including tentative/stale/inconsistent tracks. Reliable, transient-local, history capacity 1. |
 | `/mapping/observations` | `maritime_interfaces/msg/BearingObservationArray` | Bearings and association decisions for ready processed RGB frames, with session ID, original pose-bracket stamps and configured offset. Sensor-data QoS. |
-| `/mapping/costmap` | `nav_msgs/msg/OccupancyGrid` | Derived occupied footprints from confirmed/stale/inconsistent tracks. Reliable, transient-local, history capacity 1. |
+| `/mapping/occupancy_grid` | `nav_msgs/msg/OccupancyGrid` | Derived occupied footprints from confirmed/stale/inconsistent tracks; unknown elsewhere. Default 0.5 m cells over 100 m square. Reliable, transient-local, history capacity 1. |
+| `/mapping/costmap` | `nav_msgs/msg/OccupancyGrid` | Compatibility alias of `/mapping/occupancy_grid`. |
 | `/mapping/markers` | `visualization_msgs/msg/MarkerArray` | All metric tracks: XY covariance ellipses and text labels with ID/category/lifecycle. Rebuilt using DELETEALL and replacement markers. Reliable, transient-local, history capacity 1. |
 | `/mapping/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray` | Input/solver/filter counters, queue/buffer sizes, track-state counts, processing time, stale-image flag, and paused reason. Default reliable QoS, history capacity 10. |
 
-Map, grid, markers and diagnostics publish every **0.5 seconds of wall time**.
+Map, grid, markers and diagnostics publish at **10 Hz of wall time** by default
+(`map_publish_hz`). This is the snapshot publication rate, not the rate of new
+position estimates; those still require informative RGB observations.
 They retain the last processed image timestamp, even if playback stops. Frame
 status and observation records publish as input frames are handled.
 
@@ -115,10 +118,14 @@ Important output details:
 - Bearing records include camera XY origin, world azimuth and bearing variance,
   observation ID, assigned world ID if any, and decisions such as `initialized`,
   `updated`, `redundant`, `unresolved_geometry`, or `ambiguous`.
-- The costmap is centered on the reference-frame origin. Unseen cells are `-1`
-  (unknown); occupied cells are `100`. Each occupied disc has radius
-  `footprint_radius_m + 3 * sqrt(largest covariance eigenvalue)`. No free water
-  is inferred. Tentative tracks do not populate occupied cells.
+- The occupancy grid is centered on the reference-frame origin. Unseen cells
+  are `-1` (unknown); cells intersecting a buoy's estimated physical disc are
+  `100`. The disc uses `footprint_radius_m` around the estimated mean, without
+  uncertainty or navigation-clearance inflation. Cell intersection keeps small
+  buoys visible between coarse cell centres. No free water is inferred.
+  Tentative tracks do not populate occupied cells. `/mapping/buoys` retains
+  position covariance, footprint radius and lifecycle for a future costmap;
+  RViz markers continue to show 3-sigma position uncertainty separately.
 
 Message definitions live in [`maritime_interfaces/msg`](../maritime_interfaces/msg/).
 This package publishes no boat command or boat odometry topic.
@@ -317,7 +324,8 @@ are read at startup; restart to apply changes.
 | `pose_time_offset_s` | `0.0` | Explicit verified constant timestamp offset. |
 | `max_pose_gap_s`, `pose_wait_s` | `0.3`, `0.5` s | Interpolation gap limit and wall-time input wait. |
 | `max_pending_frames` | `60` | Bound on queued detection arrays. |
-| `costmap_extent_m`, `costmap_resolution_m` | `100.0`, `0.1` m | Square extent and cell size; default is 1,000×1,000 cells. |
+| `costmap_extent_m`, `costmap_resolution_m` | `100.0`, `0.5` m | Occupancy square extent and cell size; default is 200×200 cells. Existing parameter names are retained. |
+| `map_publish_hz` | `10.0` Hz | Wall-time publication rate of map, occupancy grid, markers and diagnostics. |
 
 The following covers all `bearing_ekf.*` settings. Initialization gates are
 explained above; these remain experiment defaults, not mission acceptance limits.
@@ -339,7 +347,7 @@ explained above; these remain experiment defaults, not mission acceptance limits
 | `confirmation_updates`, `inconsistent_after` | `3`, `5` | Later accepted updates to confirm / sustained contradictions to mark inconsistent. |
 | `tentative_timeout_s`, `stale_after_s` | `5.0`, `5.0` s | Unresolved expiry / confirmed-track staleness. Despite its name, `tentative_timeout_s` removes tracks with no metric mean, not initialized tentative tracks. |
 | `process_noise_m2_s` | `0.0025` m²/s | Isotropic covariance growth for stationary targets. |
-| `footprint_radius_m` | `0.35` m | Physical footprint before uncertainty inflation. |
+| `footprint_radius_m` | `0.35` m | Estimated physical buoy radius used for occupancy. No uncertainty inflation. |
 | `shared_shift_deg` | `3.0`° | Coherent residual-shift rejection threshold. |
 
 [`config/bearing_ekf.yaml`](config/bearing_ekf.yaml) supplies a starter subset.
@@ -453,7 +461,7 @@ ros2 topic echo /mapping/diagnostics
 | Same-category observations deferred | Inspect ambiguity decisions and gating. Categories do not guarantee physical identity; overlap may remain unresolved. |
 | Delayed/dropped frames | Inspect `queue_overflow`, `pose_or_calibration_timeout`, `late_frame_rejected`, pending frames, and detector replacement counters in logs. The detector keeps only one active and one replaceable pending image. |
 | Map keeps publishing while replay is paused | Expected: wall timers republish the last source-time state; `stale_image_input` warns after 2 s. |
-| Large costmap footprints | Check track covariance and lifecycle. Footprints include a 3σ allowance, and stale/inconsistent tracks remain obstacles. |
+| Large occupancy footprints | Check `footprint_radius_m` and cell resolution. Covariance affects the separate 3σ markers, not occupied cells. Stale/inconsistent tracks retain their physical footprint. |
 
 Repository validation commands, run from **`Simulation/`**:
 

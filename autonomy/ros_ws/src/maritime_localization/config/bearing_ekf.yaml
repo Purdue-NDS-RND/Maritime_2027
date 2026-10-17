@@ -7,7 +7,8 @@
     pose_wait_s: 0.5
     max_pending_frames: 60
     costmap_extent_m: 100.0
-    costmap_resolution_m: 0.1
+    costmap_resolution_m: 0.5
+    map_publish_hz: 10.0
     bearing_ekf.bearing_std_deg: 1.0
     bearing_ekf.pose_position_floor_m: 0.15
     bearing_ekf.pose_attitude_floor_deg: 1.0

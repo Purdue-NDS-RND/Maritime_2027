@@ -58,9 +58,12 @@ def main():
                          'method:=bearing_ekf', 'use_sim_time:=true', 'publish_debug_image:=true',
                          f'pose_topic:={pose}', f'pose_time_offset_s:={args.offset}',
                          'mapper_parameters:=/tmp/live-mapper.yaml'])
-    commands.append(['python3', '/opt/live/mapping_view.py', '--pose-topic', pose,
-                     '--offset', str(args.offset), '--clock', args.clock,
-                     *(['--no-window'] if args.no_window else [])])
+    viewer = ['python3', '/opt/live/mapping_view.py', '--pose-topic', pose,
+              '--offset', str(args.offset), '--clock', args.clock]
+    # Matplotlib redraws must not block occupancy delivery or alignment inputs.
+    commands.append([*viewer, '--no-window'])
+    if not args.no_window:
+        commands.append([*viewer, '--plot-only'])
     children = []
     stopping = False
 
