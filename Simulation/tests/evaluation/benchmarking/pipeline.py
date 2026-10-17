@@ -13,9 +13,7 @@ import time
 
 from nav_msgs.msg import Odometry
 from maritime_interfaces.msg import BuoyEstimateArray
-from maritime_localization.depth import DepthLocalizer
 from maritime_localization.mapping import MappingSettings
-from maritime_localization.triangulation import TriangulationLocalizer
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -29,7 +27,6 @@ from clock_alignment import calibrate, ALIGNED_POSE, ns
 
 IMAGE = "/sensors/camera_0/color/image_raw"
 INFO = "/sensors/camera_0/color/camera_info"
-DEPTH = "/sensors/camera_0/depth/image_rect_raw"
 POSE = "/mavros/local_position/odom"
 DETECTIONS = "/perception/camera_0/detections"
 ESTIMATES = "/localization/buoys"
@@ -57,6 +54,8 @@ def stop(process, group=True):
 
 
 def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="auto"):
+    if method != "bearing_ekf":
+        raise ValueError("Only bearing_ekf buoy mapping is supported")
     metadata = json.loads((dataset / "dataset.json").read_text())
     if metadata["status"] != "complete":
         raise ValueError("Recording must be complete")
@@ -64,22 +63,19 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
     if domain == metadata["capture_domain"]:
         raise ValueError("Replay must use a different domain from the live capture")
     input_topics = [IMAGE, INFO, POSE, "/tf_static"]
-    if method == "depth":
-        input_topics.append(DEPTH)
     bag_metadata = yaml.safe_load((dataset / "bag/metadata.yaml").read_text())
     topic_counts = {entry["topic_metadata"]["name"]: entry["message_count"]
                     for entry in bag_metadata["rosbag2_bagfile_information"]["topics_with_message_count"]}
     if any(topic_counts.get(topic, 0) == 0 for topic in input_topics):
         raise ValueError("Recording is missing required camera, pose, or mounting-transform input")
-    alignment = calibrate(dataset, pose_clock, pose_time_offset_s) if method == "rgb_mapping" else None
+    alignment = calibrate(dataset, pose_clock, pose_time_offset_s)
     destination.mkdir(parents=True, exist_ok=False)
     if alignment:
         (destination / "clock-alignment.json").write_text(json.dumps(alignment.report, indent=2)+"\n")
     report = dict(status="starting", method=method, recording=metadata["name"],
                   created_at=datetime.now(timezone.utc).isoformat(),
                   algorithm_implemented=True,
-                  algorithm_parameters=asdict(MappingSettings() if method == "rgb_mapping" else
-                                             (DepthLocalizer if method == "depth" else TriangulationLocalizer)().settings),
+                  algorithm_parameters=asdict(MappingSettings()),
                   pose_time_offset_s=pose_time_offset_s,
                   pose_clock=alignment.report if alignment else {"mode": "source", "offset_s": pose_time_offset_s},
                   rate=rate, ros_domain=domain,
@@ -87,8 +83,7 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
                   assumptions={"output_frame": "map", "pose_source": ALIGNED_POSE if alignment else POSE,
                                "source_pose_topic": POSE,
                                "timing": ("recorded-reference clock normalization then acquisition-time pose interpolation" if alignment else
-                                          "acquisition-time pose interpolation with explicit clock offset" if method == "rgb_mapping"
-                                          else "latest received inputs; no timestamp synchronization"),
+                                          "acquisition-time pose interpolation with explicit clock offset"),
                                "observation_point": "2D bounding-box center approximates buoy center",
                                "truth_frame_alignment": "provisional; no accuracy scoring"})
     (destination / "detector.yaml").write_bytes(
@@ -171,11 +166,10 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
                                 f"pose_topic:={ALIGNED_POSE if alignment else POSE}"])
         # Results are small standard ROS outputs, with a deeper recorder queue.
         result_topics = [DETECTIONS, ESTIMATES]
-        if method == "rgb_mapping":
-            if alignment:
-                result_topics.append(ALIGNED_POSE)
-            result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/costmap",
-                              "/mapping/markers", "/mapping/diagnostics"]
+        if alignment:
+            result_topics.append(ALIGNED_POSE)
+        result_topics += ["/mapping/buoys", "/mapping/observations", "/mapping/occupancy_grid", "/mapping/costmap",
+                          "/mapping/markers", "/mapping/diagnostics"]
         qos = {topic: dict(reliability="best_effort", durability="volatile", history="keep_last", depth=100)
                for topic in result_topics}
         qos_path = destination / "result-qos.yaml"
@@ -230,9 +224,7 @@ def run(dataset, destination, method, rate, pose_time_offset_s=0., pose_clock="a
             raise RuntimeError("Localization reported errors; inspect the result bag")
         report["status"] = "complete"
         print(f"Pipeline complete: {report['detection_arrays']} detection arrays, "
-              f"{report['localization_arrays']} localization updates, {report['estimates']} XY points.\n"
-              + ("Positioning method is unimplemented; empty coordinates are expected."
-                 if not report["algorithm_implemented"] else ""), flush=True)
+              f"{report['localization_arrays']} localization updates, {report['estimates']} XY points.", flush=True)
     except BaseException as error:
         report.update(status="interrupted" if isinstance(error, InterruptedError) else "incomplete",
                       error=f"{type(error).__name__}: {error}")
@@ -267,7 +259,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--method", choices=("depth", "triangulation", "rgb_mapping"), default="rgb_mapping")
+    parser.add_argument("--method", choices=("bearing_ekf",), default="bearing_ekf")
     parser.add_argument("--rate", type=float, default=1.0)
     parser.add_argument("--pose-clock", choices=("auto", "source", "recorded-reference"), default="auto")
     parser.add_argument("--pose-time-offset", type=float, default=0.)

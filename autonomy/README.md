@@ -1,6 +1,6 @@
 # Onboard Autonomy
 
-Persistent RGB-only mapping is available through `pipeline.launch.py method:=rgb_mapping`.
+Persistent RGB-only mapping is available through `pipeline.launch.py method:=bearing_ekf`.
 See [RGB mapping operation and design](../Simulation/docs/RGB_BUOY_MAPPING.md).
 It uses acquisition-time vessel poses, robust bearing initialization, and per-buoy EKFs.
 
@@ -23,10 +23,11 @@ diagnostic is intentionally warning-level, publishes no vehicle commands, and
 reports mission readiness false.
 
 `maritime_perception` adds an explicitly launched RGB-to-ArUco-box detector.
-`maritime_localization` supplies a shared ROS wrapper and launch file for depth
-and temporal RGB triangulation methods. Both produce map XY estimates;
-triangulation waits for sufficient translation and parallax.
-`maritime_interfaces` defines the shared XY position/status output. These packages
+`maritime_localization` supplies Bearing EKF Buoy Mapping: robust multi-view
+bearing initialization, a persistent world-track manager, and an independent XY
+EKF per buoy. See its [package README](ros_ws/src/maritime_localization/README.md)
+for every file, input/output topic, parameter and filter equation.
+`maritime_interfaces` defines the shared position/status, map and bearing messages. These packages
 have no simulator, truth, or vehicle-transport dependency. The detector is not
 added to the default simulation startup. See the
 [benchmark development guide](../Simulation/docs/BUOY_BENCHMARKS.md) for build,

@@ -13,7 +13,7 @@ from sensor_msgs.msg import CameraInfo
 from scipy.spatial.transform import Rotation
 from vision_msgs.msg import Detection2DArray
 
-from maritime_localization.mapping_node import RGBMappingNode
+from maritime_localization.mapping_node import BuoyMappingNode
 from maritime_perception.aruco import BoundingBox
 from maritime_perception.messages import detection_array
 
@@ -21,7 +21,7 @@ from maritime_perception.messages import detection_array
 class MappingNodeTests(unittest.TestCase):
     def setUp(self):
         rclpy.init()
-        self.node = RGBMappingNode()
+        self.node = BuoyMappingNode()
         self.addCleanup(self.close)
         self.outputs = []
         self.node.estimate_publisher.publish = self.outputs.append
@@ -36,6 +36,11 @@ class MappingNodeTests(unittest.TestCase):
         transform.transform.rotation.z, transform.transform.rotation.w = -.5, .5
         self.node.transforms.set_transform_static(transform, 'test')
         self.frame = info.header.frame_id
+
+    def test_mapper_name_and_parameter_prefix(self):
+        self.assertEqual(self.node.get_name(), 'buoy_mapper')
+        self.assertEqual(self.node.get_parameter('bearing_ekf.min_views').value, 4)
+        self.assertFalse(self.node.has_parameter('rgb_mapping.min_views'))
 
     def close(self):
         self.node.destroy_node()
@@ -186,6 +191,37 @@ class MappingNodeTests(unittest.TestCase):
         self.node.publish_map()
         self.assertEqual(at(grids[-1], x, y), -1)
         self.assertEqual(at(grids[-1], x+10., y), 100)
+
+    def test_physical_occupancy_does_not_expand_with_covariance(self):
+        from test_mapping import mapped
+        self.node.mapper = mapped()
+        grids, maps, markers = [], [], []
+        self.node.grid_publisher.publish = grids.append
+        self.node.map_publisher.publish = maps.append
+        self.node.marker_publisher.publish = markers.append
+        track = self.node.mapper.snapshot()[0]
+        self.node.publish_map()
+        original = grids[-1].data[:]
+        track.covariance = np.eye(2)*25.
+        self.node.publish_map()
+        self.assertEqual(grids[-1].data, original)
+        np.testing.assert_array_equal(maps[-1].tracks[0].covariance, [25., 0., 0., 25.])
+        self.assertAlmostEqual(markers[-1].markers[1].scale.x, 30.)
+        self.assertTrue(set(original) <= {-1, 100})
+
+    def test_small_buoy_between_coarse_cell_centres_remains_occupied(self):
+        from test_mapping import mapped
+        self.node.mapper = mapped()
+        self.node.mapper.snapshot()[0].mean = np.array([10., 3.])
+        grids = []
+        self.node.grid_publisher.publish = grids.append
+        self.node.publish_map()
+        grid = grids[-1]
+        occupied = np.array(grid.data).reshape(grid.info.height, grid.info.width)
+        self.assertEqual(np.count_nonzero(occupied == 100), 4)
+        col = round((10.-grid.info.origin.position.x)/grid.info.resolution)
+        row = round((3.-grid.info.origin.position.y)/grid.info.resolution)
+        self.assertTrue(np.all(occupied[row-1:row+1, col-1:col+1] == 100))
 
     def test_unobserved_costmap_stays_unknown(self):
         maps, grids = [], []

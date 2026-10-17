@@ -1,5 +1,6 @@
 """Read-only live mapping evaluation: truth never enters the localization pipeline."""
 import argparse
+import copy
 from collections import defaultdict, deque
 import math
 import re
@@ -12,7 +13,7 @@ from geometry_msgs.msg import Point
 from maritime_interfaces.msg import BuoyMap
 from maritime_localization.geometry import rigid_transform
 from maritime_localization.timing import PoseBuffer, TimedPose
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from visualization_msgs.msg import Marker, MarkerArray
@@ -25,11 +26,12 @@ RGB = {'red': (1., .15, .15), 'green': (.1, .8, .1), 'blue': (.1, .4, 1.), 'whit
 
 
 class MappingView(Node):
-    def __init__(self, pose_topic, offset=0., clock='receipt'):
-        super().__init__('monitor_live_mapping_view')
+    def __init__(self, pose_topic, offset=0., clock='receipt', publish_overlays=True):
+        super().__init__('monitor_live_mapping_view' if publish_overlays else 'monitor_live_mapping_plot')
         self.offset = round(offset*1e9)
         self.clock_mode = clock
         self.mapping = None
+        self.grid = None
         self.map_arrival = 0.
         self.truth = {}
         self.truth_arrivals = {}
@@ -44,7 +46,11 @@ class MappingView(Node):
         self.alignment_residual = None
         self.owned = {}
         durable = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.overlay = self.create_publisher(MarkerArray, '/monitor/mapping/markers', durable)
+        if publish_overlays:
+            self.overlay = self.create_publisher(MarkerArray, '/monitor/mapping/markers', durable)
+            self.grid_overlay = self.create_publisher(OccupancyGrid, '/monitor/mapping/occupancy_grid', durable)
+            self.create_subscription(OccupancyGrid, '/mapping/occupancy_grid', self.on_grid, durable)
+            self.create_timer(.5, self.publish_overlay)
         self.create_subscription(BuoyMap, '/mapping/buoys', self.on_map, durable)
         self.create_subscription(Odometry, pose_topic, self.on_pose, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/blueboat/ground_truth/odometry', self.on_truth_pose, qos_profile_sensor_data)
@@ -52,11 +58,10 @@ class MappingView(Node):
         if clock == 'receipt':
             self.create_subscription(DiagnosticArray, '/monitor/mapping/clock', self.on_clock_status, 10)
         self.create_timer(1., self.discover)
-        self.create_timer(.5, self.publish_overlay)
 
     def on_diagnostic(self, message):
         for status in message.status:
-            if status.name == 'rgb_buoy_mapping':
+            if status.name == 'bearing_ekf_buoy_mapping':
                 counters = {item.key: item.value for item in status.values}
                 self.diagnostic = (status.message + '\n'
                     + '  '.join(f'{key}={counters.get(key, "0")}' for key in
@@ -91,9 +96,33 @@ class MappingView(Node):
         world_yaw = math.atan2(truth.transform[1, 0], truth.transform[0, 0])
         if self.alignment.r is None:
             self.alignment.set(world_xy, world_yaw, xy, self.boat[1])
+            if self.grid is not None:
+                self.on_grid(self.grid)
             self.get_logger().warning('Truth display alignment frozen from a matched boat-pose pair; '
                                       'provisional SE(2), not a surveyed accuracy reference')
         self.alignment_residual = float(np.linalg.norm(self.alignment.point(world_xy)-xy))
+
+    def on_grid(self, message):
+        """Place the grid in RViz's world via its origin; never publish public TF.
+
+        Keep cell values/resolution intact. Only the display copy's frame and
+        origin change, using the same frozen alignment as the marker overlay.
+        """
+        if message.header.frame_id != 'map':
+            return
+        self.grid = message
+        if self.alignment.r is None:
+            return
+        output = copy.copy(message)
+        output.header = copy.copy(message.header)
+        output.header.frame_id = 'world'
+        output.info = copy.deepcopy(message.info)
+        origin = output.info.origin
+        location = self.alignment.r.T @ (np.array([origin.position.x, origin.position.y])-self.alignment.t)
+        origin.position.x, origin.position.y = map(float, location)
+        angle = yaw(origin.orientation)-math.atan2(self.alignment.r[1, 0], self.alignment.r[0, 0])
+        origin.orientation.z, origin.orientation.w = math.sin(angle/2), math.cos(angle/2)
+        self.grid_overlay.publish(output)
 
     def on_map(self, message):
         if message.header.frame_id != 'map':
@@ -258,11 +287,12 @@ def main():
     parser.add_argument('--offset', type=float, default=0.)
     parser.add_argument('--clock', default='receipt')
     parser.add_argument('--no-window', action='store_true')
+    parser.add_argument('--plot-only', action='store_true', help='Read-only popup; a separate process publishes RViz overlays')
     parser.add_argument('--snapshot', help='Save one plot after --snapshot-delay seconds and exit')
     parser.add_argument('--snapshot-delay', type=float, default=3.)
     args = parser.parse_args()
     rclpy.init()
-    node = MappingView(args.pose_topic, args.offset, args.clock)
+    node = MappingView(args.pose_topic, args.offset, args.clock, publish_overlays=not args.plot_only)
     try:
         if args.no_window and not args.snapshot:
             rclpy.spin(node)
@@ -273,6 +303,10 @@ def main():
             start, last_draw = time.monotonic(), 0.
             while rclpy.ok():
                 rclpy.spin_once(node, timeout_sec=.01)
+                # Drain callback bursts after a plot redraw, keeping the pose
+                # histories current instead of processing one callback per GUI tick.
+                for _ in range(100):
+                    rclpy.spin_once(node, timeout_sec=0.)
                 now = time.monotonic()
                 if now-last_draw > .5:
                     plot.draw()

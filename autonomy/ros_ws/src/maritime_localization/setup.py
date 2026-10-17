@@ -7,7 +7,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/maritime_localization"]),
         ("share/maritime_localization", ["package.xml"]),
-        ("share/maritime_localization/config", ["config/rgb_mapping.yaml"]),
+        ("share/maritime_localization/config", ["config/bearing_ekf.yaml"]),
         ("share/maritime_localization/launch", ["launch/pipeline.launch.py"]),
     ],
     install_requires=["setuptools"],
@@ -16,6 +16,5 @@ setup(
     maintainer_email="maintainer@example.com",
     description="Buoy positioning and persistent RGB bearing-only mapping",
     license="Apache-2.0",
-    entry_points={"console_scripts": ["buoy_localizer = maritime_localization.node:main",
-                                       "rgb_buoy_mapper = maritime_localization.mapping_node:main"]},
+    entry_points={"console_scripts": ["buoy_mapper = maritime_localization.mapping_node:main"]},
 )

@@ -2,6 +2,14 @@
 
 ## Purpose, Scope, and Design Status
 
+**Localization implementation update (2026-10-17):** Bearing EKF Buoy Mapping
+(`bearing_ekf`, executable `buoy_mapper`) is the sole supported localization
+implementation. The depth and basic triangulation baselines have been removed.
+The [package README](../autonomy/ros_ws/src/maritime_localization/README.md) is the
+current reference for its inputs, outputs, EKFs and parameters. Depth-first
+mapping choices later in this design describe earlier proposals and are
+superseded for the implemented mapper; they are not current runtime behavior.
+
 **Current migration status (2026-10-04):** the simulated public camera boundary
 is `/sensors/camera_0/...` with `camera_0_link` and
 `camera_0_optical_frame`; MAVROS and `udp://:14552@` are Simulation Adapter
@@ -65,8 +73,7 @@ No ArUco/PnP pose or known-size range estimation is implemented. The optional
 debug image labels recognized categories only. The default autonomy service
 still runs its bootstrap placeholder. A shared ROS detector/localizer launch,
 XY output messages, and replay/result-recording tools are described in the
-[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). The `depth` and `triangulation` baselines assemble latest-received inputs in
-MAVROS `map` coordinates. The report-based `rgb_mapping` method instead uses
+[benchmark guide](../Simulation/docs/BUOY_BENCHMARKS.md). Bearing EKF Buoy Mapping (`bearing_ekf`) uses
 acquisition-time pose interpolation, robust angular NLS initialization, a shared
 world-track manager with gated global assignment, persistent XY EKFs and
 covariance/lifecycle output. It has no depth subscription. Semantic maps, derived

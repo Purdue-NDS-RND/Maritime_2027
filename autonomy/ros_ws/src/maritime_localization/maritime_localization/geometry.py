@@ -1,4 +1,4 @@
-"""Camera geometry shared by both methods; no marker-size or pose APIs."""
+"""Calibrated camera geometry for bearing-only buoy mapping."""
 
 import cv2
 import numpy as np
@@ -37,11 +37,6 @@ def camera_ray(observation, box):
         xy = cv2.undistortPoints(pixel, observation.camera_matrix, distortion if distortion.size else None)
     ray = np.array([*xy.reshape(2), 1.])
     return ray if np.isfinite(ray).all() else None
-
-
-def angle(first, second):
-    """Angle in radians between unit vectors."""
-    return float(np.arccos(np.clip(np.dot(first, second), -1., 1.)))
 
 
 def rigid_transform(position, quaternion):

@@ -49,14 +49,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("build", "test", "detect", "run", "offline"))
     parser.add_argument("--recording", default=os.environ.get("RECORDING"))
-    parser.add_argument("--method", choices=("depth", "triangulation", "rgb_mapping"),
-                        default=os.environ.get("METHOD") or "rgb_mapping")
+    parser.add_argument("--method", choices=("bearing_ekf",),
+                        default=os.environ.get("METHOD") or "bearing_ekf")
     parser.add_argument("--rate", type=float, default=os.environ.get("RATE") or 1.0)
     parser.add_argument("--domain", type=int, default=os.environ.get("REPLAY_DOMAIN_ID") or 97)
     parser.add_argument("--name", help="Unique output directory name; generated when omitted")
     parser.add_argument("--pose-clock", choices=("auto", "source", "recorded-reference"), default=os.environ.get("POSE_CLOCK") or "auto")
     parser.add_argument("--pose-time-offset", type=float, default=os.environ.get("POSE_TIME_OFFSET_S") or 0.)
     args = parser.parse_args()
+    if args.method != "bearing_ekf":
+        parser.error("Only METHOD=bearing_ekf is supported")
     try:
         if args.command == "build":
             subprocess.run(["docker", "build", "-t", "maritime-autonomy:jazzy", "-f",

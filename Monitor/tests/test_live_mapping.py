@@ -13,7 +13,7 @@ import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import TransformStamped
 from maritime_interfaces.msg import BuoyMap
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 import numpy as np
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
@@ -118,6 +118,16 @@ rclpy.shutdown()
         overlays = []
         source.create_subscription(MarkerArray, '/monitor/mapping/markers', overlays.append,
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        grids, grid_times, world_grids, world_times = [], [], [], []
+        durable = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        def receive_grid(message):
+            grids.append(message)
+            grid_times.append(time.monotonic())
+        def receive_world_grid(message):
+            world_grids.append(message)
+            world_times.append(time.monotonic())
+        source.create_subscription(OccupancyGrid, '/mapping/occupancy_grid', receive_grid, durable)
+        source.create_subscription(OccupancyGrid, '/monitor/mapping/occupancy_grid', receive_world_grid, durable)
         transform = TransformStamped()
         transform.header.frame_id, transform.child_frame_id = 'base_link', 'camera_optical'
         transform.transform.rotation.x, transform.transform.rotation.y = -.5, .5
@@ -126,10 +136,12 @@ rclpy.shutdown()
         broadcaster.sendTransform(transform)
         log = open('/tmp/live-pipeline-test.log', 'w+')
         parameters = Path('/tmp/live-test-mapper.yaml')
-        parameters.write_text('/localization/rgb_buoy_mapper:\n  ros__parameters:\n    pose_wait_s: 2.0\n')
+        parameters.write_text('/localization/buoy_mapper:\n  ros__parameters:\n    pose_wait_s: 2.0\n')
         process = subprocess.Popen(['ros2', 'launch', 'maritime_localization', 'pipeline.launch.py',
             'use_sim_time:=true', f'pose_topic:={ALIGNED_POSE}', f'mapper_parameters:={parameters}'],
             stdout=log, stderr=subprocess.STDOUT)
+        popup = subprocess.Popen(['xvfb-run', '-a', 'python3', '/opt/live/mapping_view.py',
+            '--plot-only', '--pose-topic', ALIGNED_POSE], stdout=log, stderr=subprocess.STDOUT)
 
         def spin(seconds):
             end = time.monotonic()+seconds
@@ -210,6 +222,30 @@ rclpy.shutdown()
             expected_world = r @ np.array([track.x, track.y])+translation
             np.testing.assert_allclose([means[-1].pose.position.x, means[-1].pose.position.y],
                                        expected_world, atol=.05)
+            # Occupancy is delivered at 10 Hz even after RGB observations stop.
+            # Check both the production grid and the display copy, not timer setup.
+            for arrivals in (grid_times, world_times):
+                recent = [t for t in arrivals if t > arrivals[-1]-2.]
+                self.assertGreaterEqual((len(recent)-1)/(recent[-1]-recent[0]), 8.)
+            self.assertIsNone(popup.poll(), 'Popup must remain active during grid delivery')
+            grid, world_grid = grids[-1], world_grids[-1]
+            self.assertEqual((grid.info.width, grid.info.height, grid.info.resolution), (200, 200, .5))
+            self.assertIn(100, grid.data)
+            self.assertIn(-1, grid.data)
+            self.assertNotIn(0, grid.data)  # No fabricated free space.
+            self.assertEqual(world_grid.header.frame_id, 'world')
+            self.assertEqual(world_grid.data, grid.data)
+            origin = world_grid.info.origin
+            # Transform a cell centre through the RViz grid origin. It must land
+            # in the same translated/rotated world as the truth/marker fixture.
+            cell = np.array([100.5, 101.5])*grid.info.resolution
+            world_cell = np.array([origin.position.x, origin.position.y])+rotation(.4) @ cell
+            expected = r @ (np.array([-50., -50.])+cell)+translation
+            np.testing.assert_allclose(world_cell, expected, atol=.02)
+            late_grids = []
+            source.create_subscription(OccupancyGrid, '/monitor/mapping/occupancy_grid', late_grids.append, durable)
+            spin(.3)
+            self.assertTrue(late_grids, 'RViz late join must receive the retained grid')
             plot = Plot(view)
             plot.draw()
             # Save a representative UI with plausible truth in the display frame;
@@ -229,12 +265,13 @@ rclpy.shutdown()
             self.assertEqual(clock.converted, before)
         finally:
             import signal
-            process.send_signal(signal.SIGINT)
-            try:
-                process.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+            for child in (process, popup):
+                child.send_signal(signal.SIGINT)
+                try:
+                    child.wait(timeout=8)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
             log.close()
             executor.shutdown()
             for node in (view, clock, source):

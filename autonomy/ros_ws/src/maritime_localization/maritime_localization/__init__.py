@@ -1,1 +1,1 @@
-"""Interfaces for future depth and RGB triangulation experiments."""
+"""Persistent bearing-only buoy mapping with independent XY EKFs."""

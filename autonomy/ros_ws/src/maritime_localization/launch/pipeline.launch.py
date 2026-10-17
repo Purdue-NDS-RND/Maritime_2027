@@ -13,11 +13,10 @@ from launch_ros.substitutions import FindPackageShare
 def nodes(context):
     def value(name):
         return LaunchConfiguration(name).perform(context)
-    method = value('method')
     cameras = [value('camera')]
     if value('second_camera'):
-        if method != 'rgb_mapping' or value('second_camera') in cameras:
-            raise ValueError('second_camera requires rgb_mapping and a distinct camera name')
+        if value('second_camera') in cameras:
+            raise ValueError('second_camera requires a distinct camera name')
         cameras.append(value('second_camera'))
     use_sim_time = ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)
     result = []
@@ -31,21 +30,11 @@ def nodes(context):
     parameters = [{'use_sim_time': use_sim_time}]
     if value('mapper_parameters'):
         parameters.append(value('mapper_parameters'))
-    if method == 'rgb_mapping':
-        parameters.append({'cameras': cameras, 'pose_time_offset_s': ParameterValue(
-            LaunchConfiguration('pose_time_offset_s'), value_type=float)})
-        result.append(Node(package='maritime_localization', executable='rgb_buoy_mapper',
-            namespace='localization', output='screen', parameters=parameters,
-            remappings=[('vessel/odometry', value('pose_topic'))]))
-    else:
-        parameters.append({'method': method})
-        camera = cameras[0]
-        result.append(Node(package='maritime_localization', executable='buoy_localizer',
-            namespace='localization', output='screen', parameters=parameters,
-            remappings=[('detections', f'/perception/{camera}/detections'),
-                        ('camera_info', f'/sensors/{camera}/color/camera_info'),
-                        ('depth', f'/sensors/{camera}/depth/image_rect_raw'),
-                        ('vessel/odometry', value('pose_topic'))]))
+    parameters.append({'cameras': cameras, 'pose_time_offset_s': ParameterValue(
+        LaunchConfiguration('pose_time_offset_s'), value_type=float)})
+    result.append(Node(package='maritime_localization', executable='buoy_mapper',
+        namespace='localization', output='screen', parameters=parameters,
+        remappings=[('vessel/odometry', value('pose_topic'))]))
     return result
 
 
@@ -53,7 +42,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('camera', default_value='camera_0'),
         DeclareLaunchArgument('second_camera', default_value=''),
-        DeclareLaunchArgument('method', default_value='rgb_mapping', choices=['depth', 'triangulation', 'rgb_mapping']),
+        DeclareLaunchArgument('method', default_value='bearing_ekf', choices=['bearing_ekf']),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('pose_topic', default_value='/mavros/local_position/odom'),
         DeclareLaunchArgument('pose_time_offset_s', default_value='0.0'),

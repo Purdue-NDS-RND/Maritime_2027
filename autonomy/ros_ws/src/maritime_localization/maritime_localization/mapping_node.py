@@ -1,6 +1,7 @@
 """RGB-only ROS mapper: one posterior writer for all configured camera streams."""
 
 from collections import Counter
+from array import array
 from dataclasses import asdict
 import json
 import time
@@ -45,12 +46,12 @@ def positive_covariance(covariance):
     return covariance
 
 
-class RGBMappingNode(Node):
+class BuoyMappingNode(Node):
     def __init__(self):
-        super().__init__('rgb_buoy_mapper')
+        super().__init__('buoy_mapper')
         def parameter(name, default):
             return self.declare_parameter(name, default).value
-        settings = MappingSettings(**{name: parameter(f'rgb_mapping.{name}', default)
+        settings = MappingSettings(**{name: parameter(f'bearing_ekf.{name}', default)
                                       for name, default in asdict(MappingSettings()).items()})
         self.mapper = BearingMapper(settings)
         self.frame = parameter('reference_frame', 'map')
@@ -59,12 +60,13 @@ class RGBMappingNode(Node):
         self.offset_s = parameter('pose_time_offset_s', 0.)
         self.wait_s = parameter('pose_wait_s', .5)
         self.queue_limit = parameter('max_pending_frames', 60)
-        self.resolution = parameter('costmap_resolution_m', .1)
+        self.resolution = parameter('costmap_resolution_m', .5)
         self.extent = parameter('costmap_extent_m', 100.)
+        self.map_publish_hz = parameter('map_publish_hz', 10.)
         self.max_pose_gap_s = parameter('max_pose_gap_s', .3)
         if (not self.cameras or len(set(self.cameras)) != len(self.cameras)
-                or not np.isfinite([self.offset_s, self.wait_s, self.resolution, self.extent, self.max_pose_gap_s]).all()
-                or min(self.wait_s, self.resolution, self.extent, self.max_pose_gap_s) <= 0
+                or not np.isfinite([self.offset_s, self.wait_s, self.resolution, self.extent, self.max_pose_gap_s, self.map_publish_hz]).all()
+                or min(self.wait_s, self.resolution, self.extent, self.max_pose_gap_s, self.map_publish_hz) <= 0
                 or not 1 <= self.queue_limit <= 1000 or self.extent/self.resolution > 2000):
             raise ValueError('Invalid mapper input/timing/grid parameters')
         self.poses = PoseBuffer(max_gap_s=self.max_pose_gap_s)
@@ -78,7 +80,8 @@ class RGBMappingNode(Node):
         self.listener = TransformListener(self.transforms, self)
         durable = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.map_publisher = self.create_publisher(BuoyMap, '/mapping/buoys', durable)
-        self.grid_publisher = self.create_publisher(OccupancyGrid, '/mapping/costmap', durable)
+        self.grid_publisher = self.create_publisher(OccupancyGrid, '/mapping/occupancy_grid', durable)
+        self.legacy_grid_publisher = self.create_publisher(OccupancyGrid, '/mapping/costmap', durable)
         self.marker_publisher = self.create_publisher(MarkerArray, '/mapping/markers', durable)
         self.diagnostic_publisher = self.create_publisher(DiagnosticArray, '/mapping/diagnostics', 10)
         self.observation_publisher = self.create_publisher(BearingObservationArray, '/mapping/observations', qos_profile_sensor_data)
@@ -93,7 +96,7 @@ class RGBMappingNode(Node):
         # Input timeouts must still expire when bag /clock pauses or reaches EOF.
         self.wall_clock = Clock(clock_type=ClockType.STEADY_TIME)
         self.timer = self.create_timer(.02, self.drain, clock=self.wall_clock)
-        self.map_timer = self.create_timer(.5, self.publish_map, clock=self.wall_clock)
+        self.map_timer = self.create_timer(1./self.map_publish_hz, self.publish_map, clock=self.wall_clock)
         self.get_logger().info(f'RGB-only session={self.mapper.session_id}; acquisition-time interpolation; '
                                f'pose stamp + {self.offset_s}s = image stamp; parameters={asdict(settings)}')
 
@@ -148,7 +151,7 @@ class RGBMappingNode(Node):
             raise ValueError(self.mapper.paused_reason)
         self.mounts[camera] = mounting.copy()
         transform = pose.transform @ mounting
-        obs = Observation(stamp_ns(message.header.stamp), message.header.frame_id, (),
+        obs = Observation(stamp_ns(message.header.stamp), message.header.frame_id,
                           np.array(calibration.k).reshape(3, 3), tuple(calibration.d),
                           camera_to_reference=transform, reference_frame=self.frame,
                           distortion_model=calibration.distortion_model)
@@ -240,7 +243,7 @@ class RGBMappingNode(Node):
             self.observation_publisher.publish(observations)
 
     def publish_status(self, message, status, detail, updated=(), pose_ns=0):
-        output = BuoyEstimateArray(method='rgb_mapping', status=status, detail=detail, inputs_ready=status == 'ok')
+        output = BuoyEstimateArray(method='bearing_ekf', status=status, detail=detail, inputs_ready=status == 'ok')
         output.header.stamp, output.header.frame_id = message.header.stamp, self.frame
         output.vessel_pose_stamp = ros_stamp(pose_ns-int(self.offset_s*1e9) if pose_ns else 0)
         for track in updated:
@@ -267,7 +270,8 @@ class RGBMappingNode(Node):
                 selected_observation_count=track.selected_observations, confirmation_evidence=track.confirmation_evidence,
                 observation_ids=track.provenance, last_residual_rad=track.residual_rad))
         self.map_publisher.publish(output)
-        # Costmap is derived, rebuilt every publish. Unseen space stays unknown.
+        # Rebuild occupancy from current estimates, removing old footprints after
+        # refinement. No free-water evidence is inferred from RGB detections.
         grid = OccupancyGrid(header=output.header)
         cells = int(np.ceil(self.extent/self.resolution))
         grid.info.resolution, grid.info.width, grid.info.height = float(self.resolution), cells, cells
@@ -277,13 +281,18 @@ class RGBMappingNode(Node):
         markers = MarkerArray(markers=[Marker(action=Marker.DELETEALL)])
         for index, track in enumerate(output.tracks):
             if track.lifecycle in ('confirmed', 'stale', 'inconsistent'):
-                radius = track.footprint_radius_m + 3*np.sqrt(max(np.linalg.eigvalsh(np.array(track.covariance).reshape(2, 2))))
+                radius = track.footprint_radius_m
                 x, y = track.x + self.extent/2, track.y + self.extent/2
                 left, right = max(0, int((x-radius)/self.resolution)), min(cells, int((x+radius)/self.resolution)+1)
                 bottom, top = max(0, int((y-radius)/self.resolution)), min(cells, int((y+radius)/self.resolution)+1)
                 if left < right and bottom < top:
                     yy, xx = np.ogrid[bottom:top, left:right]
-                    mask = ((xx+.5)*self.resolution-x)**2 + ((yy+.5)*self.resolution-y)**2 <= radius**2
+                    # Occupy cells touched by the physical disc. Testing only
+                    # cell centres can erase small buoys between coarse cells.
+                    # Covariance and navigation clearance belong downstream.
+                    dx = np.maximum(np.abs((xx+.5)*self.resolution-x)-self.resolution/2, 0.)
+                    dy = np.maximum(np.abs((yy+.5)*self.resolution-y)-self.resolution/2, 0.)
+                    mask = dx**2 + dy**2 <= radius**2
                     data[bottom:top, left:right][mask] = 100
             marker = Marker(header=output.header, ns='buoys', id=2*index, type=Marker.SPHERE, action=Marker.ADD)
             marker.pose.position.x, marker.pose.position.y = track.x, track.y
@@ -300,8 +309,9 @@ class RGBMappingNode(Node):
             label.color.r = label.color.g = label.color.b = label.color.a = 1.
             label.text = f'{track.world_id} {track.category} {track.lifecycle}'
             markers.markers.append(label)
-        grid.data = data.reshape(-1).tolist()
+        grid.data = array('b', data.tobytes())
         self.grid_publisher.publish(grid)
+        self.legacy_grid_publisher.publish(grid)
         self.marker_publisher.publish(markers)
         counters = dict(self.counters + self.mapper.diagnostics)
         stale_inputs = self.last_arrival is None or time.monotonic()-self.last_arrival > 2.
@@ -310,7 +320,7 @@ class RGBMappingNode(Node):
         counters['pose_buffer_samples'] = len(self.poses.samples)
         counters.update({f'tracks_{state}': sum(track.state == state for track in self.mapper.tracks)
                          for state in ('unresolved', 'tentative', 'confirmed', 'stale', 'inconsistent')})
-        diagnostics = DiagnosticStatus(name='rgb_buoy_mapping', hardware_id=self.mapper.session_id,
+        diagnostics = DiagnosticStatus(name='bearing_ekf_buoy_mapping', hardware_id=self.mapper.session_id,
             level=(DiagnosticStatus.ERROR if self.mapper.paused_reason else
                    DiagnosticStatus.WARN if stale_inputs else DiagnosticStatus.OK),
             message=self.mapper.paused_reason or 'RGB-only independent-landmark mapping',
@@ -322,7 +332,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = None
     try:
-        node = RGBMappingNode()
+        node = BuoyMappingNode()
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
