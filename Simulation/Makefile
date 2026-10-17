@@ -90,3 +90,11 @@ down:
 
 logs:
 	docker compose -f container/compose.yaml --profile ros logs -f
+
+.PHONY: navigation-build navigation navigation-test
+navigation-build:
+	python3 scripts/navigation.py build
+navigation:
+	python3 scripts/navigation.py run --task $(or $(TASK),slalom) $(ARGS)
+navigation-test:
+	python3 scripts/navigation.py test

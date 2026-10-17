@@ -72,7 +72,7 @@ def main():
             assert abs(t.x-.35) < 1e-6 and abs(t.y-sign*.1) < 1e-6 and abs(t.z-.4) < 1e-6
             yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
             assert abs(yaw-sign*math.pi/4) < 1e-6, (camera, yaw)
-            expected_marker = 2 if camera == 'camera_0' else 1
+            expected_marker = 1 if camera == 'camera_0' else 2
             if not args.camera_only:
                 assert expected_marker in markers[camera], (camera, markers[camera])
             result[camera] = dict(exact_triples=len(common), rate_hz=hz, visible_ids=sorted(markers[camera]), yaw_rad=yaw)

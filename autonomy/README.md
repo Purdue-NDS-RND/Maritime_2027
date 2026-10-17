@@ -45,3 +45,7 @@ target 1/1, and UDP 14552. There is no standalone autonomy Compose profile and
 no supported hardware startup. A real environment-neutral autonomy application
 must replace the placeholder before integrated autonomy or vessel-readiness
 claims. Explicit detector tests do not establish mission readiness.
+
+Optional dual RGB gate and slalom navigation is available as an explicit session;
+see [gate and slalom navigation](../docs/GATE_SLALOM_NAVIGATION.md). The default
+bootstrap and existing RGB bearing mapper retain their existing behavior.
