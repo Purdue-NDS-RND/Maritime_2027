@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Exercise delivery of CLI-friendly text, full-size RGB/depth, and TF."""
+"""Exercise delivery of text, custom buoy maps, full-size RGB/depth, and TF."""
 
 import sys
 import time
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
+from maritime_interfaces.msg import BuoyMap, BuoyTrack
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
@@ -26,6 +27,17 @@ def main():
     def receive(message, label):
         if label == "text":
             assert message.data == "monitor delivery verified"
+        elif label == "buoys":
+            assert message.header.frame_id == "map"
+            assert message.session_id == "monitor-smoke"
+            assert message.unresolved_count == 2
+            assert len(message.tracks) == 1
+            track = message.tracks[0]
+            assert (track.world_id, track.category, track.lifecycle) == (
+                "buoy-1", "red", "confirmed",
+            )
+            assert (track.x, track.y, track.footprint_radius_m) == (3.5, -2.0, 0.35)
+            assert list(track.covariance) == [0.25, 0.0, 0.0, 0.5]
         else:
             assert (message.width, message.height) == (1280, 720)
             assert len(message.data) == message.step * message.height
@@ -38,6 +50,7 @@ def main():
 
     for label, msg_type, encoding, stride in (
         ("text", String, None, 0),
+        ("buoys", BuoyMap, None, 0),
         ("rgb", Image, "rgb8", 3),
         ("depth", Image, "32FC1", 4),
     ):
@@ -46,6 +59,15 @@ def main():
             message = msg_type()
             if label == "text":
                 message.data = "monitor delivery verified"
+            elif label == "buoys":
+                message.header.frame_id = "map"
+                message.session_id = "monitor-smoke"
+                message.unresolved_count = 2
+                message.tracks = [BuoyTrack(
+                    world_id="buoy-1", category="red", lifecycle="confirmed",
+                    x=3.5, y=-2.0, footprint_radius_m=0.35,
+                    covariance=[0.25, 0.0, 0.0, 0.5],
+                )]
             else:
                 message.width, message.height = 1280, 720
                 message.encoding = encoding
@@ -64,7 +86,7 @@ def main():
                 qos_profile_sensor_data,
             ))
 
-    deadline = time.monotonic() + 35
+    deadline = time.monotonic() + (90 if publishers else 35)
     next_publish = 0
     try:
         while time.monotonic() < deadline:
@@ -79,9 +101,9 @@ def main():
                 broadcaster.sendTransform(transform)
                 next_publish = time.monotonic() + 0.2
             rclpy.spin_once(node, timeout_sec=0.05)
-            if not publishers and seen == {"text", "rgb", "depth"}:
+            if not publishers and seen == {"text", "buoys", "rgb", "depth"}:
                 if buffer.can_transform("probe_base", "probe_camera", rclpy.time.Time()):
-                    print("PASS: cross-container text, 1280x720 RGB/depth payloads, and TF", flush=True)
+                    print("PASS: cross-container text, BuoyMap records, 1280x720 RGB/depth payloads, and TF", flush=True)
                     return
         if not publishers:
             raise RuntimeError(f"Delivery timed out; received: {sorted(seen)}")

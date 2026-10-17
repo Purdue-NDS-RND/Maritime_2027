@@ -22,3 +22,14 @@ docker run --rm --init --network host --ipc host -d --name "$publisher" \
     python3 /tests/message_probe.py publish >/dev/null
 "${compose[@]}" run --rm --no-deps -T --name "$subscriber" \
     -v "$PROJECT_DIR/tests:/tests:ro" shell python3 /tests/message_probe.py subscribe
+"${compose[@]}" run --rm --no-deps -T --name "$subscriber" shell \
+    bash --rcfile /etc/monitor.bashrc -ic \
+    'timeout 15 ros2 topic echo /monitor_smoke/buoys --once --field session_id | grep -Fx monitor-smoke'
+echo 'PASS: Monitor shell ros2 topic echo deserializes BuoyMap'
+"${compose[@]}" run --rm --no-deps -T --name "$subscriber" shell \
+    bash --rcfile /etc/monitor.bashrc -ic \
+    'output=$(PYTHONUNBUFFERED=1 timeout 8 ros2 topic hz /monitor_smoke/buoys --window 10 2>&1)
+     status=$?
+     printf "%s\n" "$output"
+     [[ $status == 124 ]] && grep -q "average rate:" <<< "$output"'
+echo 'PASS: Monitor shell ros2 topic hz measures BuoyMap delivery'

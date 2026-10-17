@@ -187,7 +187,21 @@ image. Remote GUI forwarding and browser desktops are outside this initial setup
 Shell access has the normal ROS ability to publish and call services; this is not
 a read-only security boundary. Host networking is intended for trusted tooling.
 
-Standard ROS messages and `mavros_msgs` are installed. For custom messages, use a
+Standard ROS messages, `mavros_msgs`, and this repository's `maritime_interfaces`
+are installed and sourced automatically. Build from the repository checkout:
+Compose passes the canonical `autonomy/ros_ws/src/maritime_interfaces` package as
+a separate build context, without requiring an autonomy image or running stack.
+After changes to those message definitions, run `make build` and reopen your
+Monitor shell. You can inspect the buoy map directly:
+
+```bash
+ros2 interface show maritime_interfaces/msg/BuoyMap
+ros2 topic echo /mapping/buoys --once
+ros2 topic hz /mapping/buoys
+```
+
+Topic commands require the mapper to be running on the same ROS domain.
+For other custom messages, use a
 compatible Jazzy workspace install tree (built without symlinks into absent source
 or build directories):
 
@@ -233,7 +247,10 @@ make smoke
 
 The smoke test uses a root publisher and a host-user subscriber in independent
 containers (matching the Adapter/tools UID split) to verify actual string,
-1280x720 RGB/depth payload, and TF delivery. It creates no boat connection and
+nested `BuoyMap` records, 1280x720 RGB/depth payload, and TF delivery. It also
+checks custom-map deserialization and rate through `ros2 topic echo` and
+`ros2 topic hz` in a sourced shell.
+It creates no boat connection and
 cleans up only its own test containers. It uses subnet discovery on domain 97;
 set `MONITOR_TEST_DOMAIN_ID` to another unused domain if necessary. The publisher
 offers UDP and 32 MiB shared memory; the tools container uses UDP. For diagnostic
