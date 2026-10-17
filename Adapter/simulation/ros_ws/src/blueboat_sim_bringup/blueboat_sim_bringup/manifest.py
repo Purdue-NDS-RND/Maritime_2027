@@ -31,15 +31,17 @@ def load_manifest(path: str) -> dict:
         "schema_version", "scenario", "seed", "world", "boat_pose",
         "camera_mount", "buoys",
     }
-    if not isinstance(manifest, dict) or set(manifest) != required:
+    if not isinstance(manifest, dict) or set(manifest) - {"boat_model"} != required:
         raise ValueError("manifest top-level fields do not match schema_version 1")
+    if manifest.get("boat_model", "single") not in ("single", "dual"):
+        raise ValueError("unsupported boat_model")
     if manifest["schema_version"] != 1:
         raise ValueError("unsupported scenario manifest schema_version")
     if not isinstance(manifest["scenario"], str) or not NAME.fullmatch(manifest["scenario"]):
         raise ValueError("invalid scenario identity")
     if manifest["seed"] is not None and type(manifest["seed"]) is not int:
         raise ValueError("manifest seed must be an integer or null")
-    if manifest["world"] != "blueboat_rgbd":
+    if manifest["world"] not in {"blueboat_rgbd", "blueboat_waves", "blueboat_calm", "blueboat_harbor"}:
         raise ValueError("unsupported manifest world")
     _finite_fields(manifest["boat_pose"], ("x", "y", "z", "yaw_rad"), "boat_pose")
     _finite_fields(manifest["camera_mount"], ("x", "y", "z"), "camera_mount")

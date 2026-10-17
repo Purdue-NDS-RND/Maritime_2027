@@ -19,9 +19,12 @@ not calibrated sea-state classifications. Both physics and surface rendering
 use the selected parameters. Source world files are never overwritten.
 
 For buoy scenarios, enter an optional integer seed to randomize buoy poses
-reproducibly, or leave it blank for the fixed layout. RGB-D choices enable
-ROS/MAVROS automatically. Boat-only scenes ask whether to enable
-ROS/MAVROS, defaulting to off unless `ROS_SIM` is already enabled.
+reproducibly, or leave it blank for the fixed layout. Then select the boat:
+**single camera** (forward, default) or **dual camera** (-45/+45 degrees).
+Both camera boats enable ROS/MAVROS in every scene. An explicit
+`BOAT_MODEL=single|dual` selects the same layout without a model prompt; old
+explicit world launches without this variable preserve their existing behavior.
+See [camera boat selection and shared mapping/RViz](DUAL_CAMERA.md).
 
 Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
 launches (redirected input or output) keep the existing defaults and never
@@ -31,7 +34,7 @@ menu in a terminal. Builds and `make down` also never prompt.
 For explicit launches, combine water with a scene:
 
 ```bash
-WATER=calm SCENARIO=gate make run
+BOAT_MODEL=dual WATER=calm SCENARIO=gate make run
 WATER=normal SCENARIO=multi make run
 WATER=calm SCENARIO=slalom make run
 WATER=harsh WORLD=blueboat_harbor.sdf make run

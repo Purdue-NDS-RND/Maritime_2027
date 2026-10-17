@@ -38,7 +38,7 @@ def main():
                 rclpy.spin_once(probe, timeout_sec=.1)
             active = [(name, namespace) for name, namespace in probe.get_node_names_and_namespaces()
                       if (name == 'buoy_mapper' and namespace == '/localization')
-                      or (name == 'aruco_detector' and namespace == '/perception/camera_0')]
+                      or (name == 'aruco_detector' and namespace.startswith('/perception/camera_'))]
             if active:
                 print(f'ERROR: mapping/detection already active on this domain: {active}', flush=True)
                 return 2

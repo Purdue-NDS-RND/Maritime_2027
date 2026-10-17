@@ -28,6 +28,18 @@ CAMERA_TOPICS = (
 MIN_RGBD_HZ = 8.0
 
 
+def camera_names(root=ROOT):
+    manifest = json.loads((root / 'scenario.manifest.json').read_text())
+    model = manifest.get('boat_model', 'single')
+    if model not in ('single', 'dual'):
+        raise ValueError('unsupported boat model in recording manifest')
+    return ['camera_0', 'camera_1'] if model == 'dual' else ['camera_0']
+
+
+def camera_topics(camera):
+    return tuple(topic.replace('camera_0', camera) for topic in CAMERA_TOPICS)
+
+
 def write_json(path, value):
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(value, indent=2) + "\n")
@@ -47,11 +59,15 @@ def topic_config(root=ROOT):
         if buoy["truth_topic"] != expected or expected in truth_topics:
             raise ValueError("scenario truth topics must identify distinct buoy entities")
         truth_topics.append(expected)
+    for camera in camera_names(root)[1:]:
+        config['required'] += list(camera_topics(camera))
+        for topic in CAMERA_TOPICS:
+            config['qos'][topic.replace('camera_0', camera)] = dict(config['qos'][topic])
     config["required"] += truth_topics
     return config
 
 
-def rgbd_summary(stamps):
+def rgbd_summary(stamps, topics=CAMERA_TOPICS):
     common = stamps[0] & stamps[1] & stamps[2]
     matched = sum(common.values())
     duration = (max(common) - min(common)) / 1e9 if common else 0
@@ -59,7 +75,7 @@ def rgbd_summary(stamps):
         "matched": matched,
         "rate_hz": (matched - 1) / duration if duration > 0 else 0.0,
         "unmatched": {topic: sum(values.values()) - matched
-                      for topic, values in zip(CAMERA_TOPICS, stamps)},
+                      for topic, values in zip(topics, stamps)},
     }
 
 
@@ -75,7 +91,9 @@ def inspect_bag(root=ROOT):
                 rosbag2_py.ConverterOptions("", ""))
     types = {item.name: item.type for item in reader.get_all_topics_and_types()}
     topics = {}
-    stamps = [Counter() for _ in CAMERA_TOPICS]
+    cameras = camera_names(root)
+    all_camera_topics = tuple(topic for camera in cameras for topic in camera_topics(camera))
+    stamps = {topic: Counter() for topic in all_camera_topics}
     static_transforms = set()
     start = end = None
     first_position = last_position = None
@@ -83,7 +101,7 @@ def inspect_bag(root=ROOT):
     header_ranges = {}
     classes = {}
     for topic, type_name in types.items():
-        if topic in CAMERA_TOPICS or topic.endswith("/odometry") or topic in (
+        if topic in all_camera_topics or topic.endswith("/odometry") or topic in (
             "/tf_static", "/mavros/local_position/odom", "/mavros/imu/data",
         ):
             classes[topic] = get_message(type_name)
@@ -102,8 +120,8 @@ def inspect_bag(root=ROOT):
             stamp = stamp_ns(message.header.stamp)
             bounds = header_ranges.setdefault(topic, [stamp, stamp])
             bounds[0], bounds[1] = min(bounds[0], stamp), max(bounds[1], stamp)
-            if topic in CAMERA_TOPICS:
-                stamps[CAMERA_TOPICS.index(topic)][stamp] += 1
+            if topic in all_camera_topics:
+                stamps[topic][stamp] += 1
         if topic == "/tf_static":
             static_transforms.update((tf.header.frame_id, tf.child_frame_id) for tf in message.transforms)
         if topic == "/blueboat/ground_truth/odometry":
@@ -116,12 +134,17 @@ def inspect_bag(root=ROOT):
     for stats in topics.values():
         del stats["last"]
     errors = [f"No messages: {topic}" for topic in config["required"] if topic not in topics]
-    for transform in (("base_link", "camera_0_link"), ("camera_0_link", "camera_0_optical_frame")):
-        if transform not in static_transforms:
-            errors.append(f"Missing camera transform: {transform[0]} -> {transform[1]}")
-    rgbd = rgbd_summary(stamps)
-    if rgbd["rate_hz"] < MIN_RGBD_HZ:
-        errors.append(f"Exact RGB-D rate {rgbd['rate_hz']:.2f} Hz is below {MIN_RGBD_HZ:.2f} Hz")
+    camera_summaries = {}
+    for camera in cameras:
+        for transform in (("base_link", f"{camera}_link"), (f"{camera}_link", f"{camera}_optical_frame")):
+            if transform not in static_transforms:
+                errors.append(f"Missing camera transform: {transform[0]} -> {transform[1]}")
+        topics_for_camera = camera_topics(camera)
+        summary = rgbd_summary([stamps[topic] for topic in topics_for_camera], topics_for_camera)
+        camera_summaries[camera] = summary
+        if summary["rate_hz"] < MIN_RGBD_HZ:
+            errors.append(f"{camera}: Exact RGB-D rate {summary['rate_hz']:.2f} Hz is below {MIN_RGBD_HZ:.2f} Hz")
+    rgbd = camera_summaries['camera_0']
     for topic in config["required"]:
         if topic in topics and not topic.endswith("tf_static") and topics[topic]["max_gap_s"] > 2:
             errors.append(f"Stream gap over 2 seconds: {topic}")
@@ -132,7 +155,7 @@ def inspect_bag(root=ROOT):
         "passed": not errors, "errors": errors,
         "duration_s": (end - start) / 1e9 if start is not None else 0.0,
         "size_bytes": sum(path.stat().st_size for path in root.rglob("*.mcap")),
-        "topics": topics, "rgbd": rgbd, "header_time_ranges_ns": header_ranges,
+        "topics": topics, "rgbd": rgbd, "cameras": camera_summaries, "header_time_ranges_ns": header_ranges,
         "reported_transport_losses": max(map(int, losses), default=0),
         "boat_displacement_m": math.dist(first_position, last_position) if first_position else 0.0,
         "boat_path_length_m": path_length,
@@ -235,9 +258,10 @@ def record(duration):
         report = inspect_bag()
         write_json(ROOT / "quality.json", report)
         metadata["status"] = "complete"
-        print(f"Dataset checks: {'PASS' if report['passed'] else 'FAIL'}; "
-              f"exact RGB-D {report['rgbd']['rate_hz']:.2f} Hz", flush=True)
-        print(f"Unmatched RGB/depth/info: {list(report['rgbd']['unmatched'].values())}", flush=True)
+        print(f"Dataset checks: {'PASS' if report['passed'] else 'FAIL'}", flush=True)
+        for camera, summary in report['cameras'].items():
+            print(f"{camera}: exact RGB-D {summary['rate_hz']:.2f} Hz; "
+                  f"unmatched RGB/depth/info: {list(summary['unmatched'].values())}", flush=True)
         for error in report["errors"]:
             print(f"  {error}", flush=True)
         return 0 if report["passed"] else 1

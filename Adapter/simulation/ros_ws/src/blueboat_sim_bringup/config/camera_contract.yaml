@@ -2,6 +2,8 @@ contract_id: maritime.camera_adapter
 contract_version: 1.0.0
 environment: simulation
 use_sim_time: true
+# Default single-camera deployment. Dual mounts/roster are selected by the run manifest;
+# see Simulation/docs/DUAL_CAMERA.md and the public /sensors/camera_roster metadata.
 enabled_cameras: [camera_0]
 cameras:
   camera_0:

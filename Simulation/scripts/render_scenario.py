@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-world", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--seed", type=int)
+    parser.add_argument("--boat-model", choices=("single", "dual"), default="single")
     return parser.parse_args()
 
 
@@ -146,6 +147,9 @@ def main() -> int:
     if world is None or world.get("name") != "blueboat_rgbd":
         raise SystemExit("Base world must be named blueboat_rgbd")
 
+    if args.boat_model == "dual":
+        world.find("include/uri").text = "model://blueboat_dual_rgbd"
+
     manifest_buoys = []
     panel_offset = 0.311
     for item in buoys:
@@ -187,6 +191,8 @@ def main() -> int:
         "camera_mount": {"x": 0.35, "y": 0.0, "z": 0.40},
         "buoys": manifest_buoys,
     }
+    if args.boat_model == "dual":
+        manifest["boat_model"] = "dual"
     try:
         manifest_text = json.dumps(manifest, indent=2, allow_nan=False) + "\n"
     except ValueError:

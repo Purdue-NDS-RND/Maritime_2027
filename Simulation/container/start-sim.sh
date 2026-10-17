@@ -96,6 +96,9 @@ while (( SECONDS < deadline )); do
     if [[ $CAMERA_ENABLED == 1 ]] && ! grep -q '^/blueboat/rgbd_camera/depth_image$' <<<"$topics"; then
         camera_ready=0
     fi
+    if [[ $CAMERA_ENABLED == 1 && ${BOAT_MODEL:-single} == dual ]] && ! grep -q '^/blueboat/camera_1/depth_image$' <<<"$topics"; then
+        camera_ready=0
+    fi
     if [[ -n $clock_topic ]] && grep -q '^/model/blueboat/odometry$' <<<"$topics" && [[ $camera_ready == 1 ]]; then
         if python3 /opt/boat_sim/scripts/gazebo_clock_ready.py "$clock_topic"; then
             ready=1

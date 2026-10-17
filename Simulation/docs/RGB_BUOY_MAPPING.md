@@ -70,7 +70,12 @@ For live topics, in an environment with the autonomy ROS workspace sourced:
 ros2 launch maritime_localization pipeline.launch.py method:=bearing_ekf
 ```
 
-For two calibrated cameras:
+The launch defaults to `camera_layout:=auto` and uses the durable camera roster published by the Adapter. `camera_layout:=single` and
+`camera_layout:=dual` explicitly select a layout. Dual-camera recordings select
+their layout from the archived manifest before replay begins. See
+[Selectable camera boats](DUAL_CAMERA.md).
+
+For two explicitly named calibrated cameras:
 
 ```bash
 ros2 launch maritime_localization pipeline.launch.py method:=bearing_ekf \

@@ -22,8 +22,8 @@
 #include "blueboat_camera_adapter/tf_validation.hpp"
 
 namespace {
-constexpr char kPrivateFrame[] = "zed2i_left_camera_optical_frame";
-constexpr char kPublicFrame[] = "camera_0_optical_frame";
+
+
 constexpr int64_t kMaxAgeNs = 100000000;
 constexpr size_t kMaxQueue = 64;
 
@@ -40,24 +40,34 @@ bool finite_values(const Values & values) {
 class CameraBoundary final : public rclcpp::Node {
  public:
   CameraBoundary() : Node("camera_0_boundary") {
+    camera_ = declare_parameter<std::string>("camera_id", "camera_0");
+    const auto model = declare_parameter<std::string>("boat_model", "single");
+    if ((model != "single" && model != "dual") ||
+        (camera_ != "camera_0" && !(model == "dual" && camera_ == "camera_1"))) {
+      throw std::runtime_error("unsupported camera/model combination");
+    }
+    mount_y_ = model == "single" ? 0.0 : (camera_ == "camera_0" ? -0.10 : 0.10);
+    mount_yaw_ = model == "single" ? 0.0 : (camera_ == "camera_0" ? -M_PI / 4 : M_PI / 4);
+    public_frame_ = camera_ + "_optical_frame";
+    private_frame_ = model == "single" ? "zed2i_left_camera_optical_frame" : public_frame_;
     const auto registration_mode = declare_parameter<std::string>("registration_mode", "");
     const auto registration_evidence = declare_parameter<std::string>("registration_evidence_ref", "");
     if (registration_mode != "color" || registration_evidence != "simulation-rgbd-registration") {
       throw std::runtime_error("camera registration configuration/evidence is not contract-approved");
     }
     const auto qos = rclcpp::SensorDataQoS().keep_last(1);
-    color_pub_ = create_publisher<sensor_msgs::msg::Image>("/sensors/camera_0/color/image_raw", qos);
-    depth_pub_ = create_publisher<sensor_msgs::msg::Image>("/sensors/camera_0/depth/image_rect_raw", qos);
-    info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("/sensors/camera_0/color/camera_info", qos);
+    color_pub_ = create_publisher<sensor_msgs::msg::Image>("/sensors/" + camera_ + "/color/image_raw", qos);
+    depth_pub_ = create_publisher<sensor_msgs::msg::Image>("/sensors/" + camera_ + "/depth/image_rect_raw", qos);
+    info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("/sensors/" + camera_ + "/color/camera_info", qos);
     diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
     color_sub_ = create_subscription<sensor_msgs::msg::Image>(
-        "/adapter/private/camera_0/color", qos,
+        "/adapter/private/" + camera_ + "/color", qos,
         [this](sensor_msgs::msg::Image::UniquePtr message) { receive_color(std::move(message)); });
     depth_sub_ = create_subscription<sensor_msgs::msg::Image>(
-        "/adapter/private/camera_0/depth", qos,
+        "/adapter/private/" + camera_ + "/depth", qos,
         [this](sensor_msgs::msg::Image::UniquePtr message) { receive_depth(std::move(message)); });
     info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
-        "/adapter/private/camera_0/camera_info", qos,
+        "/adapter/private/" + camera_ + "/camera_info", qos,
         [this](sensor_msgs::msg::CameraInfo::UniquePtr message) { receive_info(std::move(message)); });
     tf_sub_ = create_subscription<tf2_msgs::msg::TFMessage>(
         "/tf_static", rclcpp::QoS(10).transient_local().reliable(),
@@ -67,6 +77,8 @@ class CameraBoundary final : public rclcpp::Node {
   }
 
  private:
+  std::string camera_, private_frame_, public_frame_;
+  double mount_y_ = 0.0, mount_yaw_ = 0.0;
   std::string invalid_stamp_reason(int64_t stamp, int64_t previous) {
     const int64_t now = get_clock()->now().nanoseconds();
     if (stamp <= 0 || stamp <= previous) return "nonmonotonic_header_stamp";
@@ -82,7 +94,7 @@ class CameraBoundary final : public rclcpp::Node {
   }
 
   std::string invalid_color_reason(const sensor_msgs::msg::Image & message) const {
-    if (message.header.frame_id != kPrivateFrame) return "frame_mismatch";
+    if (message.header.frame_id != private_frame_) return "frame_mismatch";
     if (message.encoding != "rgb8" && message.encoding != "bgr8") return "unsupported_encoding";
     if (message.width == 0 || message.height == 0) return "invalid_dimensions";
     if (message.step != message.width * 3U ||
@@ -93,7 +105,7 @@ class CameraBoundary final : public rclcpp::Node {
   }
 
   std::string invalid_depth_reason(const sensor_msgs::msg::Image & message) const {
-    if (message.header.frame_id != kPrivateFrame) return "frame_mismatch";
+    if (message.header.frame_id != private_frame_) return "frame_mismatch";
     if (message.encoding != "32FC1") return "unsupported_encoding";
     if (message.width == 0 || message.height == 0) return "invalid_dimensions";
     if (message.step != message.width * 4U ||
@@ -104,7 +116,7 @@ class CameraBoundary final : public rclcpp::Node {
   }
 
   std::string invalid_info_reason(const sensor_msgs::msg::CameraInfo & message) const {
-    if (message.header.frame_id != kPrivateFrame) return "frame_mismatch";
+    if (message.header.frame_id != private_frame_) return "frame_mismatch";
     if (message.width == 0 || message.height == 0) return "invalid_dimensions";
     size_t expected_d = 0;
     if (message.distortion_model == "plumb_bob") expected_d = 5;
@@ -224,9 +236,9 @@ class CameraBoundary final : public rclcpp::Node {
         // Gazebo's RGBD depth product is registered to color; startup has
         // validated the immutable simulation-rgbd-registration evidence ID.
         normalize_depth(depth_message);
-        color_message.header.frame_id = kPublicFrame;
-        depth_message.header.frame_id = kPublicFrame;
-        info_message.header.frame_id = kPublicFrame;
+        color_message.header.frame_id = public_frame_;
+        depth_message.header.frame_id = public_frame_;
+        info_message.header.frame_id = public_frame_;
         color_pub_->publish(color_message);
         depth_pub_->publish(depth_message);
         info_pub_->publish(info_message);
@@ -246,11 +258,11 @@ class CameraBoundary final : public rclcpp::Node {
     for (const auto & transform : message.transforms) {
       const auto & parent = transform.header.frame_id;
       const auto & child = transform.child_frame_id;
-      if (child != "camera_0_link" && child != "camera_0_optical_frame") continue;
+      if (child != camera_ + "_link" && child != public_frame_) continue;
       const auto & t = transform.transform.translation;
       const auto & q = transform.transform.rotation;
       const bool valid = blueboat_camera_adapter::valid_camera_transform(
-          parent, child, t.x, t.y, t.z, q.x, q.y, q.z, q.w);
+          parent, child, t.x, t.y, t.z, q.x, q.y, q.z, q.w, camera_, mount_y_, mount_yaw_);
       std::ostringstream signature;
       signature << parent << ':' << t.x << ':' << t.y << ':' << t.z << ':'
                 << q.x << ':' << q.y << ':' << q.z << ':' << q.w;
@@ -259,8 +271,8 @@ class CameraBoundary final : public rclcpp::Node {
         errors_["frames"] = valid ? "duplicate_camera_transform" : "camera_transform_mismatch";
       }
     }
-    frames_ready_ = camera_transforms_["camera_0_link"].size() == 1 &&
-                    camera_transforms_["camera_0_optical_frame"].size() == 1 &&
+    frames_ready_ = camera_transforms_[camera_ + "_link"].size() == 1 &&
+                    camera_transforms_[public_frame_].size() == 1 &&
                     errors_.count("frames") == 0;
   }
 
@@ -277,13 +289,13 @@ class CameraBoundary final : public rclcpp::Node {
   diagnostic_msgs::msg::DiagnosticStatus component_status(
       const std::string & component, uint8_t default_level, const std::string & default_reason) const {
     diagnostic_msgs::msg::DiagnosticStatus output;
-    output.name = "camera_adapter/camera_0/" + component;
+    output.name = "camera_adapter/" + camera_ + "/" + component;
     output.hardware_id = "simulation_adapter";
     auto error = errors_.find(component);
     output.level = error == errors_.end() ? default_level : diagnostic_msgs::msg::DiagnosticStatus::ERROR;
     output.message = error == errors_.end() ? default_reason : error->second;
     output.values = {
-        value("contract_version", "1.0.0"), value("camera_id", "camera_0"),
+        value("contract_version", "1.0.0"), value("camera_id", camera_),
         value("source_ready", output.level == diagnostic_msgs::msg::DiagnosticStatus::OK ? "true" : "false"),
         value("reason", output.message), value("rgb_depth_match_tolerance_ns", 0),
         value("max_acquisition_age_ns", kMaxAgeNs), value("max_arrival_silence_ns", 2000000000LL),

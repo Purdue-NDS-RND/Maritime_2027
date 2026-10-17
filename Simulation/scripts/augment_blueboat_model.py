@@ -25,6 +25,7 @@ def structural(element: ET.Element) -> tuple:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--boat-model", choices=("single", "dual"), default="single")
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--payload", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -53,10 +54,12 @@ def main() -> int:
         raise SystemExit("Payload document has no model/base_link")
 
     additions = list(payload_link)
+    approved_names = INSERTED_NAMES if args.boat_model == "single" else {
+        f"camera_{i}_{kind}" for i in range(2) for kind in ("visual", "rgbd")}
     names = {item.get("name") for item in additions}
-    if names != INSERTED_NAMES or {item.tag for item in additions} != {"sensor", "visual"}:
-        raise SystemExit("Payload must contain exactly the approved sensor and visual")
-    if any(base_link.find(f"./*[@name='{name}']") is not None for name in INSERTED_NAMES):
+    if len(additions) != len(approved_names) or names != approved_names or {item.tag for item in additions} != {"sensor", "visual"}:
+        raise SystemExit("Payload must contain exactly the approved sensors and visuals")
+    if any(base_link.find(f"./*[@name='{name}']") is not None for name in approved_names):
         raise SystemExit("BlueBoat source already contains an approved payload name")
 
     for item in additions:
@@ -66,7 +69,7 @@ def main() -> int:
     audit_link = audit_root.find("./model/link[@name='base_link']")
     assert audit_link is not None
     for item in list(audit_link):
-        if item.get("name") in INSERTED_NAMES:
+        if item.get("name") in approved_names:
             audit_link.remove(item)
     if structural(audit_root) != original_structure:
         raise SystemExit("Structural audit failed: non-payload BlueBoat XML changed")

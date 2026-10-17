@@ -2,9 +2,7 @@
 """Monitor-only Gazebo truth visualization. Never publishes public TF."""
 import math
 import re
-from pathlib import Path
 
-import yaml
 
 import numpy as np
 import rclpy
@@ -41,49 +39,43 @@ class SimulationView(Node):
         self.static = self.create_publisher(TFMessage, ROOT + '/tf_static', static_qos)
         self.markers = self.create_publisher(MarkerArray, ROOT + '/markers', 2)
         self.subscriptions_by_topic = {}
-        self.info = None
-        self.last_image = None
-        self.publish_camera_mount()
+        self.info = {}
+        self.last_image = {}
+        self.mounts = {}
+        self.camera_tf = TFMessage()
+        self.create_subscription(TFMessage, '/tf_static', self.on_camera_tf,
+                                 QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         # RViz clears its TF buffer when simulation time jumps backwards.
         self.create_timer(1.0, lambda: self.static.publish(self.camera_tf))
         self.create_subscription(Odometry, '/blueboat/ground_truth/odometry',
                                  lambda msg: self.on_pose(msg, 'base_link'), 10)
-        self.create_subscription(CameraInfo, '/sensors/camera_0/color/camera_info',
-                                 lambda msg: setattr(self, 'info', msg), qos_profile_sensor_data)
-        self.create_subscription(Image, '/sensors/camera_0/color/image_raw',
-                                 lambda msg: setattr(self, 'last_image', msg), qos_profile_sensor_data)
         self.create_timer(1.0, self.discover)
         self.create_timer(0.25, self.draw_image)
         self.get_logger().info('Simulation truth view active on private /monitor/simulation topics')
 
-    def publish_camera_mount(self):
-        # Read the Adapter's canonical calibration contract, mounted read-only by
-        # rviz-sim. Do not depend on late-joining the public static-TF writers.
-        contract = yaml.safe_load(Path('/opt/monitor/simulation-camera.yaml').read_text())
-        camera = contract['cameras']['camera_0']
-        if contract['environment'] != 'simulation' or camera['mount_parent_frame'] != 'base_link':
-            raise ValueError('unexpected simulation camera mount contract')
-        mount = TransformStamped()
-        mount.header.frame_id, mount.child_frame_id = 'base_link', 'camera_0_link'
-        xyz = camera['mount_xyz_m']
-        rpy = camera['mount_rpy_rad']
-        if len(xyz) != 3 or len(rpy) != 3 or not all(math.isfinite(v) for v in xyz + rpy):
-            raise ValueError('invalid camera mount pose')
-        mount.transform.translation.x, mount.transform.translation.y, mount.transform.translation.z = map(float, xyz)
-        roll, pitch, yaw = (v / 2 for v in rpy)
-        cr, sr, cp, sp, cy, sy = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch), math.cos(yaw), math.sin(yaw)
-        q = mount.transform.rotation
-        q.x, q.y = sr*cp*cy-cr*sp*sy, cr*sp*cy+sr*cp*sy
-        q.z, q.w = cr*cp*sy-sr*sp*cy, cr*cp*cy+sr*sp*sy
-        optical = TransformStamped()
-        optical.header.frame_id, optical.child_frame_id = 'camera_0_link', 'camera_0_optical_frame'
-        q = optical.transform.rotation
-        q.x, q.y, q.z, q.w = -.5, .5, -.5, .5
-        self.camera_tf = TFMessage(transforms=[mount, optical])
+    def on_camera_tf(self, message):
+        # Copy only camera calibration into the private truth view. Public boat
+        # motion remains independent of the truth-derived Monitor boat pose.
+        for transform in message.transforms:
+            if (re.fullmatch(r'camera_\d+_link', transform.child_frame_id)
+                    and transform.header.frame_id == 'base_link') or (
+                    re.fullmatch(r'camera_\d+_optical_frame', transform.child_frame_id)
+                    and transform.header.frame_id == transform.child_frame_id.replace('_optical_frame', '_link')):
+                self.mounts[transform.child_frame_id] = transform
+        self.camera_tf = TFMessage(transforms=list(self.mounts.values()))
         self.static.publish(self.camera_tf)
 
     def discover(self):
         for topic, types in self.get_topic_names_and_types():
+            camera_match = re.fullmatch(r'/sensors/(camera_\d+)/color/(image_raw|camera_info)', topic)
+            if camera_match and topic not in self.subscriptions_by_topic:
+                camera, stream = camera_match.groups()
+                if stream == 'camera_info' and 'sensor_msgs/msg/CameraInfo' in types:
+                    self.subscriptions_by_topic[topic] = self.create_subscription(CameraInfo, topic,
+                        lambda msg, camera=camera: self.info.__setitem__(camera, msg), qos_profile_sensor_data)
+                elif stream == 'image_raw' and 'sensor_msgs/msg/Image' in types:
+                    self.subscriptions_by_topic[topic] = self.create_subscription(Image, topic,
+                        lambda msg, camera=camera: self.last_image.__setitem__(camera, msg), qos_profile_sensor_data)
             match = BUOY.fullmatch(topic)
             if match and 'nav_msgs/msg/Odometry' in types and topic not in self.subscriptions_by_topic:
                 frame = 'buoy/' + match[1]
@@ -136,11 +128,14 @@ class SimulationView(Node):
         self.markers.publish(MarkerArray(markers=[body, label, heading]))
 
     def draw_image(self):
-        msg, info = self.last_image, self.info
-        if msg is None or info is None:
-            return
-        self.last_image = None
-        if (msg.header.frame_id != 'camera_0_optical_frame' or
+        for camera in list(self.last_image):
+            msg = self.last_image.pop(camera)
+            info = self.info.get(camera)
+            if info is not None:
+                self.draw_camera(camera, msg, info)
+
+    def draw_camera(self, camera, msg, info):
+        if (msg.header.frame_id != camera + '_optical_frame' or
                 info.header.frame_id != msg.header.frame_id or
                 (msg.width, msg.height) != (info.width, info.height) or
                 msg.encoding not in ('rgb8', 'bgr8')):
@@ -158,7 +153,7 @@ class SimulationView(Node):
             return
         if msg.encoding == 'bgr8':
             pixels = pixels[:, :, ::-1]
-        plane = self.marker(msg.header.frame_id, 'camera/image_plane', Marker.TRIANGLE_LIST, msg.header.stamp)
+        plane = self.marker(msg.header.frame_id, camera + '/image_plane', Marker.TRIANGLE_LIST, msg.header.stamp)
         plane.scale.x = plane.scale.y = plane.scale.z = 1.
         for row in range(height):
             for col in range(width):
@@ -167,7 +162,7 @@ class SimulationView(Node):
                 for dx, dy in ((0, 0), (1, 0), (1, 1), (0, 0), (1, 1), (0, 1)):
                     plane.points.append(Point(x=float(x[col + dx]), y=float(y[row + dy]), z=1.5))
                     plane.colors.append(color)
-        outline = self.marker(msg.header.frame_id, 'camera/frustum', Marker.LINE_LIST, msg.header.stamp)
+        outline = self.marker(msg.header.frame_id, camera + '/frustum', Marker.LINE_LIST, msg.header.stamp)
         outline.scale.x = .015
         corners = [Point(x=float(x[c]), y=float(y[r]), z=1.5) for c, r in ((0, 0), (-1, 0), (-1, -1), (0, -1))]
         for index, corner in enumerate(corners):

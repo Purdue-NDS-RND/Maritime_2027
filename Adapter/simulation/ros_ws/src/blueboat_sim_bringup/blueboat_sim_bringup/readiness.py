@@ -32,10 +32,11 @@ class Watch(Node):
 def main():
     parser = argparse.ArgumentParser(description="Check one readiness boundary; boundaries are never inferred from each other.")
     parser.add_argument("boundary", choices=tuple(NAMES))
+    parser.add_argument("--camera", default="camera_0", choices=("camera_0", "camera_1"))
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
     rclpy.init()
-    node = Watch(NAMES[args.boundary])
+    node = Watch(NAMES[args.boundary].replace("camera_0", args.camera))
     deadline = time.monotonic() + args.timeout
     reason = "diagnostic_unobserved"
     try:

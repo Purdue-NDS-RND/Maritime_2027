@@ -13,7 +13,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SELECTION_KEYS = ("WORLD", "SCENARIO", "BUOY_SEED", "ROS_SIM", "WATER")
+SELECTION_KEYS = ("WORLD", "SCENARIO", "BUOY_SEED", "ROS_SIM", "WATER", "BOAT_MODEL")
 
 
 class RunMenuTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class RunMenuTests(unittest.TestCase):
                 "if sys.argv[1:] == ['compose', 'version']: sys.exit(0)\n"
                 "Path(__file__).with_name('selection').write_text('SELECTED=' + "
                 "json.dumps({k: os.environ.get(k) "
-                "for k in ('WORLD', 'SCENARIO', 'BUOY_SEED', 'ROS_SIM', 'WATER')}) + '\\n')\n"
+                "for k in ('WORLD', 'SCENARIO', 'BUOY_SEED', 'ROS_SIM', 'WATER', 'BOAT_MODEL')}) + '\\n')\n"
                 "sys.exit(1)\n"
             )
             docker.chmod(0o755)
@@ -80,7 +80,7 @@ class RunMenuTests(unittest.TestCase):
                 os.close(master)
 
     def selected(self, answers, overrides=None):
-        code, output = self.launch(answers, overrides)
+        code, output = self.launch(answers + "\n", overrides)
         self.assertNotEqual(code, 0)  # Intentional Docker preflight stop.
         rows = [line for line in output.splitlines() if line.startswith("SELECTED=")]
         self.assertEqual(len(rows), 1, output)
@@ -94,7 +94,7 @@ class RunMenuTests(unittest.TestCase):
                     values, output = self.selected(f"{water_answer}\n{answer}\n\n")
                     self.assertEqual(values["WORLD"], f"blueboat_{world}.sdf")
                     self.assertEqual(values["WATER"], water)
-                    self.assertEqual(values["ROS_SIM"], "0")
+                    self.assertEqual(values["ROS_SIM"], "1")
                     self.assertIsNone(values["SCENARIO"])
                     self.assertLess(output.index('Choose water'), output.index('Choose a scene'))
 
@@ -121,9 +121,9 @@ class RunMenuTests(unittest.TestCase):
         self.assertEqual(values["BUOY_SEED"], "42")
         self.assertIn("Please enter a number", output)
         self.assertIn("Please enter an integer", output)
-        values, output = self.selected("2\n1\nmaybe\ny\n")
+        values, output = self.selected("2\n1\nmaybe\n1\n")
         self.assertEqual(values["ROS_SIM"], "1")
-        self.assertIn("Please enter y, n", output)
+        self.assertIn("Please enter 1 or 2", output)
 
     def test_existing_seed_and_ros_defaults(self):
         values, _ = self.selected("2\n4\n\n", {"BUOY_SEED": "17"})
@@ -138,6 +138,11 @@ class RunMenuTests(unittest.TestCase):
                 self.assertEqual(code, 0, output)
                 self.assertIn("Setup cancelled", output)
                 self.assertNotIn("SELECTED=", output)
+
+    def test_dual_boat_selection(self):
+        values, output = self.selected("2\n4\n\n2\n")
+        self.assertEqual(values["BOAT_MODEL"], "dual")
+        self.assertIn("BOAT_MODEL=dual", output)
 
     def test_eof_cancels(self):
         code, output = self.launch("\x04")
