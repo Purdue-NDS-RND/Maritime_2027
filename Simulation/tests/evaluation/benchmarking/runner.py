@@ -100,11 +100,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--image-topic", default="/sensors/camera_0/color/image_raw")
-    parser.add_argument("--method", choices=("detections", "depth", "triangulation"), default="detections")
     parser.add_argument("--preview-every", type=int, default=30, help="Save an annotated frame every N frames; 0 disables")
     args = parser.parse_args()
-    if args.method != "detections":
-        parser.error(f"Use make benchmark METHOD={args.method} for ROS positioning; this tool exports detections only")
     if args.preview_every < 0:
         parser.error("preview-every must be nonnegative")
     run(args.dataset, args.output, args.config, args.image_topic, args.preview_every)

@@ -13,7 +13,7 @@ from sensor_msgs.msg import CameraInfo
 from scipy.spatial.transform import Rotation
 from vision_msgs.msg import Detection2DArray
 
-from maritime_localization.mapping_node import RGBMappingNode
+from maritime_localization.mapping_node import BuoyMappingNode
 from maritime_perception.aruco import BoundingBox
 from maritime_perception.messages import detection_array
 
@@ -21,7 +21,7 @@ from maritime_perception.messages import detection_array
 class MappingNodeTests(unittest.TestCase):
     def setUp(self):
         rclpy.init()
-        self.node = RGBMappingNode()
+        self.node = BuoyMappingNode()
         self.addCleanup(self.close)
         self.outputs = []
         self.node.estimate_publisher.publish = self.outputs.append
@@ -36,6 +36,11 @@ class MappingNodeTests(unittest.TestCase):
         transform.transform.rotation.z, transform.transform.rotation.w = -.5, .5
         self.node.transforms.set_transform_static(transform, 'test')
         self.frame = info.header.frame_id
+
+    def test_mapper_name_and_parameter_prefix(self):
+        self.assertEqual(self.node.get_name(), 'buoy_mapper')
+        self.assertEqual(self.node.get_parameter('bearing_ekf.min_views').value, 4)
+        self.assertFalse(self.node.has_parameter('rgb_mapping.min_views'))
 
     def close(self):
         self.node.destroy_node()

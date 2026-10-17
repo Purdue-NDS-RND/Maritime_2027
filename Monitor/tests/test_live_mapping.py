@@ -126,7 +126,7 @@ rclpy.shutdown()
         broadcaster.sendTransform(transform)
         log = open('/tmp/live-pipeline-test.log', 'w+')
         parameters = Path('/tmp/live-test-mapper.yaml')
-        parameters.write_text('/localization/rgb_buoy_mapper:\n  ros__parameters:\n    pose_wait_s: 2.0\n')
+        parameters.write_text('/localization/buoy_mapper:\n  ros__parameters:\n    pose_wait_s: 2.0\n')
         process = subprocess.Popen(['ros2', 'launch', 'maritime_localization', 'pipeline.launch.py',
             'use_sim_time:=true', f'pose_topic:={ALIGNED_POSE}', f'mapper_parameters:={parameters}'],
             stdout=log, stderr=subprocess.STDOUT)

@@ -182,13 +182,10 @@ def benchmark(path):
     if json.loads((path / "dataset.json").read_text())["status"] != "complete":
         print("\nThis recording is incomplete. Inspect its details first.")
         return
-    print("\nRuns the selected positioning method and saves map XY estimates, CSV, and scatter plot.")
-    method = choose("Method [1: depth, 2: RGB triangulation, 3: RGB persistent map]: ", ("1", "2", "3"), "3")
-    offset = 0.
-    if method == "3":
-        print("Recorded FCU time references recover simulation clock differences automatically.\n"
-              "Leave offset at 0 for automatic recovery; a verified manual offset overrides it.")
-        offset = ask("Known pose clock offset in seconds [0]: ", "0", float)
+    print("\nRuns Bearing EKF Buoy Mapping and saves the map, XY updates, CSV, and scatter plot.")
+    print("Recorded FCU time references recover simulation clock differences automatically.\n"
+          "Leave offset at 0 for automatic recovery; a verified manual offset overrides it.")
+    offset = ask("Known pose clock offset in seconds [0]: ", "0", float)
     rate = ask("Playback speed [1]: ", "1", cli.positive_number)
     capture = json.loads((path / "dataset.json").read_text())["capture_domain"]
     def domain_number(value):
@@ -199,7 +196,7 @@ def benchmark(path):
     domain = ask("Replay ROS domain [97]: ", "97", domain_number)
     tool = cli.SIMULATION / "tests/evaluation/benchmarking/tools.py"
     run_foreground([sys.executable, str(tool), "run", "--recording", path.name,
-                    "--method", {"1": "depth", "2": "triangulation", "3": "rgb_mapping"}[method],
+                    "--method", "bearing_ekf",
                     "--pose-time-offset", str(offset),
                     "--rate", str(rate), "--domain", str(domain)])
 

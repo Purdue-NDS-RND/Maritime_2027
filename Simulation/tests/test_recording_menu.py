@@ -112,22 +112,22 @@ class MenuTests(unittest.TestCase):
 
     def test_benchmark_selects_method_rate_and_isolated_domain(self):
         path = self.dataset()
-        with patch("builtins.input", side_effect=["2", "0.5", "0", "98"]), \
+        with patch("builtins.input", side_effect=["0", "0.5", "0", "98"]), \
                 patch.object(menu, "run_foreground", return_value=0) as run, \
                 contextlib.redirect_stdout(io.StringIO()):
             menu.benchmark(path)
         args = run.call_args.args[0]
-        self.assertEqual(args[-10:], ["--recording", "gate-pass", "--method", "triangulation",
+        self.assertEqual(args[-10:], ["--recording", "gate-pass", "--method", "bearing_ekf",
                                       "--pose-time-offset", "0.0", "--rate", "0.5", "--domain", "98"])
 
     def test_rgb_map_selects_explicit_clock_offset(self):
         path = self.dataset()
-        with patch("builtins.input", side_effect=["3", "-123.5", "1", "97"]), \
+        with patch("builtins.input", side_effect=["-123.5", "1", "97"]), \
                 patch.object(menu, "run_foreground", return_value=0) as run, \
                 contextlib.redirect_stdout(io.StringIO()):
             menu.benchmark(path)
         args = run.call_args.args[0]
-        self.assertEqual(args[args.index("--method")+1], "rgb_mapping")
+        self.assertEqual(args[args.index("--method")+1], "bearing_ekf")
         self.assertEqual(args[args.index("--pose-time-offset")+1], "-123.5")
 
 

@@ -45,12 +45,12 @@ def positive_covariance(covariance):
     return covariance
 
 
-class RGBMappingNode(Node):
+class BuoyMappingNode(Node):
     def __init__(self):
-        super().__init__('rgb_buoy_mapper')
+        super().__init__('buoy_mapper')
         def parameter(name, default):
             return self.declare_parameter(name, default).value
-        settings = MappingSettings(**{name: parameter(f'rgb_mapping.{name}', default)
+        settings = MappingSettings(**{name: parameter(f'bearing_ekf.{name}', default)
                                       for name, default in asdict(MappingSettings()).items()})
         self.mapper = BearingMapper(settings)
         self.frame = parameter('reference_frame', 'map')
@@ -148,7 +148,7 @@ class RGBMappingNode(Node):
             raise ValueError(self.mapper.paused_reason)
         self.mounts[camera] = mounting.copy()
         transform = pose.transform @ mounting
-        obs = Observation(stamp_ns(message.header.stamp), message.header.frame_id, (),
+        obs = Observation(stamp_ns(message.header.stamp), message.header.frame_id,
                           np.array(calibration.k).reshape(3, 3), tuple(calibration.d),
                           camera_to_reference=transform, reference_frame=self.frame,
                           distortion_model=calibration.distortion_model)
@@ -240,7 +240,7 @@ class RGBMappingNode(Node):
             self.observation_publisher.publish(observations)
 
     def publish_status(self, message, status, detail, updated=(), pose_ns=0):
-        output = BuoyEstimateArray(method='rgb_mapping', status=status, detail=detail, inputs_ready=status == 'ok')
+        output = BuoyEstimateArray(method='bearing_ekf', status=status, detail=detail, inputs_ready=status == 'ok')
         output.header.stamp, output.header.frame_id = message.header.stamp, self.frame
         output.vessel_pose_stamp = ros_stamp(pose_ns-int(self.offset_s*1e9) if pose_ns else 0)
         for track in updated:
@@ -310,7 +310,7 @@ class RGBMappingNode(Node):
         counters['pose_buffer_samples'] = len(self.poses.samples)
         counters.update({f'tracks_{state}': sum(track.state == state for track in self.mapper.tracks)
                          for state in ('unresolved', 'tentative', 'confirmed', 'stale', 'inconsistent')})
-        diagnostics = DiagnosticStatus(name='rgb_buoy_mapping', hardware_id=self.mapper.session_id,
+        diagnostics = DiagnosticStatus(name='bearing_ekf_buoy_mapping', hardware_id=self.mapper.session_id,
             level=(DiagnosticStatus.ERROR if self.mapper.paused_reason else
                    DiagnosticStatus.WARN if stale_inputs else DiagnosticStatus.OK),
             message=self.mapper.paused_reason or 'RGB-only independent-landmark mapping',
@@ -322,7 +322,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = None
     try:
-        node = RGBMappingNode()
+        node = BuoyMappingNode()
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass

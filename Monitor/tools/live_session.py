@@ -37,7 +37,7 @@ def main():
             while time.monotonic() < deadline:
                 rclpy.spin_once(probe, timeout_sec=.1)
             active = [(name, namespace) for name, namespace in probe.get_node_names_and_namespaces()
-                      if (name == 'rgb_buoy_mapper' and namespace == '/localization')
+                      if (name == 'buoy_mapper' and namespace == '/localization')
                       or (name == 'aruco_detector' and namespace == '/perception/camera_0')]
             if active:
                 print(f'ERROR: mapping/detection already active on this domain: {active}', flush=True)
@@ -52,10 +52,10 @@ def main():
             commands.append(['python3', '/opt/live/live_clock.py', '--pose-topic', args.pose_topic])
         # FCU SYSTEM_TIME can arrive at 1 Hz. Wait for the next enclosing reference
         # without changing the production default or allowing pose extrapolation.
-        Path('/tmp/live-mapper.yaml').write_text('/localization/rgb_buoy_mapper:\n'
+        Path('/tmp/live-mapper.yaml').write_text('/localization/buoy_mapper:\n'
             '  ros__parameters:\n    pose_wait_s: 2.0\n')
         commands.append(['ros2', 'launch', 'maritime_localization', 'pipeline.launch.py',
-                         'method:=rgb_mapping', 'use_sim_time:=true', 'publish_debug_image:=true',
+                         'method:=bearing_ekf', 'use_sim_time:=true', 'publish_debug_image:=true',
                          f'pose_topic:={pose}', f'pose_time_offset_s:={args.offset}',
                          'mapper_parameters:=/tmp/live-mapper.yaml'])
     commands.append(['python3', '/opt/live/mapping_view.py', '--pose-topic', pose,

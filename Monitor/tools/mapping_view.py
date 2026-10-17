@@ -56,7 +56,7 @@ class MappingView(Node):
 
     def on_diagnostic(self, message):
         for status in message.status:
-            if status.name == 'rgb_buoy_mapping':
+            if status.name == 'bearing_ekf_buoy_mapping':
                 counters = {item.key: item.value for item in status.values}
                 self.diagnostic = (status.message + '\n'
                     + '  '.join(f'{key}={counters.get(key, "0")}' for key in
