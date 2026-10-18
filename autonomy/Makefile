@@ -10,7 +10,7 @@ export POSE_TIME_OFFSET_S ?= 0
 help:
 	@printf '%s\n' \
 	  'make navigation-build  Build navigation and its simulation support image' \
-	  'make run             Run dual-camera gate and slalom navigation' \
+	  'make run             Run map-based Nav2 navigation (see docs/GATE_SLALOM_NAVIGATION.md)' \
 	  'make navigation-test Run navigation and command-gate tests' \
 	  'make mapping-build  Build the autonomy and optional live monitoring images' \
 	  'make mapping        Run RGB detection, mapping and the live top-down popup' \

@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-IMAGE = 'maritime-mapping-view:jazzy'
+IMAGE = os.environ.get('MAPPING_IMAGE', 'maritime-mapping-view:jazzy')
 
 
 def main():

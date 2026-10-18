@@ -257,7 +257,8 @@ class BuoyMappingNode(Node):
         output = BuoyMap(session_id=self.mapper.session_id, paused=bool(self.mapper.paused_reason),
                          detail=self.mapper.paused_reason or '')
         output.header.frame_id, output.header.stamp = self.frame, ros_stamp(stamp)
-        output.unresolved_count = sum(track.mean is None for track in self.mapper.tracks)
+        output.unresolved_world_ids = [track.identifier for track in self.mapper.tracks if track.mean is None]
+        output.unresolved_count = len(output.unresolved_world_ids)
         for track in self.mapper.snapshot():
             age = max(0., (stamp-track.last_seen_ns)/1e9)
             confidence = min(1., track.confirmation_evidence/self.mapper.settings.confirmation_updates)*np.exp(-age/60.)

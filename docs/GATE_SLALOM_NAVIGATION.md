@@ -1,127 +1,233 @@
-# Gate and Dodge navigation
+# Map-based boat navigation with Nav2
 
-The optional `maritime_navigation` package uses both calibrated RGB cameras to
-find the entry gate, pass red buoys on their left and green buoys on their right,
-and clear the exit gate. The entry gate establishes the course axes. Buoy
-coordinates, physical identities and scenario manifests are not navigation
-inputs. The existing `slalom` scenario provides gate A, four alternating turns,
-and gate B; `gate` provides the standalone first challenge. The gate scenario
-now places green on the left and red on the right for forward traversal.
-
-This implements the gate and Dodge sequence described on pages 5-7 of the
-AIMM-ICC Competition Course Details (December 13, 2025). Course dimensions in
-simulation are provisional. Leaving a real dock, competition deployment,
-natural color detection, GPS independence and other challenges are outside the
-validation of this simulation implementation.
+Navigation consumes the shared RGB Bearing EKF map. It no longer estimates
+marker range independently or sends velocity directly toward buoy waypoints.
+Nav2 Smac State Lattice computes a footprint-checked route and Regulated Pure Pursuit
+follows it. The mission supervisor selects goals, checks input progress, and
+independently checks the commanded hull sweep before releasing commands.
+Nav2 checks path validity at 1 Hz, retaining a valid route and replanning when
+the goal changes or updated obstacles invalidate it. Soft cost changes alone
+do not replace an otherwise valid committed path.
 
 ## Run
 
-Build navigation from `autonomy/` once:
+Start Simulation and Adapter separately. From `autonomy/`:
 
 ```bash
-cd autonomy
 make navigation-build
+make navigation-test
+
+# One map-frame goal; yaw is radians. Unknown water requires explicit permission.
+make run TASK=goal ARGS='--goal 10 0 0 --assume-bounded-water'
+
+# Initial rectangle, relative to the starting boat pose, must be known clear:
+# forward [-3,5] m, left [-4,4] m. Mapped obstacles still override it.
+make run TASK=gate ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
+make run TASK=slalom ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
 ```
 
-Start Simulation and the Adapter in one terminal:
+Use `SCENARIO=gate|slalom BOAT_MODEL=dual WATER=calm make run` in Simulation for
+matching course evaluation. Navigation reads no scenario manifest or simulator
+truth. `--evaluate` starts an independent simulation-only judge that does. The judge
+ends a test if its conservative physical clearance envelope is violated; truth
+is never used to generate navigation goals or commands.
+One camera remains supported through the mapper's camera roster discovery.
+
+Default operating bounds are `[-5,-12,45,12]` in map metres. Override them with
+`--operating-bounds XMIN YMIN XMAX YMAX`. The whole vessel must remain inside.
+`--assume-bounded-water` permits planning through unknown cells only within this
+boundary. It is a simulation operating assumption, **not observed free water**.
+Without this flag, unknown cells remain blocked. Objects undetected by RGB
+perception cannot appear in this obstacle map.
+
+`--bootstrap-clear-start` permits up to four observation goals inside the declared
+clear rectangle while acquiring range through translation. Relative forward/left
+offsets are `(3,1.5)`, `(2,-1.5)`, `(0,1.5)`, `(0,-1.5)` metres. After the first
+leg, additional opposing viewpoints are used while the gate is unconfirmed.
+Strict uncertainty mode also surveys while active detections lack range; if
+that bounded survey is exhausted, it waits for range. Graded mode can continue
+toward confirmed course goals while unresolved bearings contribute soft costs.
+No rotation-only range initialization is attempted. If useful geometry or
+clearance cannot be found,
+the boat stops; it does not invent buoy positions or lower uncertainty to fit.
+
+`--external-map` uses an existing shared mapping pipeline; otherwise navigation
+reads the camera roster, then starts detection, mapping, and the existing experimental simulation clock
+converter. Do not run a second mapper, teleop, or another actuator publisher.
+`--plan-only` omits the vehicle bridge and cannot arm or move the boat.
+
+Builds use `maritime-autonomy-nav2:jazzy`, retaining the ordinary mapping image.
+The added `BuoyMap.unresolved_world_ids` field requires rebuilding other mapping
+and Monitor images before mixing them with this branch.
+Session settings and per-process logs go to `Simulation/logs/navigation-*`.
+The post-arming wall-time budget defaults to 600 seconds for a goal/gate and
+1200 seconds for slalom; override it with `--mission-timeout SECONDS`. Startup
+and verified cleanup have separate allowances. Freshness guards remain active
+throughout. Ctrl-C stops the command bridge first; a bridge-owned armed session requests
+HOLD and disarm before the other processes stop.
+
+## Data and responsibility
+
+| Interface | Use |
+| --- | --- |
+| `/mapping/occupancy_grid` | Physical occupied cells; unknown elsewhere. Unchanged by navigation. |
+| `/mapping/buoys` | Persistent map IDs, categories, metric means, covariance, lifecycle, active unresolved IDs and observation progress. |
+| `/mapping/observations` | Unresolved bearings add angular uncertainty costs; strict mode blocks their sectors. |
+| `vessel/odometry` | Environment-neutral pose and measured body velocity input. Simulation runner remaps to FCU odometry. |
+| `/navigation/planning_grid` | Fully rebuilt, bounded planning grid with physical obstacles, uncertainty, unresolved hazards and mission crossing constraints. |
+| `/navigation/odometry` | Planar live state for Nav2; wall-time stamps and `navigation_odom` frame. |
+| `/plan` | Smac planned path. |
+| `/navigation/cmd_vel` | Nav2's internal body-forward speed and yaw rate; never connected directly to the vehicle. |
+| `/navigation/velocity` | Supervisor-gated `TwistStamped`, `base_link`, forward m/s and counterclockwise rad/s. |
+| `/navigation/status` | JSON stage, stop reason, target, map session/stamp, unresolved count and mission events. |
+
+The Python costmap adapter keeps physical buoy radius plus 0.15 m clearance
+hard. Position uncertainty adds graded costs up to two standard deviations,
+using the largest covariance eigenvalue. The soft scores (0-85) are planning
+preferences, not calibrated collision probabilities. This intentionally allows
+a planner to cross an uncertain region when physical clearance permits it.
+Unresolved bearings also contribute angular soft gradients (0-85), without
+inventing a range. Under the explicit bounded-water assumption, the boat may
+traverse these uncertain regions to gather more parallax. This accepts possible
+collision risk from an object whose position is not yet resolved. Use
+`--uncertainty-mode hard` to instead exclude both the full two-sigma envelope
+and unresolved bearing sectors.
+The selected policy is recorded in session settings and `/navigation/status`.
+The status `observations` values sum track observation counts for each listed
+source camera; they are not per-camera frame counters.
+
+Unresolved bearing sectors follow the mapper's active `unresolved_world_ids`.
+A newer observation retains its sector while waiting for its matching map snapshot;
+retired unresolved IDs stop contributing sectors. This follows the mapper's
+existing five-second unresolved expiry, and does not remove metric obstacles.
+Anonymous ambiguous observations retain uncertainty sectors until session reset.
+These are soft in graded mode and blocked in strict mode. Unresolved expiry
+is not evidence of observed free water.
+
+Tentative, confirmed, stale and inconsistent metric tracks retain hard physical
+footprints. The adapter preserves occupied source cells and rebuilds from each
+snapshot so moved estimates do not leave ghost footprints. It crops to the
+operating region and refines the raster to 0.10 m without clearing any coarse
+occupied source cell. This gives usable gate geometry without allocating a
+high-resolution grid for the entire 100 m source map. Nav2 applies the 2.2 x
+1.2 m polygon footprint and a soft inflation gradient. The hull is not added a
+second time to the obstacle radius.
+
+The gate/slalom mission uses retained confirmed/stale shared-map tracks.
+Occlusion does not discard a confirmed course landmark; individual uncertainty
+continues to grow in the mapper while whole-map acquisition freshness is gated.
+Crossing constraints
+block shortcuts outside gates or on the wrong side of a turn buoy. Open-water turn goals use a 3 m lateral stand-off. Destination
+proximity is required before advancing a course leg. A physically blocked gate still stops the boat. With graded costs, a 3 m gate
+can be attempted despite the mapper's 0.25 m uncertainty floor; estimated
+physical clearance does not guarantee clearance from the true buoy position.
+The optional hard uncertainty mode can legitimately reject that same gate.
+
+When the next confirmed turn or exit gate is missing, graded mode can request
+up to four local observation goals: one/two metres farther along the course,
+with opposing lateral viewpoints at ±2 m. These are anchored to the start of
+that search and remain inside the operating bounds. They do not invent buoy
+ranges or advance course events. Nav2 and the hull-sweep guard check each move;
+course goals resume as soon as the expected landmark is confirmed. Exhausting
+the bounded search stops further observation motion. Strict mode waits instead.
+
+
+## Frames, time and command transport
+
+Navigation owns `map -> navigation_odom -> base_link`, using the external local
+vessel estimate. Currently `navigation_odom` has the same origin as `map`; this
+is not a new global localization system or a promise of drift-free odometry.
+The Adapter continues to publish only its existing data and static mounts.
+The private truth-derived Monitor frames are never navigation pose inputs.
+
+Nav2 uses wall time and live odometry receipt stamps. Mapping uses acquisition
+stamps, with the existing experimental FCU-reference/receipt-clock converter
+for simulation. Arrival bias remains unmeasured; this is not a hardware-ready
+time synchronization solution. Replay through the live navigation runner is
+not supported.
+
+The map and physical grid are paired by acquisition stamp in a bounded buffer;
+separate topic arrival times do not invalidate the last complete snapshot.
+Repeated 10 Hz map publications do not count as new observations. The movement
+gate stops when map acquisition progress/receipt exceeds two seconds, odometry
+progress exceeds 0.5 seconds, the mapper pauses, or controller commands exceed
+0.3 seconds. Brief odometry gaps stop commands while retaining the Nav2 action;
+prolonged loss cancels it. Map session changes and timestamp reversal latch a fault until
+restart. A three-second sampled hull sweep checks commanded curvature, measured
+curvature and straight coasting, using the greater of commanded and measured
+speed. It rejects commands entering hard obstacles or unknown cells; the explicitly
+selected graded uncertainty costs remain traversable. This horizon and motion settings require boat stopping and
+tracking measurements; sampled prediction cannot guarantee behaviour in currents.
+
+The simulation bridge separately requires connected, armed GUIDED state,
+forwards body-forward speed plus yaw rate through MAVROS raw BODY_NED setpoints,
+and zeros both after 0.5 seconds without a valid command. Body-forward X avoids
+Rover's local-NED north/south speed-sign ambiguity. MAVROS performs FLU/FRD and
+yaw-rate sign conversion. No MAVROS or simulator imports enter autonomy packages.
+Nav2 spin, backup and obstacle-clearing recovery behaviours are not enabled.
+The controller aligns heading before driving when the path differs by more
+than 0.15 radians, and aligns final goal heading. Retaining valid paths avoids
+continually changing the alignment target. Angular motion counts as progress;
+hull checks remain active during alignment. Rotation does not supply the
+translation needed to initialize buoy range.
+
+The bridge requests 20 Hz LOCAL_POSITION_NED and ATTITUDE_QUATERNION telemetry
+and 5 Hz SYSTEM_TIME references for this connection before arming; it restores
+their default intervals on exit. Command-smoke durations use simulation time so
+slow rendering does not shorten the physical observation window.
+No persistent FCU parameters, boat dynamics or MAVLink ports are changed.
+Each RGB detector defaults to one OpenCV thread (`opencv_threads`) to bound
+concurrent camera load.
+
+## Inspect and validate
 
 ```bash
-cd Simulation
-SCENARIO=slalom BOAT_MODEL=dual WATER=calm make run
+make -C Monitor build
+make -C Monitor rviz-nav
+make -C Monitor shell ARGS='ros2 topic echo /navigation/status'
+
+# Moves an initially unarmed simulated boat; stop navigation/teleop first.
+make -C Simulation navigation-command-smoke
 ```
 
-Start navigation in a second terminal:
+`rviz-nav` uses `map` coordinates and wall time, showing physical occupancy,
+planning policy, Nav2 costs, shared buoy estimates, route and hull footprint.
+The existing `rviz-sim` view remains a private truth/world inspection tool.
 
-```bash
-cd autonomy
-make run ARGS=--evaluate
-```
+`make navigation-test` runs mission/costmap policy tests, bridge gating tests,
+and actual Nav2 servers in isolated ROS domains 97 and 98. The integration fixture uses
+synthetic odometry and mapped obstacles to check detouring, map-progress timeout,
+blocked-route stopping and session-reset stopping. An additional isolated gate fixture checks the
+3 m opening with the actual mapper uncertainty floor. It is software integration
+evidence; physical vessel dynamics and live RGB-map accuracy require separate
+simulation trajectory evaluation.
 
-Simulation starts its Adapter by default, and starts no autonomy application.
-The old placeholder is no longer part of the Simulation stack.
-For the standalone gate, use `SCENARIO=gate` in Simulation and
-`make run TASK=gate ARGS=--evaluate` in autonomy. The runner requires a
-healthy simulator and Adapter. It waits for an observed gate before requesting
-GUIDED and arming an initially disarmed boat. It sends ENU desired velocity at
-up to 0.65 m/s. Completion, interruption and session timeout invoke a zero
-command, HOLD and disarm. External mode changes end the command session.
-Ctrl-C stops this session; use `make down` to stop Simulation separately.
-Start each complete attempt from a fresh simulator with the gate ahead of the
-boat. A new session after passing the gate waits for another gate ahead.
+Starting configuration: 0.2 m/s desired speed, 1.0 m minimum lattice curve radius,
+10 Hz controller/supervisor and 1 Hz path-validity checks. These are provisional simulation
+values, not measured hardware limits. Do not claim course acceptance from a
+healthy lifecycle node or an ideal kinematic integration test.
 
-Logs and optional `result.json` are in `Simulation/logs/navigation-<timestamp>/`.
-The independent judge records actual buoy poses and the boat trajectory, checks
-all buoy side crossings and conservative footprint clearance, and requires the
-complete gate/turn/exit event sequence with observations from both cameras.
-A successful process launch or healthy container is not a navigation pass.
+Nav2 references: [Smac State Lattice](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/planners_plugins/smac/smac_lattice/configuring_smac_lattice/),
+[Regulated Pure Pursuit](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/controller_plugins/configuring_regulated_pp/).
 
-`make navigation-test` in `autonomy/` runs the course-planning and existing autonomy boundary
-tests on the host, plus RGB geometry and command-gate tests in isolated containers.
-It requires the built autonomy and evaluation images but no running simulator.
+## Validation record (2026-10-18)
 
-## Inputs and limits
+| Check | Measured result |
+| --- | --- |
+| Simulation and Monitor `make validate` | Passed syntax, assets, pinned-source and Compose checks. |
+| `make -C autonomy navigation-test` | 34 unit tests, 5 bridge tests, and actual Nav2 detour/gate fixtures passed. Minimum physical hull clearance: 1.09 m detour, 0.45 m three-metre gate. |
+| Existing live mapping regression | 9 tests passed using a separate Nav2-based mapping-view image. |
+| Root boundary tests | 13 passed; one ROS-only host test skipped. |
+| Monitor smoke, isolated domain 100 | Cross-container custom messages, image payloads, TF, CLI deserialization and rate measurements passed with the extended `BuoyMap`. |
+| `make -C Simulation verify-rgbd` | Full RGB-D, scenario, boundary, MAVROS and original-control regression passed. |
+| `make -C Simulation navigation-command-smoke` | Forward movement at east/south headings, both yaw-rate signs, stopping, HOLD and disarm passed. Maximum measured stopping travel was 0.44 m after a 0.3 m/s command. |
+| Live RGB-map 3 m gate, dual cameras, calm water | Passed in 126 s wall time. Minimum clearance from conservative 0.6 m buoy envelopes: 0.23 m; whole-stern exit clearance: 0.71 m. No evaluator clearance violation. HOLD/disarm verified; runner exit code 0. Run `navigation-20261018-052923`. |
+| Live RGB-map slalom, dual cameras, calm water | Passed all six course events and all eight required-side checks in 852 s wall time. Minimum clearance from conservative 0.6 m buoy envelopes: 0.68 m; whole-stern exit clearance: 0.62 m. No evaluator clearance violation. HOLD/disarm verified; runner exit code 0. Run `navigation-20261018-051135`. |
 
-- `/sensors/camera_0/color/{image_raw,camera_info}` and the corresponding
-  `camera_1` topics, plus their calibrated `base_link` optical transforms.
-- `vessel/odometry` is the environment-neutral navigation input. The simulation
-  runner remaps it to `/mavros/local_position/odom`; navigation has no MAVROS,
-  Gazebo, FCU transport or ground-truth dependency. Its generic output is
-  `/navigation/velocity` (`TwistStamped`, map/ENU) and its progress output is
-  `/navigation/status` (`String` JSON).
-- Metric range comes from PnP on the existing 0.50 m ArUco faces, with IDs 1/2
-  denoting red/green categories. Repeated IDs are associated by observed
-  position, never treated as unique buoy identities. These fiducials and known
-  size are a simulation perception assumption, not a natural-buoy detector.
-  The existing bearing-only mapper is unchanged.
-- Live image and odometry **receipt times** are paired within 0.25 seconds.
-  Processing drops frames older than 0.5 seconds. This approximation is for slow
-  live simulation; it is not acquisition-time synchronization or a replay path.
-- Missing camera data (1.5 s) or odometry (0.5 s) causes zero desired velocity.
-  Missing marker observations (8 s) also stops motion, except for the bounded
-  clearance leg after entering an already observed gate. That leg uses fresh
-  odometry and requires the conservative hull footprint to fit inside the
-  observed gate; it lets the stern clear after the markers leave the forward cameras. No blind forward search is performed. Gates must
-  be 2.6-6 m wide and approximately perpendicular to the initial boat heading.
-  Turn count defaults to four; the gate-only task configures zero.
-- The course is traversed in the direction established by the first gate. The
-  planner retains observed landmarks, selects new targets only from landmarks
-  observed within the last three seconds, and commits to each target while passing
-  it. It is intended for the forward, ordered buoy course, not arbitrary obstacle
-  avoidance or a general route planner.
-- The simulation command bridge separately gates on connected, armed GUIDED
-  state, bounds commanded speeds, and zeros commands after 0.5 seconds without
-  a navigation message. It forwards velocity through `/mavros/setpoint_raw/local`
-  with yaw and yaw rate ignored, selecting Rover's heading-and-speed control.
-  Sending velocity plus yaw rate through the standard velocity plugin instead
-  selects Rover's turn-rate control, whose NED-X sign can reverse the vessel on
-  southbound course segments. It runs only with explicit simulation environment flags.
-  Do not run teleop or another setpoint publisher during this command session.
-
-## Validation
-
-Navigation acceptance on October 17, 2026 used `BOAT_MODEL=dual WATER=calm`:
-
-- Standalone gate: both buoy sides and the whole-vessel crossing passed;
-  minimum conservative footprint clearance was 0.28 m.
-- Full slalom: gate A, four turns and gate B passed the independent trajectory
-  judge; minimum conservative clearance was 0.44 m, and the entire conservative
-  footprint cleared the exit plane by 0.79 m. Both cameras contributed more than
-  1,250 marker observations.
-- Armed interruption and normal completion both verified HOLD and disarm.
-- `make dual-camera-smoke`: both exact RGB-D streams and mount TF passed,
-  with 30.3 Hz measured using source timestamps and the expected gate marker
-  visible in each camera.
-- `make validate` in Simulation, `make navigation-build` and `make navigation-test` in autonomy, repository
-  boundary tests, and the complete `make verify-rgbd` suite passed. The latter
-  includes original ArduPilot travel, stopping, return and disarm behavior.
-
-The validation above describes the navigation algorithm; startup ownership is now
-Simulation + Adapter in `Simulation/` and explicit navigation in `autonomy/`.
-
-Run-specific evidence remains under `Simulation/logs/`; no generated logs or
-scenario files are committed. To render a judged trajectory locally:
-
-```bash
-MPLCONFIGDIR=/tmp/navigation-matplotlib python3 tests/evaluation/plot_navigation.py \
-  logs/navigation-<timestamp>/result.json
-```
+Local, uncommitted evidence is under `Simulation/logs/nav2-validation/` and
+`Simulation/logs/navigation-*`. Mapping regression used
+`AUTONOMY_IMAGE=maritime-autonomy-nav2:jazzy` as the optional mapping-view Docker
+build argument and `MAPPING_IMAGE=maritime-mapping-view-nav2:jazzy` for the test;
+the ordinary mapping images were retained. These results establish simulation
+behavior only; hardware timing, transport and disturbance rejection remain
+separate validation work.

@@ -1,4 +1,4 @@
-"""Transport independent online course planner. Coordinates come from vision.
+"""Transport independent online course planner. Coordinates and persistent identities come from the shared buoy map.
 
 Initial gate defines forward/left axes; no course coordinates or marker identities
 are supplied. Red stays right, green stays left. Mission length is configuration.
@@ -7,9 +7,34 @@ from dataclasses import dataclass
 import math
 
 
+def observation_goals(x, y, yaw):
+    """Bounded opposing viewpoints, used only in the declared clear start area."""
+    c, s = math.cos(yaw), math.sin(yaw)
+    return [(x+dx*c-dy*s, y+dx*s+dy*c, yaw)
+            for dx, dy in ((3., 1.5), (2., -1.5), (0., 1.5), (0., -1.5))]
+
+
+def search_goal(mission, pose, bounds, attempt):
+    """A short viewpoint move, without guessing a missing buoy's range."""
+    if mission.forward is None or attempt >= 4:
+        return None
+    s, t = mission.coordinates(*pose[:2])
+    side = 2. if mission.passed % 2 == 0 else -2.
+    if abs(side-t) < 1. or attempt % 2:
+        side = -side
+    x, y = mission.world(s+1.+attempt//2, side)
+    # Leave room for the hull to turn at the viewpoint. The actual route and
+    # physical obstacles are still checked by Nav2 and the movement gate.
+    margin = 1.5
+    if not (bounds[0]+margin <= x <= bounds[2]-margin
+            and bounds[1]+margin <= y <= bounds[3]-margin):
+        return None
+    return x, y, math.atan2(mission.forward[1], mission.forward[0])
+
+
 @dataclass
 class Landmark:
-    identity: int
+    identity: str
     category: str
     x: float
     y: float
@@ -18,7 +43,7 @@ class Landmark:
 
 
 class Mission:
-    def __init__(self, turns=4, clearance=2.0):
+    def __init__(self, turns=4, clearance=3.0):
         if turns < 0 or clearance < 1.5:
             raise ValueError('Invalid course/clearance')
         self.turns = turns
@@ -33,25 +58,9 @@ class Mission:
         self.stage = 'acquire_gate'
         self.passed = 0
         self.events = []
-        self.next_id = 0
         self.departure = None
         self.gate_plane_s = None
         self.gate_width = None
-
-    def observe(self, category, x, y, now):
-        if category not in ('red', 'green') or not all(map(math.isfinite, (x, y, now))):
-            return
-        matches = [b for b in self.landmarks if b.category == category and math.hypot(b.x-x, b.y-y) < 1.3]
-        if matches:
-            b = min(matches, key=lambda b: math.hypot(b.x-x, b.y-y))
-            # Bounded smoothing retains landmarks when they leave the cameras.
-            b.x += .2*(x-b.x)
-            b.y += .2*(y-b.y)
-            b.count += 1
-            b.seen = now
-        else:
-            self.landmarks.append(Landmark(self.next_id, category, x, y, now))
-            self.next_id += 1
 
     def coordinates(self, x, y):
         dx, dy = x-self.origin[0], y-self.origin[1]
@@ -74,28 +83,43 @@ class Mission:
                     pairs.append((red, green))
         return pairs
 
-    def clearing_gate(self, x, y, yaw):
-        """Permit only the bounded stern-clearance leg of an observed gate.
-
-        Forward cameras naturally lose the gate behind the vessel. Fresh camera
-        streams and odometry are still required by the caller. The conservative
-        hull rectangle must fit between the observed buoys throughout this leg.
-        """
-        if (self.stage not in ('gate_a', 'gate_b') or self.target is None
-                or self.departure is not None or self.gate_plane_s is None):
-            return False
-        s, t = self.coordinates(x, y)
-        goal_s, goal_t = self.coordinates(*self.target)
-        angle = yaw-math.atan2(self.forward[1], self.forward[0])
-        half_width = .6*abs(math.cos(angle))+1.1*abs(math.sin(angle))
-        margin = self.gate_width/2-.6-half_width
-        return (self.gate_plane_s <= s <= goal_s+.15
-                and abs(t-goal_t) < margin)
+    def refresh_target(self):
+        """Keep a committed course leg attached to its current map identities."""
+        if self.target is None or self.forward is None:
+            return
+        active = [b for b in self.landmarks if b.identity in self.active_ids]
+        if len(active) != len(self.active_ids):
+            self.stage = 'fault'
+            self.events.append('active_course_track_missing')
+            self.target = None
+            return
+        if self.stage in ('gate_a', 'gate_b'):
+            coordinates = [self.coordinates(b.x, b.y) for b in active]
+            plane = sum(s for s, _ in coordinates)/2
+            centre = sum(t for _, t in coordinates)/2
+            self.gate_plane_s = plane
+            self.gate_width = abs(coordinates[0][1]-coordinates[1][1])
+            target = self.world(plane-2.0 if self.departure is not None else plane+2.2, centre)
+            departure = self.world(plane+2.2, centre) if self.departure is not None else None
+        elif self.stage.startswith('turn_'):
+            buoy = active[0]
+            s, t = self.coordinates(buoy.x, buoy.y)
+            side = t+(self.clearance if buoy.category == 'red' else -self.clearance)
+            target = self.world(s-1.8 if self.departure is not None else s+1.5, side)
+            departure = self.world(s+1.5, side) if self.departure is not None else None
+        else:
+            return
+        # Small posterior changes should not continually cancel Nav2 actions.
+        if math.dist(target, self.target) > .3:
+            self.target, self.departure = target, departure
 
     def update(self, x, y, yaw, now):
         if self.stage in ('complete', 'fault'):
             return None
-        ready = [b for b in self.landmarks if b.count >= 3 and now-b.seen < 3 and b.identity not in self.used]
+        # Shared-map confirmation persists through occlusion. Whole-map progress
+        # is gated by the supervisor; individual age is represented in covariance.
+        ready = [b for b in self.landmarks if b.count >= 3 and b.category in ('red', 'green')
+                 and b.identity not in self.used]
         if self.forward is None:
             pairs = self.gate_pair(ready, yaw)
             pairs = [p for p in pairs if all((b.x-x)*math.cos(yaw)+(b.y-y)*math.sin(yaw) > 1 for b in p)]
@@ -114,7 +138,7 @@ class Mission:
         if self.target is not None:
             goal_s, goal_t = self.coordinates(*self.target)
             # Clear the plane with the entire vessel before advancing.
-            if s >= goal_s-.15:
+            if s >= goal_s-.35 and math.hypot(s-goal_s, t-goal_t) <= .4:
                 if abs(t-goal_t) > .85:
                     self.stage = 'fault'
                     self.events.append('missed_course_target')
@@ -136,6 +160,12 @@ class Mission:
             if not ahead:
                 self.stage = 'search'
                 return None
+            if self.passed < self.turns:
+                expected = 'red' if self.passed % 2 == 0 else 'green'
+                ahead = [b for b in ahead if b.category == expected]
+                if not ahead:
+                    self.stage = 'search'
+                    return None
             nearest = min(ahead, key=lambda b: self.coordinates(b.x, b.y)[0])
             ns, nt = self.coordinates(nearest.x, nearest.y)
             if self.passed == self.turns:
@@ -160,27 +190,3 @@ class Mission:
                 self.active_ids = [nearest.identity]
                 self.stage = f'turn_{self.passed+1}'
         return self.target
-
-
-def velocity(x, y, yaw, target, speed=.65):
-    if target is None:
-        return 0., 0.
-    dx, dy = target[0]-x, target[1]-y
-    distance = math.hypot(dx, dy)
-    if distance < .1:
-        return 0., 0.
-    # The downstream vessel controller receives an ENU desired velocity vector.
-    magnitude = min(speed, distance*.5)
-    return magnitude*dx/distance, magnitude*dy/distance
-
-
-def guidance(x, y, yaw, target):
-    """ENU velocity and yaw rate for a vessel accepting both setpoints."""
-    vx, vy = velocity(x, y, yaw, target)
-    if not (vx or vy):
-        return 0., 0., 0.
-    desired = math.atan2(vy, vx)
-    error = math.atan2(math.sin(desired-yaw), math.cos(desired-yaw))
-    speed = math.hypot(vx, vy)*max(.2, math.cos(error))
-    desired_rate = max(-.5, min(.5, 1.3*error))
-    return speed*math.cos(desired), speed*math.sin(desired), desired_rate

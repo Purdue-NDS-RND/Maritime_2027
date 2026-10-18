@@ -63,6 +63,7 @@ def main():
                 message.header.frame_id = "map"
                 message.session_id = "monitor-smoke"
                 message.unresolved_count = 2
+                message.unresolved_world_ids = ['unresolved-1', 'unresolved-2']
                 message.tracks = [BuoyTrack(
                     world_id="buoy-1", category="red", lifecycle="confirmed",
                     x=3.5, y=-2.0, footprint_radius_m=0.35,

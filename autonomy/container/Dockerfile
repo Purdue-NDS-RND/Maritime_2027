@@ -13,6 +13,12 @@ RUN apt-get update \
         ros-jazzy-vision-msgs \
         ros-jazzy-tf2-ros-py \
         ros-jazzy-rosidl-default-generators \
+        ros-jazzy-nav2-planner \
+        ros-jazzy-nav2-controller \
+        ros-jazzy-nav2-bt-navigator \
+        ros-jazzy-nav2-lifecycle-manager \
+        ros-jazzy-nav2-smac-planner \
+        ros-jazzy-nav2-regulated-pure-pursuit-controller \
     && python3 -c "import cv2; assert hasattr(cv2.aruco, 'detectMarkers')" \
     && rm -rf /var/lib/apt/lists/*
 

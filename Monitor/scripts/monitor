@@ -4,12 +4,13 @@ set -euo pipefail
 PROJECT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 usage() {
     cat <<'EOF'
-Usage: Monitor/scripts/monitor build|shell|rviz|rviz-sim|gui|config [arguments...]
+Usage: Monitor/scripts/monitor build|shell|rviz|rviz-sim|rviz-nav|gui|config [arguments...]
 
   build                 Build the tools image (extra arguments go to Compose build)
   shell [COMMAND ...]   Open a ROS-sourced Bash shell, or run a command
   rviz [ARG ...]        Open RViz2 with the neutral default view
   rviz-sim [ARG ...]    Open the simulation world, entities and camera view
+  rviz-nav [ARG ...]    Open map-based Nav2 costs, route and footprint
   gui COMMAND [ARG ...] Run another GUI tool, e.g. rqt_graph
   config                Validate and print resolved Compose configuration
 
@@ -30,7 +31,7 @@ action=${1:---help}
 [[ $# == 0 ]] || shift
 case "$action" in
     -h|--help|help) usage; exit 0 ;;
-    build|shell|rviz|rviz-sim|gui|config) ;;
+    build|shell|rviz|rviz-sim|rviz-nav|gui|config) ;;
     *) usage >&2; exit 2 ;;
 esac
 if [[ $action == gui && $# == 0 ]]; then
@@ -82,12 +83,15 @@ export MONITOR_XAUTH_FILE
 trap 'rm -f -- "$MONITOR_XAUTH_FILE"' EXIT
 printf '%s\n' "$cookie" | sed 's/^..../ffff/' | xauth -f "$MONITOR_XAUTH_FILE" nmerge -
 chmod 600 "$MONITOR_XAUTH_FILE"
-if [[ $action == rviz || $action == rviz-sim ]]; then
+if [[ $action == rviz || $action == rviz-sim || $action == rviz-nav ]]; then
     rviz_command=rviz2
     preset=default
     if [[ $action == rviz-sim ]]; then
         rviz_command=/opt/monitor/tools/rviz-simulation
         preset=simulation
+    fi
+    if [[ $action == rviz-nav ]]; then
+        preset=navigation
     fi
     run_options+=(-v "$PROJECT_DIR/config/rviz/$preset.rviz:/opt/monitor/config/rviz/$preset.rviz:ro")
     view_args=(-d "/opt/monitor/config/rviz/$preset.rviz")
