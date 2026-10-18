@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import statistics
+import os
 import threading
 import time
 
@@ -19,6 +20,9 @@ def stamp_ns(message: Image) -> int:
 
 
 def main() -> None:
+    expected_rate = float(os.environ.get('CAMERA_FPS', '15'))
+    if not 8 <= expected_rate <= 60:
+        raise SystemExit('CAMERA_FPS must be finite and between 8 and 60')
     lock = threading.Lock()
     stamps: dict[str, list[int]] = {"RGB": [], "depth": []}
     wall_times: dict[str, list[float]] = {"RGB": [], "depth": []}
@@ -52,8 +56,9 @@ def main() -> None:
         simulated_rate = 1.0 / statistics.median(periods)
         wall_periods = [b - a for a, b in zip(wall_times[label], wall_times[label][1:])]
         wall_rate = 1.0 / statistics.median(wall_periods)
-        if not 27.0 <= simulated_rate <= 33.0:
-            raise SystemExit(f"Gazebo {label} simulated-time rate {simulated_rate:.2f} Hz is outside 27-33 Hz")
+        if not .9*expected_rate <= simulated_rate <= 1.1*expected_rate:
+            raise SystemExit(f"Gazebo {label} simulated-time rate {simulated_rate:.2f} Hz "
+                             f"does not match configured {expected_rate:g} Hz (+/-10%)")
         print(
             f"Gazebo {label}: {simulated_rate:.2f} Hz in simulated time; "
             f"{wall_rate:.2f} Hz median callback cadence"

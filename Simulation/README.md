@@ -21,6 +21,11 @@ The same RViz and RGB mapping launches handle both; see [camera boat guide](docs
 For automation, use e.g. `WATER=harsh SCENARIO=gate make run`. Explicit launches
 without `WATER` preserve their existing water defaults.
 
+The launcher selects a working NVIDIA container runtime automatically when
+available. RGB-D capture defaults to 15 Hz at the original 1280 x 720 resolution;
+use `CAMERA_FPS=30` for the previous cadence. `make performance` measures real
+simulation speed. See [performance setup and diagnosis](docs/PERFORMANCE.md).
+
 Gazebo Harmonic simulates the official Blue Robotics BlueBoat model, mild
 surface waves, buoyancy, hydrodynamic drag, IMU data, and twin-thruster motion.
 ArduPilot Rover 4.7.0 runs its real boat-control code in software-in-the-loop

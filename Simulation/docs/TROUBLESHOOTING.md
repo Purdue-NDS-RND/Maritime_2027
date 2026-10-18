@@ -102,7 +102,7 @@ heartbeat, and meaningful MAVLink behavior.
   `make boundary-smoke` in a scenario to test actual delivery, not just discovery.
 - If camera topics are absent, inspect `gz topic -l` in the simulator and make
   sure an RGB-D scenario—not a legacy world—was selected.
-- If Gazebo supplies 30 Hz exact RGB-D pairs but ROS images or public triples
+- If Gazebo supplies exact RGB-D pairs at the selected `CAMERA_FPS` but ROS images or public triples
   are missing, confirm the Adapter's `FASTRTPS_DEFAULT_PROFILES_FILE` points to
   `/etc/maritime/fastdds.xml` and that its read-only Compose mount is present.
   `Adapter/simulation/config/fastdds.xml` supplies a tested 32 MiB Fast DDS
@@ -112,8 +112,12 @@ heartbeat, and meaningful MAVLink behavior.
   Do not lower the synchronized-triple requirement to compensate for delivery loss.
 - A lower camera rate under `SOFTWARE_RENDERING=1` is a rendering-performance
   limitation. `make verify-rgbd` measures Gazebo message timestamps and accepts
-  27–33 Hz in simulated time for the configured 30 Hz GPU path. Wall-clock and
+  the selected `CAMERA_FPS` within 10% in simulated time (15 Hz by default).
+  Wall-clock and
   Python/OpenCV exact-pair throughput are reported separately and are not the
   sensor cadence when real-time factor is below one.
+- For low real-time factor, see [performance diagnosis](PERFORMANCE.md). Confirm
+  the actual OpenGL renderer; a detected NVIDIA card or a stale Docker runtime
+  registration does not mean Gazebo is using discrete graphics.
 - Generated worlds and their exact pose manifests are under
   `logs/generated-worlds/`; delete neither while a scenario is running.

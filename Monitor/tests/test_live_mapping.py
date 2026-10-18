@@ -65,6 +65,35 @@ class GeometryTests(unittest.TestCase):
         np.testing.assert_allclose(curve.max(axis=1), [8, 6])
         np.testing.assert_allclose(curve.min(axis=1), [-4, 0])
 
+    def test_live_receipt_jitter_waits_for_valid_bracket_without_extrapolation(self):
+        bridge = ReceiptClock()
+        self.assertTrue(bridge.add(1_000_000_000, 1_000_000_000, defer_arrival_jitter=True))
+        self.assertFalse(bridge.add(1_020_000_000, 1_120_000_000, defer_arrival_jitter=True))
+        self.assertEqual(bridge.deferred, 1)
+        self.assertIsNone(bridge.fault)
+        with self.assertRaises(LookupError):
+            bridge.convert(1_010_000_000)
+        self.assertTrue(bridge.add(1_200_000_000, 1_220_000_000, defer_arrival_jitter=True))
+        self.assertEqual(bridge.convert(1_100_000_000), 1_110_000_000)
+
+    def test_live_jitter_mode_still_latches_resets_and_persistent_gaps(self):
+        for source, target in [(900_000_000, 1_100_000_000),
+                               (1_100_000_000, 900_000_000),
+                               (3_100_000_000, 1_021_000_000)]:
+            bridge = ReceiptClock()
+            bridge.add(1_000_000_000, 1_000_000_000, defer_arrival_jitter=True)
+            bridge.add(1_100_000_000, 1_001_000_000, defer_arrival_jitter=True)
+            with self.subTest(source=source, target=target), self.assertRaises(ValueError):
+                bridge.add(source, target, defer_arrival_jitter=True)
+            with self.assertRaises(ValueError):
+                bridge.convert(1_000_000_000)
+
+    def test_strict_clock_keeps_original_slope_fault(self):
+        bridge = ReceiptClock()
+        bridge.add(1_000_000_000, 1_000_000_000)
+        with self.assertRaisesRegex(ValueError, 'Implausible'):
+            bridge.add(1_020_000_000, 1_120_000_000)
+
 
 def stamp(message_stamp, value):
     message_stamp.sec, message_stamp.nanosec = divmod(value, 1_000_000_000)

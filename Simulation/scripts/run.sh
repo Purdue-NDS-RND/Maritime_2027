@@ -29,6 +29,8 @@ Environment:
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
   BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat; enables ROS
   WATER=calm|normal|harsh  Override water independently of the world/scenario
+  SIM_GPU=auto|nvidia|mesa Prefer working NVIDIA graphics, or select a renderer
+  CAMERA_FPS=15           RGB-D capture rate in simulation Hz (8..60; 30 supported)
   ROS_SIM=1                Enable ROS/MAVROS for a direct WORLD launch
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
 EOF
@@ -128,6 +130,15 @@ esac
 if [[ -n ${BOAT_MODEL:-} ]]; then
     export ROS_SIM=1 CAMERA_ENABLED=1
 fi
+export CAMERA_FPS=${CAMERA_FPS:-15}
+python3 - "$CAMERA_FPS" <<'PY'
+import sys
+try:
+    rate = float(sys.argv[1])
+    assert 8 <= rate <= 60
+except (ValueError, AssertionError):
+    raise SystemExit('ERROR: CAMERA_FPS must be finite and between 8 and 60.')
+PY
 scenario=${SCENARIO:-}
 case "${WATER:-}" in
     ''|calm|normal|harsh) ;;
@@ -282,6 +293,9 @@ case "${software,,}" in
     *) echo "ERROR: SOFTWARE_RENDERING must be a boolean value." >&2; exit 2 ;;
 esac
 
+source "$PROJECT_DIR/scripts/select-gpu.sh"
+select_simulation_gpu
+
 mkdir -p logs
 if [[ ! -w logs ]]; then
     echo "ERROR: $PROJECT_DIR/logs is not writable by UID $HOST_UID." >&2
@@ -335,6 +349,7 @@ fi
 
 echo "Host IDs: uid=$HOST_UID gid=$HOST_GID video_gid=$VIDEO_GID render_gid=$RENDER_GID"
 echo "Boat model: ${BOAT_MODEL:-single}"
+echo "Graphics: $SIM_GPU_RESOLVED (requested ${SIM_GPU:-auto})"
 echo "World: ${WORLD:-blueboat_waves.sdf}; scenario: ${scenario:-none}; display: $DISPLAY"
 echo "MAVLink: ${MAVLINK_QGC:-udp:127.0.0.1:14550} (QGC), ${MAVLINK_API:-udp:127.0.0.1:14551} (student API)"
 if [[ $ros_enabled == 1 ]]; then
