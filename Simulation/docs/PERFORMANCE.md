@@ -93,6 +93,8 @@ so they can establish working shared-memory transport again.
 ## Measured on 2026-10-18
 
 Core Ultra 9 185H, RTX 4050 Laptop GPU, dual-camera gate, calm water, GUI on.
+Navigation measurements below used the separate experimental navigation branch;
+this performance change does not add that navigation stack to `main`.
 Idle means Gazebo/SITL and the Adapter. Full navigation additionally runs both
 RGB detectors, shared mapper, Nav2, clock adapter, command bridge, truth-only
 evaluator and `rviz-nav`. These are fixed clock-delta measurements, not the
@@ -125,6 +127,12 @@ An experimental static-water change made the measured run slower and was
 reverted; water settings and wave plugins are unchanged.
 
 ## Validation
+
+The performance commit was extracted onto `main` without the experimental
+navigation stack. On that exact branch, static/model/GPU/cadence validation,
+all 12 mapping/clock tests, and `python3 tests/lifecycle_acceptance.py --cases
+signal_int` passed. Evidence is under `logs/performance-main-*`. The broader
+runtime results below were obtained before extraction with navigation present.
 
 `make validate` passed, including model preservation (4 tests), GPU selection
 (4 tests), and camera cadence overrides (2 tests). Monitor validation and all
