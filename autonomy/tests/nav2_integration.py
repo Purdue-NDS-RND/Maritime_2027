@@ -42,6 +42,7 @@ class Fixture(Node):
         self.pending_grids = []
         self.freeze = False
         self.blocked = False
+        self.paused = False
         self.session = 'integration-one'
         self.gate = os.environ.get('NAV2_TEST_SCENARIO') == 'gate'
         self.stamp = self.get_clock().now().to_msg()
@@ -86,7 +87,8 @@ class Fixture(Node):
         self.odom.publish(odom)
         if not self.freeze:
             self.stamp = odom.header.stamp
-        mapped = BuoyMap(session_id=self.session)
+        mapped = BuoyMap(session_id=self.session, paused=self.paused,
+                         detail='Injected permanent pose discontinuity' if self.paused else '')
         mapped.header.frame_id, mapped.header.stamp = 'map', self.stamp
         if time.monotonic()-self.started < 8:
             # An unresolved duplicate can expire while its replacement resolves.
@@ -147,6 +149,18 @@ def main():
         node.launch_process = process
         try:
             until(node, lambda: node.x > .5, 45)
+            if os.environ.get('NAV2_TEST_SCENARIO') == 'paused_map':
+                node.paused = True
+                until(node, lambda: node.status.get('stage') == 'fault' and node.speed == 0, 5)
+                assert 'Injected permanent pose discontinuity' in node.status['reason'], node.status
+                node.paused = False
+                deadline = time.monotonic()+2
+                until(node, lambda: time.monotonic() > deadline, 3)
+                assert node.status['stage'] == 'fault' and node.speed == 0, node.status
+                print('PASS: permanent mapper pause latches a terminal stop with its cause', flush=True)
+                Path(os.environ.get('NAV2_TEST_RESULTS', '/tmp/nav2-result.json')).write_text(
+                    json.dumps(dict(passed=True, final_status=node.status), indent=2)+'\n')
+                return
             node.freeze = True
             until(node, lambda: node.status.get('reason') == 'waiting_for_fresh_inputs' and node.speed == 0, 5)
             print('PASS: duplicate map snapshots stop motion despite continued publication', flush=True)

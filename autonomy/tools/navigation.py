@@ -2,6 +2,7 @@
 """Run map-based Nav2 navigation against a separately started simulator."""
 import argparse
 from datetime import datetime
+import hashlib
 import json
 import math
 import os
@@ -12,7 +13,7 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-IMAGE = 'maritime-autonomy-nav2:jazzy'
+IMAGE = os.environ.get('NAVIGATION_IMAGE', 'maritime-autonomy-nav2:jazzy')
 
 
 def session_exit(processes, evaluate):
@@ -48,9 +49,16 @@ def main():
                         help='Graded uncertainty costs (default) or a hard two-sigma exclusion envelope')
     parser.add_argument('--plan-only', action='store_true', help='Do not start the vehicle command/arming bridge')
     parser.add_argument('--evaluate', action='store_true')
+    parser.add_argument('--nav2-overrides', help='Experimental Nav2 parameter YAML; copied into session logs')
     parser.add_argument('--mission-timeout', type=float,
                         help='Wall seconds after arming: default 1200 for slalom, 600 otherwise')
     args = parser.parse_args()
+    overrides = None
+    if args.nav2_overrides:
+        overrides = Path(args.nav2_overrides).expanduser().resolve()
+        if not overrides.is_file():
+            parser.error('--nav2-overrides must name an existing parameter YAML file')
+        args.nav2_overrides = str(overrides)
     if args.mission_timeout is None:
         args.mission_timeout = 1200. if args.task == 'slalom' else 600.
     if not math.isfinite(args.mission_timeout) or not 60 <= args.mission_timeout <= 3600:
@@ -76,7 +84,9 @@ def main():
                         '-v', f'{ROOT}/Simulation/tests/evaluation:/tests:ro',
                         'maritime-sim-evaluation:jazzy', 'python3', '-m', 'unittest', 'discover',
                         '-s', '/tests', '-p', 'test_navigation_bridge.py', '-v'], check=True)
-        for scenario, domain, filename in [('goal', 97, 'integration.json'), ('gate', 98, 'gate-integration.json')]:
+        for scenario, domain, filename in [('goal', 97, 'integration.json'),
+                                          ('gate', 98, 'gate-integration.json'),
+                                          ('paused_map', 96, 'paused-map.json')]:
             subprocess.run(['docker', 'run', '--rm', '--network', 'host', '-e', f'ROS_DOMAIN_ID={domain}',
                             '-e', f'NAV2_TEST_SCENARIO={scenario}',
                             '-e', f'NAV2_TEST_RESULTS=/results/{filename}',
@@ -125,6 +135,10 @@ def main():
         parser.error('Invalid Adapter camera roster')
     output = ROOT/'Simulation/logs'/('navigation-'+datetime.now().strftime('%Y%m%d-%H%M%S'))
     output.mkdir()
+    if overrides:
+        content = overrides.read_bytes()
+        (output/'nav2-overrides.yaml').write_bytes(content)
+        args.nav2_overrides_sha256 = hashlib.sha256(content).hexdigest()
     (output/'settings.json').write_text(json.dumps(
         dict(vars(args), cameras=cameras, autonomy_image=autonomy_image), indent=2)+'\n')
     print(f'Navigation logs: {output}; cameras: {cameras}', flush=True)
@@ -151,8 +165,12 @@ def main():
               f'bootstrap_clear_start:={str(args.bootstrap_clear_start).lower()}',
               'operating_bounds:='+json.dumps(args.operating_bounds, separators=(',', ':')),
               f'goal_x:={args.goal[0]}', f'goal_y:={args.goal[1]}', f'goal_yaw:={args.goal[2]}']
+    navigator_options = []
+    if overrides:
+        launch.append('nav2_overrides:=/nav2-overrides.yaml')
+        navigator_options = ['-v', f'{output}/nav2-overrides.yaml:/nav2-overrides.yaml:ro']
     commands.append(('navigator', autonomy_image,
-        ['bash', '-lc', 'source /etc/maritime_autonomy_setup.bash && exec "$@"', '--', *launch], []))
+        ['bash', '-lc', 'source /etc/maritime_autonomy_setup.bash && exec "$@"', '--', *launch], navigator_options))
     if args.evaluate:
         commands.append(('judge', 'maritime-sim-evaluation:jazzy', ['python3', '/navigation_evaluate.py'],
                          ['-e', f'NAVIGATION_MISSION_TIMEOUT_S={args.mission_timeout}',

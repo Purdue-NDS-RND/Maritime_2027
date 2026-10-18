@@ -60,6 +60,10 @@ Builds use `maritime-autonomy-nav2:jazzy`, retaining the ordinary mapping image.
 The added `BuoyMap.unresolved_world_ids` field requires rebuilding other mapping
 and Monitor images before mixing them with this branch.
 Session settings and per-process logs go to `Simulation/logs/navigation-*`.
+Opt-in controller comparisons and their measured limits are documented in
+[`autonomy/experiments/README.md`](../autonomy/experiments/README.md).
+An irreversible mapper pause ends the mission with its diagnostic cause and
+requests HOLD/disarm; restart mapping and navigation after resolving that cause.
 The post-arming wall-time budget defaults to 600 seconds for a goal/gate and
 1200 seconds for slalom; override it with `--mission-timeout SECONDS`. Startup
 and verified cleanup have separate allowances. Freshness guards remain active

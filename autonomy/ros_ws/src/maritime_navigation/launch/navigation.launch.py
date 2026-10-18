@@ -15,7 +15,7 @@ def generate_launch_description():
     config = str(share/'config/nav2.yaml')
     servers = [('nav2_planner', 'planner_server'), ('nav2_controller', 'controller_server'),
                ('nav2_bt_navigator', 'bt_navigator')]
-    nodes = [Node(package=p, executable=e, name=e, output='screen', parameters=[config, *(
+    nodes = [Node(package=p, executable=e, name=e, output='screen', parameters=[config, LaunchConfiguration('nav2_overrides'), *(
                   [{'default_nav_to_pose_bt_xml': str(share/'behavior_trees/replan.xml')}]
                   if e == 'bt_navigator' else
                   [{'GridBased.lattice_filepath': str(share/'config/lattice_diff_10cm.json')}]
@@ -36,6 +36,7 @@ def generate_launch_description():
                        'behavior_tree': str(share/'behavior_trees/replan.xml')}],
                    remappings=[('vessel/odometry', LaunchConfiguration('pose_topic'))])]
     return LaunchDescription([
+        DeclareLaunchArgument('nav2_overrides', default_value=config),
         DeclareLaunchArgument('task', default_value='goal', choices=['goal', 'gate', 'slalom']),
         DeclareLaunchArgument('uncertainty_mode', default_value='graded', choices=['graded', 'hard']),
         DeclareLaunchArgument('pose_topic', default_value='/vessel/odometry'),

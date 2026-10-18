@@ -38,7 +38,8 @@ class PoseBuffer:
             if dt == 0:
                 return
             if distance > self.max_speed * dt or turn > self.max_turn * dt:
-                self.fault = 'Pose discontinuity/origin reset; restart mapping session'
+                self.fault = ('Pose discontinuity/origin reset; restart mapping session '
+                              f'(dt={dt:.6f}s, distance={distance:.6f}m, turn={turn:.6f}rad)')
                 return
         self.samples.append(sample)
         cutoff = sample.stamp_ns - self.history_ns

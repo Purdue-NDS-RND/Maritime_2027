@@ -108,6 +108,10 @@ class Navigator(Node):
             self.fault = 'mapping_time_rewound'
         self.source_session, self.source_stamp = message.session_id, stamp
         self.source_paused = message.paused
+        if message.paused:
+            # Mapper pauses latch until a new session. Waiting here cannot
+            # recover; make the failure visible and let the bridge disarm.
+            self.fault = 'mapping_paused: '+message.detail
         self.match_snapshot('map', stamp, message)
 
     def match_snapshot(self, kind, stamp, message):
