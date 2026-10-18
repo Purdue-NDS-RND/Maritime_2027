@@ -16,6 +16,9 @@ stop_run() {
     fi
     runner_pid=
     ./scripts/run.sh --down >/dev/null 2>&1 || true
+    # A just-exiting launcher child can briefly retain the inherited lock FD.
+    # Wait for release before the next scenario instead of racing its startup.
+    flock -w 30 logs/.launcher.lock true
 }
 trap stop_run EXIT
 trap 'exit 130' INT
