@@ -182,6 +182,9 @@ intervals. Repeated `odometry_timeout` messages indicate missing or slow pose
 delivery; inspect telemetry before changing watchdog thresholds.
 Time references match the pose rate so clock interpolation does not hold poses
 for a 200 ms simulation-time reference interval during slow rendering.
+Live receipt alignment defers transient slope outliers until a valid bracket
+arrives, while retaining immediate backward/reset and two-second-gap faults.
+It does not extrapolate or change navigation freshness thresholds.
 No persistent FCU parameters, boat dynamics or MAVLink ports are changed.
 Each RGB detector defaults to one OpenCV thread (`opencv_threads`) to bound
 concurrent camera load.

@@ -1,6 +1,15 @@
 .DEFAULT_GOAL := run
 
 .PHONY: run build rebuild ros-build validate smoke teleop sensor-smoke mavros-smoke boundary-smoke verify-rgbd buoy-tracking-smoke down logs
+.PHONY: performance dds-clean
+dds-clean:
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T \
+		evaluation bash -lc 'source /opt/ros/jazzy/setup.bash && fastdds shm clean && df -h /dev/shm'
+
+performance:
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T \
+		-v "$(abspath tests/evaluation/simulation_performance.py):/performance_probe.py:ro" \
+		evaluation python3 /performance_probe.py $(ARGS)
 
 export NAME RECORDING DURATION RATE START_PAUSED REPLAY_DOMAIN_ID
 .PHONY: record recording-info replay

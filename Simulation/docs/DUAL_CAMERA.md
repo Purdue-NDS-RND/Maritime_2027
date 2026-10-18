@@ -7,7 +7,9 @@ replaces that view with two identical RGB-D cameras: camera_0 yaw -45 degrees
 (starboard), camera_1 yaw +45 degrees (port), in ROS body coordinates (x forward,
 y port, z up). Both sit at x=0.35 m, z=0.40 m, with y=-0.10/+0.10 m to separate
 the visual housings. The upstream boat dynamics, sensor calibration, resolution,
-update rate, source pins, and MAVLink ports stay unchanged.
+source pins, and MAVLink ports stay unchanged. Capture now defaults to 15 Hz;
+`CAMERA_FPS=30` selects the previous cadence. Resolution remains 1280 x 720.
+See [performance setup and measurements](PERFORMANCE.md).
 
 From `Simulation/`, use `BOAT_MODEL=dual SCENARIO=gate make run`; use
 `BOAT_MODEL=single` for the forward camera. Interactive setup offers the same

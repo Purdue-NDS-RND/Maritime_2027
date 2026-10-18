@@ -31,6 +31,16 @@ export GZ_VERSION=harmonic
 export GZ_SIM_SYSTEM_PLUGIN_PATH=/opt/ardupilot_gazebo/build:/opt/asv_wave_sim/install/lib${GZ_SIM_SYSTEM_PLUGIN_PATH:+:$GZ_SIM_SYSTEM_PLUGIN_PATH}
 export GZ_SIM_RESOURCE_PATH=/sim/generated-worlds:/opt/boat_sim/worlds:/opt/boat_sim/models:/opt/SITL_Models/Gazebo/models:/opt/ardupilot_gazebo/models:/opt/ardupilot_gazebo/worlds:/opt/asv_wave_sim/gz-waves-models/models:/opt/asv_wave_sim/gz-waves-models/world_models:/opt/asv_wave_sim/gz-waves-models/worlds${GZ_SIM_RESOURCE_PATH:+:$GZ_SIM_RESOURCE_PATH}
 
+if [[ $CAMERA_ENABLED == 1 ]]; then
+    camera_model=blueboat_rgbd
+    [[ ${BOAT_MODEL:-single} != dual ]] || camera_model=blueboat_dual_rgbd
+    runtime_models="$LOG_DIR/generated-models/$RUN_ID"
+    python3 /opt/boat_sim/scripts/configure_camera_rate.py \
+        --source "/opt/boat_sim/models/$camera_model" \
+        --output "$runtime_models/$camera_model" --rate "${CAMERA_FPS:-15}"
+    export GZ_SIM_RESOURCE_PATH="$runtime_models:$GZ_SIM_RESOURCE_PATH"
+fi
+
 gazebo_pid=
 sitl_pid=
 
@@ -71,6 +81,7 @@ mavlink_api=$MAVLINK_API
 mavlink_mavros=$MAVLINK_MAVROS
 enable_mavros=$ENABLE_MAVROS
 camera_enabled=$CAMERA_ENABLED
+camera_fps=${CAMERA_FPS:-15}
 software_rendering=${LIBGL_ALWAYS_SOFTWARE:-0}
 gazebo_log=$(basename "$GAZEBO_LOG")
 sim_vehicle_log=$(basename "$SIM_VEHICLE_LOG")
