@@ -13,7 +13,7 @@ from mavros_msgs.srv import CommandBool, MessageInterval, SetMode
 from rclpy.node import Node
 from std_msgs.msg import String
 
-TELEMETRY_RATES = ((32, 20.), (31, 20.), (2, 5.))
+TELEMETRY_RATES = ((32, 20.), (31, 20.), (2, 20.))
 
 
 class Bridge(Node):
@@ -116,7 +116,7 @@ def main():
         for identity, rate in TELEMETRY_RATES:
             if not node.call(node.interval, MessageInterval.Request(message_id=identity, message_rate=rate)).success:
                 raise RuntimeError(f'Navigation telemetry request rejected: {identity} at {rate} Hz')
-        print('Requested position/attitude at 20 Hz and time references at 5 Hz', flush=True)
+        print('Requested position/attitude and time references at 20 Hz', flush=True)
         node.until(lambda: node.ready, 90)
         if not node.state or not node.state.connected or node.state.armed:
             raise RuntimeError('Vehicle state changed before navigation ownership')

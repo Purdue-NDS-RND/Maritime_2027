@@ -102,6 +102,6 @@ class BridgeTests(unittest.TestCase):
                     navigation_bridge.main()
             else:
                 navigation_bridge.main()
-        self.assertEqual(requests, [(32, 20.), (31, 20.), (2, 5.), 'GUIDED', True, 'HOLD', False,
+        self.assertEqual(requests, [(32, 20.), (31, 20.), (2, 20.), 'GUIDED', True, 'HOLD', False,
                                     (32, 0.), (31, 0.), (2, 0.)])
         self.assertFalse(state.armed)

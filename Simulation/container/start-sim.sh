@@ -114,6 +114,10 @@ if [[ $ready -ne 1 ]]; then
 fi
 echo "Gazebo time is advancing and BlueBoat is present."
 
+mavproxy_streamrate=4
+case "${ENABLE_MAVROS,,}" in
+    1|true|yes|on) mavproxy_streamrate=-1 ;;
+esac
 sitl_args=(
     -v Rover
     -f rover-skid
@@ -125,7 +129,9 @@ sitl_args=(
     --custom-location=51.566151,-4.034345,0.0,0
     --out "$MAVLINK_QGC"
     --out "$MAVLINK_API"
-    --mavproxy-args "--non-interactive --logfile=$MAVLINK_LOG"
+    # Adapter initializes baseline streams once; session-specific message
+    # intervals must not be overwritten by MAVProxy's periodic stream request.
+    --mavproxy-args "--non-interactive --streamrate=$mavproxy_streamrate --logfile=$MAVLINK_LOG"
 )
 case "${ENABLE_MAVROS,,}" in
     1|true|yes|on) sitl_args+=(--out "$MAVLINK_MAVROS") ;;

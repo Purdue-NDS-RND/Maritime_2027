@@ -115,6 +115,8 @@ class PluginConfigurationResponseTests(unittest.TestCase):
         self.clients = {}
         self.cancelled = []
         self.logs = []
+        self.stream_requests = []
+        self.stream_ready = True
         filename = PACKAGE / "config/mavros.yaml"
         harness = self
         class NodeHarness:
@@ -129,6 +131,13 @@ class PluginConfigurationResponseTests(unittest.TestCase):
                 return SimpleNamespace(value=str(filename))
             def create_timer(self, period, callback):
                 return SimpleNamespace(cancel=lambda: harness.cancelled.append(True))
+            def create_client(self, kind, topic):
+                def send(request):
+                    harness.stream_requests.append(request)
+                    return SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace())
+                return SimpleNamespace(service_is_ready=lambda: harness.stream_ready, call_async=send)
+            def create_subscription(self, kind, topic, callback, depth):
+                callback(SimpleNamespace(connected=True))
             def get_logger(self):
                 return SimpleNamespace(info=harness.logs.append)
         def parameter_client(node, owner):
@@ -147,6 +156,7 @@ class PluginConfigurationResponseTests(unittest.TestCase):
                          os=SimpleNamespace(environ={"STACK_STARTUP_TIMEOUT": "180"}),
                          time=SimpleNamespace(monotonic=lambda: 10.0),
                          AsyncParameterClient=parameter_client,
+                         State=object, StreamRate=SimpleNamespace(Request=lambda **kw: SimpleNamespace(**kw)),
                          Parameter=lambda name, value: SimpleNamespace(name=name, value=value))
         exec(compile(ast.Module(body=[cls], type_ignores=[]), "configure_mavros_harness", "exec"), namespace)
         self.node = namespace["ConfigureMavros"]()
@@ -159,10 +169,29 @@ class PluginConfigurationResponseTests(unittest.TestCase):
             self.assertEqual({parameter.name: parameter.value for parameter in parameters}, self.node.groups[owner])
         self.node.configure()
         self.assertEqual(self.node.completed, set(self.node.groups))
+        self.node.configure()
         self.assertTrue(self.cancelled)
         previous = dict(self.sent)
         self.node.configure()
         self.assertEqual(self.sent, previous)
+        self.assertEqual(len(self.stream_requests), 1)
+        self.assertEqual(vars(self.stream_requests[0]), dict(stream_id=0, message_rate=4, on_off=True))
+
+    def test_baseline_waits_for_connection_and_never_resets_session_intervals(self):
+        self.node.connected = False
+        for _ in range(4):
+            self.node.configure()
+        self.assertEqual(self.stream_requests, [])
+        self.assertFalse(self.cancelled)
+        self.node.connected = True
+        self.stream_ready = False
+        self.node.configure()
+        self.assertEqual(self.stream_requests, [])
+        self.stream_ready = True
+        for _ in range(5):
+            self.node.configure()
+        self.assertEqual(len(self.stream_requests), 1)
+        self.assertTrue(self.cancelled)
 
     def test_rejected_or_incomplete_service_results_cannot_complete_configuration(self):
         for results in ([], [self.namespace(successful=False, reason="unsupported parameter")]):

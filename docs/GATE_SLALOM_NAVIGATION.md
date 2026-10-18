@@ -172,9 +172,16 @@ hull checks remain active during alignment. Rotation does not supply the
 translation needed to initialize buoy range.
 
 The bridge requests 20 Hz LOCAL_POSITION_NED and ATTITUDE_QUATERNION telemetry
-and 5 Hz SYSTEM_TIME references for this connection before arming; it restores
+and 20 Hz SYSTEM_TIME references for this connection before arming; it restores
 their default intervals on exit. Command-smoke durations use simulation time so
 slow rendering does not shorten the physical observation window.
+With the Adapter enabled, MAVProxy automatic stream requests are disabled;
+the Adapter requests the usual 4 Hz baseline once after FCU connection.
+This prevents periodic stream-wide resets from overwriting the navigation
+intervals. Repeated `odometry_timeout` messages indicate missing or slow pose
+delivery; inspect telemetry before changing watchdog thresholds.
+Time references match the pose rate so clock interpolation does not hold poses
+for a 200 ms simulation-time reference interval during slow rendering.
 No persistent FCU parameters, boat dynamics or MAVLink ports are changed.
 Each RGB detector defaults to one OpenCV thread (`opencv_threads`) to bound
 concurrent camera load.
@@ -220,6 +227,7 @@ Nav2 references: [Smac State Lattice](https://docs.nav2.org/jazzy/configuration_
 | Root boundary tests | 13 passed; one ROS-only host test skipped. |
 | Monitor smoke, isolated domain 100 | Cross-container custom messages, image payloads, TF, CLI deserialization and rate measurements passed with the extended `BuoyMap`. |
 | `make -C Simulation verify-rgbd` | Full RGB-D, scenario, boundary, MAVROS and original-control regression passed. |
+| Telemetry ownership regression, with RViz open | Adapter tests: 11 passed; bridge tests: 5 passed; lifecycle `default_adapter,signal_int` passed. A 45 s live capture measured 8.42 Hz clock-aligned odometry, maximum gap 0.187 s, and no odometry timeout. The complete dual-camera gate retest passed in 218 s with 0.25 m minimum conservative buoy clearance, 0.62 m stern exit clearance, and verified HOLD/disarm. Run `navigation-20261018-115751`; probe `logs/nav-telemetry-gate-probe.json`. |
 | `make -C Simulation navigation-command-smoke` | Forward movement at east/south headings, both yaw-rate signs, stopping, HOLD and disarm passed. Maximum measured stopping travel was 0.44 m after a 0.3 m/s command. |
 | Live RGB-map 3 m gate, dual cameras, calm water | Passed in 126 s wall time. Minimum clearance from conservative 0.6 m buoy envelopes: 0.23 m; whole-stern exit clearance: 0.71 m. No evaluator clearance violation. HOLD/disarm verified; runner exit code 0. Run `navigation-20261018-052923`. |
 | Live RGB-map slalom, dual cameras, calm water | Passed all six course events and all eight required-side checks in 852 s wall time. Minimum clearance from conservative 0.6 m buoy envelopes: 0.68 m; whole-stern exit clearance: 0.62 m. No evaluator clearance violation. HOLD/disarm verified; runner exit code 0. Run `navigation-20261018-051135`. |
