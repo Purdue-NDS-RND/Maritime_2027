@@ -38,24 +38,33 @@ class ReceiptClock:
     def __init__(self):
         self.knots = deque(maxlen=40)
         self.fault = None
+        self.deferred = 0
 
-    def add(self, source, target):
+    def add(self, source, target, *, defer_arrival_jitter=False):
         if self.fault:
             raise ValueError(self.fault)
         if self.knots:
             a, b = self.knots[-1]
             dx, dy = source-a, target-b
             if dx == 0 and dy == 0:
-                return
+                return False
             if dx <= 0 or dy < 0 or dx > 2_000_000_000 or dy > 2_000_000_000:
                 self.fault = 'Clock reference reset/gap; restart live mapping'
                 raise ValueError(self.fault)
             if dy == 0:
-                return  # Paused simulation supplies no new clock information.
+                return False  # Paused simulation supplies no new clock information.
             if not .05 <= dy/dx <= 3.:
+                if defer_arrival_jitter:
+                    # Receipt anchors have unmeasured scheduling delay. Skip a
+                    # transient slope outlier and wait for a wider valid bracket;
+                    # never extrapolate or refresh output from a rejected anchor.
+                    # Reset/backward and >2 s gap checks above remain immediate.
+                    self.deferred += 1
+                    return False
                 self.fault = 'Implausible live clock rate; restart live mapping'
                 raise ValueError(self.fault)
         self.knots.append((source, target))
+        return True
 
     def convert(self, stamp):
         if self.fault:

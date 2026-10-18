@@ -53,8 +53,8 @@ class LiveClock(Node):
         try:
             if message.source != 'fcu':
                 raise ValueError('Expected FCU TimeReference source')
-            self.bridge.add(ns(message.header.stamp), self.sim)
-            self.reference_arrival = time.monotonic()
+            if self.bridge.add(ns(message.header.stamp), self.sim, defer_arrival_jitter=True):
+                self.reference_arrival = time.monotonic()
         except ValueError as error:
             self.fault = str(error)
         self.drain()
@@ -108,7 +108,8 @@ class LiveClock(Node):
         status = DiagnosticStatus(name='live_mapping_clock',
                                   level=DiagnosticStatus.ERROR if self.fault else DiagnosticStatus.WARN,
                                   message=detail, values=[KeyValue(key='converted', value=str(self.converted)),
-                                  KeyValue(key='dropped', value=str(self.dropped))])
+                                  KeyValue(key='dropped', value=str(self.dropped)),
+                                  KeyValue(key='deferred_references', value=str(self.bridge.deferred))])
         self.diagnostics.publish(DiagnosticArray(status=[status]))
 
 

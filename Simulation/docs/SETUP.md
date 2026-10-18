@@ -63,8 +63,12 @@ Run `make run` from the logged-in graphical desktop session so `$DISPLAY` and
 its Xauthority cookie are available. The launcher creates a temporary
 container-only Xauthority file; it does not use the insecure `xhost +` command.
 
-When `/dev/dri` exists, the GPU Compose overlay is selected automatically. If
-direct rendering fails, use:
+The launcher probes NVIDIA container support and automatically uses a working
+discrete GPU, including PRIME offload on hybrid laptops. Otherwise it uses Mesa
+through `/dev/dri`. A missing NVIDIA runtime is reported rather than treated as
+working graphics. See [performance setup](PERFORMANCE.md) for the Toolkit repair
+helper, renderer verification and capture-rate settings. If direct rendering
+fails, explicitly use CPU rendering:
 
 ```bash
 SOFTWARE_RENDERING=1 make run

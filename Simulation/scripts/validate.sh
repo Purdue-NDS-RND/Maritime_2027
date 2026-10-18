@@ -9,12 +9,15 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 scripts=(scripts/run.sh scripts/validate.sh scripts/smoke.sh scripts/verify-rgbd.sh scripts/gazebo_sensor_smoke.py container/start-sim.sh container/sitl-process-wrapper.sh container/healthcheck.sh)
 bash -n "${scripts[@]}"
 bash -n scripts/run-menu.sh
+bash -n scripts/select-gpu.sh scripts/install-nvidia-container-toolkit.sh
 for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
     [[ -x $script ]] || { echo "ERROR: $script is not executable" >&2; exit 1; }
 done
 python_sources=(
     scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
     scripts/render_boat.py tests/test_boat_models.py
+    scripts/configure_camera_rate.py tests/test_camera_rate.py tests/test_gpu_selection.py
+    tests/evaluation/simulation_performance.py
     scripts/render_water.py tests/test_water_rendering.py tests/test_run_menu.py
     recordings/*.py tests/test_recordings.py tests/test_recording_menu.py
     ../Adapter/simulation/ros_ws/src/blueboat_sim_bringup/setup.py
@@ -172,3 +175,5 @@ fi
 echo "Static validation passed."
 
 python3 -m unittest discover -s tests -p test_boat_models.py -q
+python3 -m unittest discover -s tests -p test_gpu_selection.py -q
+python3 -m unittest discover -s tests -p test_camera_rate.py -q
