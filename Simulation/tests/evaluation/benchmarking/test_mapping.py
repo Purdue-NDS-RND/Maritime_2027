@@ -249,9 +249,61 @@ class TimingTests(unittest.TestCase):
 
     def test_pose_memory_is_bounded(self):
         buffer = PoseBuffer(max_samples=4)
-        for i in range(20):
+        for i in range(200):
             buffer.add(self.sample((i+1)*100_000_000))
         self.assertEqual(len(buffer.samples), 4)
+        self.assertEqual(len(buffer.trace), 100)
+
+    def test_recorded_submillisecond_turn_is_withheld_until_valid_bracket(self):
+        buffer = PoseBuffer()
+        buffer.add(self.sample(1_000_000_000))
+        buffer.add(self.sample(1_000_446_000, yaw=.001834))
+        self.assertIsNone(buffer.fault)
+        self.assertEqual(buffer.withheld, 1)
+        self.assertEqual(len(buffer.samples), 1)
+        with self.assertRaises(LookupError):
+            buffer.lookup(1_000_446_000)
+        buffer.add(self.sample(1_020_000_000, yaw=.002))
+        _, bracket = buffer.lookup(1_000_446_000)
+        self.assertEqual(bracket, (1_000_000_000, 1_020_000_000))
+
+    def test_microinterval_large_jumps_still_latch_immediately(self):
+        for x, yaw in [(1., 0.), (0., .2)]:
+            buffer = PoseBuffer()
+            buffer.add(self.sample(1_000_000_000))
+            buffer.add(self.sample(1_000_446_000, x=x, yaw=yaw))
+            self.assertIsNotNone(buffer.fault)
+            buffer.add(self.sample(1_100_000_000))
+            with self.assertRaises(ValueError):
+                buffer.lookup(1_000_000_000)
+
+    def test_withheld_poses_cannot_hide_clock_reversal_or_duplicate_conflict(self):
+        for stamp, yaw in [(1_000_400_000, .001), (1_000_446_000, .002)]:
+            buffer = PoseBuffer()
+            buffer.add(self.sample(1_000_000_000))
+            buffer.add(self.sample(1_000_446_000, yaw=.001834))
+            buffer.add(self.sample(stamp, yaw=yaw))
+            self.assertIn('clock rewound or conflicting duplicate', buffer.fault)
+
+    def test_fast_continuous_motion_is_checked_against_accepted_anchor(self):
+        buffer = PoseBuffer()
+        buffer.add(self.sample(1_000_000_000))
+        # Each 1 ms increment looks small, but sustained 5 rad/s exceeds 4.
+        for i in range(1, 22):
+            buffer.add(self.sample(1_000_000_000+i*1_000_000, yaw=i*.005))
+        self.assertIsNotNone(buffer.fault)
+        self.assertEqual(len(buffer.samples), 1)
+
+    def test_subwindow_noise_does_not_refresh_history_or_bypass_gap_limit(self):
+        buffer = PoseBuffer()
+        buffer.add(self.sample(1_000_000_000))
+        for i in range(1, 20):
+            buffer.add(self.sample(1_000_000_000+i*1_000_000, yaw=.001*(-1)**i))
+        self.assertEqual(len(buffer.samples), 1)
+        buffer.add(self.sample(1_400_000_000))
+        with self.assertRaisesRegex(ValueError, 'gap'):
+            buffer.lookup(1_010_000_000)
+        self.assertLessEqual(len(buffer.trace), 100)
 
 
 if __name__ == '__main__':

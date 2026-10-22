@@ -159,6 +159,14 @@ The historical ROS node name contains `monitor`, but this helper runs in the
 navigation clock container. Receipt alignment and its assumed 20 ms timing
 floor remain experimental; arrival bias has not been measured.
 
+The helper retains a bounded history of original/converted poses and exact
+reference brackets. `POSE_CLOCK_ANOMALY` and `POSE_CLOCK_TRACE` in `clock.log`
+help distinguish upstream pose changes from timestamp compression. The mapper
+separately withholds poses less than 20 ms apart from interpolation and retains
+the original motion limits plus immediate jump/reset checks. See the
+[pose timing experiment](../autonomy/experiments/README.md#pose-timing-hardening-2026-10-21)
+for the precise acceptance envelope and remaining synchronization limitation.
+
 ### 3. `/perception/camera_0/aruco_detector` and `/perception/camera_1/aruco_detector`
 
 Source: [detector node](../autonomy/ros_ws/src/maritime_perception/maritime_perception/node.py).

@@ -50,6 +50,77 @@ NAVIGATION_IMAGE=maritime-autonomy-nav2-experiment:jazzy \
 Compare independent course completion and hull clearance before elapsed time.
 Passing a gate does not establish slalom performance or repeatability.
 
+## Pose timing hardening (2026-10-21)
+
+The shared mapper now uses a minimum 20 ms motion-check interval. Shorter
+interval poses are withheld from interpolation until a sufficiently separated
+pose arrives. The 15 m/s and 4 rad/s bounds are unchanged; large short-interval
+jumps still fault immediately using the minimum-window envelope (0.30 m and
+0.08 rad at defaults). Rewinds and conflicting duplicates are checked against
+every received pose, including withheld ones. A confirmed fault still requires
+a new mapping session and navigation HOLD/disarm. This change is shared by
+simulation and hardware consumers; it adds no simulator inputs to autonomy.
+
+The previous 0.446 ms / 0.001834 rad failure is covered by an exact regression.
+Tests also cover sustained excessive turn rate, immediate large jumps,
+withheld-pose ordering, missing brackets, and end-to-end frame waiting. The
+minimum interval is the mapper parameter `min_pose_motion_interval_s`; reducing
+it increases instantaneous-rate sensitivity, increasing it adds pose latency.
+The 20 ms default is a bounded engineering choice, not hardware calibration.
+
+Diagnostic capture is bounded and emits structured JSON into session logs:
+
+- `mapping.log`: one `POSE_FAULT_TRACE` containing up to 100 received poses,
+  covariance, accepted-clock stamps, and the latched reason.
+- `clock.log`: the first three `POSE_CLOCK_ANOMALY` events include original and
+  converted timestamps, receipt times, pose, and exact conversion brackets.
+  A mapper ERROR also emits one `POSE_CLOCK_TRACE` with up to 200 recent poses.
+- `/mapping/diagnostics`: `pose_short_interval_withheld` counts downsampled poses.
+
+A synthetic ROS test demonstrates that an allowed clock-conversion slope can
+compress pose spacing and trigger the old adjacent-rate check. This is a
+possible mechanism, not proof of the historical fault's cause. The provisional
+receipt-based converter is **not repaired or approved for hardware** by this
+change. Hardware still needs verified camera/FCU acquisition-time alignment;
+neither changing `use_sim_time` nor raising a rate limit supplies that alignment.
+
+Validation logs are `Simulation/logs/nav-pose-*.log`. The first benchmark attempt
+used stale generated map interfaces; the isolated `maritime-benchmark-pose:jazzy`
+image rebuild resolves that mismatch. The current-image suite passes 70 tests;
+the focused clock capture suite passes 2 tests. The standard live-mapping suite
+passes 14 tests, including the new capture tests. All 39 autonomy unit tests,
+5 bridge tests, and 3 real Nav2 integration scenarios also pass. Final static
+validation includes the Gazebo asset checks.
+
+**Live full slalom passed** in `navigation-20261021-215154` at the unchanged
+default desired speed of 0.20 m/s: 697.0 s, all six course events completed,
+minimum conservative hull clearance 0.548 m, whole-stern exit clearance 0.844 m,
+no clearance violation, and verified HOLD/disarm. Both cameras contributed.
+Late-course diagnostics recorded 8 withheld short-interval poses with a healthy
+mapper and no pending frames. No `POSE_CLOCK_ANOMALY` or mapper fault was emitted;
+this run therefore does not establish the cause of the historical failure.
+The exact old failure pair is covered synthetically, not reproduced live here.
+
+The 60 s rate probe passed: 5 Hz maps, 10 Hz commands, supervisor tick p99
+14.5 ms. This early window overlapped isolated integration tests. Late in the
+course, the existing planning-grid age guard briefly stopped commands twice
+for about one tick each; the early rate result is not a full-course timing
+guarantee. Evidence: `Simulation/logs/nav-pose-validation/`. This is one calm,
+dual-camera run on the simulation PC, not repeatability or Jetson/hardware
+acceptance. The earlier failed course records below remain historical evidence.
+
+The isolated test image is `maritime-autonomy-nav2-pose:jazzy`; older rate or
+experiment images do not acquire this checker change automatically. To rebuild
+from this checkout and run it against a separately started simulation:
+
+```bash
+NAVIGATION_IMAGE=maritime-autonomy-nav2-pose:jazzy \
+  python3 autonomy/tools/navigation.py build
+NAVIGATION_IMAGE=maritime-autonomy-nav2-pose:jazzy \
+  python3 autonomy/tools/navigation.py run --task slalom \
+  --assume-bounded-water --bootstrap-clear-start --evaluate --mission-timeout 1200
+```
+
 ## Reduced map rates (2026-10-21)
 
 The navigation runner now requests 5 Hz shared-map/physical-grid snapshots.
@@ -101,7 +172,7 @@ snapshots, 10 Hz commands, 0.110 s maximum command gap, 3.83 grid builds/s,
 Active global/local costmap update settings were 2/10 Hz, publication 1/1 Hz.
 Evidence: `Simulation/logs/nav-rate-validation/final-slalom-rates.json`.
 
-**Full-course acceptance did not pass.** Session `navigation-20261021-205903`
+**Before pose timing hardening, full-course acceptance did not pass.** Session `navigation-20261021-205903`
 cleared the entry gate and first turn, then at 147.3 s hit the existing mapper
 pose-discontinuity fault: `dt=0.000446s`, zero translation, `turn=0.001834rad`.
 The supervisor latched the fault, commands stopped, and HOLD/disarm was verified.
@@ -111,8 +182,8 @@ reported as a successful full slalom or as Jetson acceptance.
 
 The default-speed live gate result below validates the same background-worker
 architecture before the geometry-equivalent sparse-sector optimization. A
-successful full course on the final implementation remains required before
-promoting these navigation changes as a validated course baseline.
+successful full course was still required at this stage. The pose timing section
+above records the later passing run; broader repeatability remains untested.
 
 ### Background-worker validation before sparse sector optimization
 

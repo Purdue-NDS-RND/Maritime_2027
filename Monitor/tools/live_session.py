@@ -18,7 +18,7 @@ def main():
     args = parser.parse_args()
     if args.action == 'test':
         os.execvp('python3', ['python3', '-m', 'unittest', 'discover', '-s', '/opt/live-tests',
-                             '-p', 'test_live_mapping.py', '-v'])
+                             '-p', 'test_live_*.py', '-v'])
     if not args.no_window:
         import tkinter
         try:

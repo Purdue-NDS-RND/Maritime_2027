@@ -111,6 +111,31 @@ class MappingNodeTests(unittest.TestCase):
         self.assertEqual(self.outputs[-1].estimates, [])
         self.assertEqual(self.outputs[-1].status, 'waiting_for_inputs')
 
+    def test_short_interval_pose_waits_for_bracket_without_pausing_map(self):
+        self.node.receive_pose(self.pose(10))
+        second = self.pose(10, yaw=.001834)
+        second.header.stamp.nanosec = 446_000
+        self.node.receive_pose(second)
+        self.node.receive('camera_0', self.detections(10, 446_000))
+        self.assertFalse(self.node.mapper.paused_reason)
+        self.assertEqual(len(self.node.pending), 1)
+        third = self.pose(10, yaw=.002)
+        third.header.stamp.nanosec = 20_000_000
+        self.node.receive_pose(third)
+        self.assertEqual(len(self.node.pending), 0)
+        self.assertEqual(self.outputs[-1].status, 'ok')
+
+    def test_short_interval_jump_pauses_and_captures_fault(self):
+        self.node.receive_pose(self.pose(10))
+        jump = self.pose(10, yaw=.2)
+        jump.header.stamp.nanosec = 446_000
+        self.node.receive_pose(jump)
+        self.assertTrue(self.node.mapper.paused_reason)
+        self.assertTrue(self.node.pose_fault_logged)
+        self.assertEqual(len(self.node.poses.trace), 2)
+        self.node.receive_pose(self.pose(11))
+        self.assertTrue(self.node.mapper.paused_reason)
+
     def test_camera_rewind_and_calibration_change_pause_session(self):
         self.node.receive('camera_0', self.detections(10))
         self.node.receive('camera_0', self.detections(9))
