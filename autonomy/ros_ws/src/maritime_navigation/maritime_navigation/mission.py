@@ -40,14 +40,19 @@ class Landmark:
     y: float
     seen: float
     count: int = 1
+    covariance: tuple = (0., 0., 0., 0.)
+    footprint_radius_m: float = .35
 
 
 class Mission:
-    def __init__(self, turns=4, clearance=3.0):
+    def __init__(self, turns=4, clearance=3.0, exit_sigma=2., exit_clearance=.15):
         if turns < 0 or clearance < 1.5:
             raise ValueError('Invalid course/clearance')
         self.turns = turns
         self.clearance = clearance
+        if not math.isfinite(exit_sigma) or not math.isfinite(exit_clearance) or min(exit_sigma, exit_clearance) < 0:
+            raise ValueError('Invalid gate exit uncertainty/clearance')
+        self.exit_sigma, self.exit_clearance = exit_sigma, exit_clearance
         self.landmarks = []
         self.origin = None
         self.forward = None
@@ -61,6 +66,28 @@ class Mission:
         self.departure = None
         self.gate_plane_s = None
         self.gate_width = None
+        self.gate_finish_s = None
+
+    def gate_exit_goal(self, active, plane):
+        """Terminal completion clears both uncertain buoy planes with the hull.
+
+        Navigation and the map share coordinates; no simulation truth is used.
+        The maximum projected rear extent covers any boat heading. Goal padding
+        covers the 0.35 m mission arrival allowance, 0.30 m retarget deadband,
+        and 0.10 m reserve, so an accepted Nav2 stop can still clear the bound.
+        """
+        if self.stage != 'gate_b' and self.turns != 0:
+            self.gate_finish_s = None
+            return plane+2.2
+        fx, fy = self.forward
+        far = []
+        for buoy in active:
+            xx, xy, yx, yy = buoy.covariance
+            variance = max(0., fx*fx*xx+fx*fy*(xy+yx)+fy*fy*yy)
+            far.append(self.coordinates(buoy.x, buoy.y)[0]
+                       + self.exit_sigma*math.sqrt(variance)+buoy.footprint_radius_m)
+        self.gate_finish_s = max(far)+math.hypot(1.1, .6)+self.exit_clearance
+        return max(plane+2.2, self.gate_finish_s+.35+.30+.10)
 
     def coordinates(self, x, y):
         dx, dy = x-self.origin[0], y-self.origin[1]
@@ -99,8 +126,9 @@ class Mission:
             centre = sum(t for _, t in coordinates)/2
             self.gate_plane_s = plane
             self.gate_width = abs(coordinates[0][1]-coordinates[1][1])
-            target = self.world(plane-2.0 if self.departure is not None else plane+2.2, centre)
-            departure = self.world(plane+2.2, centre) if self.departure is not None else None
+            exit_goal = self.gate_exit_goal(active, plane)
+            target = self.world(plane-2.0 if self.departure is not None else exit_goal, centre)
+            departure = self.world(exit_goal, centre) if self.departure is not None else None
         elif self.stage.startswith('turn_'):
             buoy = active[0]
             s, t = self.coordinates(buoy.x, buoy.y)
@@ -131,14 +159,16 @@ class Mission:
             self.forward = (self.left[1], -self.left[0])
             self.origin = ((red.x+green.x)/2, (red.y+green.y)/2)
             self.gate_plane_s, self.gate_width = 0., width
-            self.target = self.world(2.2, 0)
             self.active_ids = [red.identity, green.identity]
             self.stage = 'gate_a'
+            self.target = self.world(self.gate_exit_goal([red, green], 0.), 0)
         s, t = self.coordinates(x, y)
         if self.target is not None:
             goal_s, goal_t = self.coordinates(*self.target)
             # Clear the plane with the entire vessel before advancing.
-            if s >= goal_s-.35 and math.hypot(s-goal_s, t-goal_t) <= .4:
+            terminal_clear = (self.departure is not None or self.gate_finish_s is None
+                              or s >= self.gate_finish_s)
+            if terminal_clear and s >= goal_s-.35 and math.hypot(s-goal_s, t-goal_t) <= .4:
                 if abs(t-goal_t) > .85:
                     self.stage = 'fault'
                     self.events.append('missed_course_target')
@@ -179,9 +209,9 @@ class Mission:
                 self.gate_plane_s = (rs+gs)/2
                 self.gate_width = abs(gt-rt)
                 self.target = self.world((rs+gs)/2-2.0, (rt+gt)/2)
-                self.departure = self.world((rs+gs)/2+2.2, (rt+gt)/2)
                 self.active_ids = [red.identity, green.identity]
                 self.stage = 'gate_b'
+                self.departure = self.world(self.gate_exit_goal([red, green], (rs+gs)/2), (rt+gt)/2)
             else:
                 # Approach the required side BEFORE reaching the buoy's plane.
                 side = nt+(self.clearance if nearest.category == 'red' else -self.clearance)

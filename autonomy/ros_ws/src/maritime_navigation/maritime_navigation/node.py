@@ -53,7 +53,8 @@ class Navigator(Node):
                           [('goal_x', 10.), ('goal_y', 0.), ('goal_yaw', 0.)])
         if not all(map(math.isfinite, (*self.goal, self.sigma, self.clearance))) or min(self.sigma, self.clearance) < 0:
             raise ValueError('Invalid goal or clearance')
-        self.mission = Mission(turns=0 if self.task == 'gate' else 4)
+        self.mission = Mission(turns=0 if self.task == 'gate' else 4,
+                               exit_sigma=self.sigma, exit_clearance=self.clearance)
         self.map = self.physical = self.pose = self.grid = None
         self.progress = InputProgress()
         self.snapshots = SnapshotPair()
@@ -231,7 +232,7 @@ class Navigator(Node):
         stamp = ns(self.map.header.stamp)
         self.mission.landmarks = [Landmark(t.world_id, t.category, t.x, t.y,
             now-max(0., (stamp-ns(t.last_seen))/1e9),
-            max(3, t.confirmation_evidence))
+            max(3, t.confirmation_evidence), tuple(t.covariance), t.footprint_radius_m)
             for t in self.map.tracks if t.lifecycle in ('confirmed', 'stale')]
         self.mission.refresh_target()
         survey = observation_goals(*self.start_pose)
@@ -431,6 +432,7 @@ class Navigator(Node):
             pose_age_s=now-self.pose_arrival if math.isfinite(self.pose_arrival) else None,
             map_progress_age_s=now-self.progress.progress if math.isfinite(self.progress.progress) else None,
             planning_grid_builds=self.planning_cache.builds, planning_grid_build_ms=self.planning_build_ms,
+            gate_finish_s=self.mission.gate_finish_s,
             tick_ms=(time.monotonic()-now)*1000,
             elapsed=now-self.started))))
 

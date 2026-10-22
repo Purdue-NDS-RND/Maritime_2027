@@ -59,8 +59,9 @@ class CourseTests(unittest.TestCase):
                     -12+x*math.sin(angle)+y*math.cos(angle))
         mapped(mission, [(c, *transform(7, y)) for c, y in [('red', -2), ('green', 2)]], 0.)
         target = mission.update(40, -12, angle, 0.)
-        self.assertAlmostEqual(target[0], transform(9.2, 0)[0])
-        self.assertAlmostEqual(target[1], transform(9.2, 0)[1])
+        exit_x = 7+math.hypot(1.1, .6)+.35+.15+.75
+        self.assertAlmostEqual(target[0], transform(exit_x, 0)[0])
+        self.assertAlmostEqual(target[1], transform(exit_x, 0)[1])
         mission.update(*target, angle, .1)
         self.assertEqual(mission.stage, 'complete')
 
@@ -108,11 +109,60 @@ class CourseTests(unittest.TestCase):
         mission.update(0, 0, 0, 0.)
         mapped(mission, [('red', 8, -2), ('green', 8, 2)], 1.)
         mission.refresh_target()
-        self.assertAlmostEqual(mission.target[0], 10.2)
+        self.assertAlmostEqual(mission.target[0], 8+math.hypot(1.1, .6)+.35+.15+.75)
         mission.landmarks = []
         mission.refresh_target()
         self.assertEqual(mission.stage, 'fault')
         self.assertIsNone(mission.target)
+
+    def test_terminal_gate_accounts_for_range_bias_and_arrival_tolerance(self):
+        mission = Mission(turns=0)
+        # Map gate is 1 m closer than the independently known physical gate.
+        mapped(mission, [('red', 6, -2), ('green', 6, 2)], 0.)
+        for buoy in mission.landmarks:
+            buoy.covariance = (.25**2, 0., 0., .1**2)
+        target = mission.update(0, 0, 0, 0.)
+        mission.update(8.2, 0., 0., 1.)  # Old fixed-offset target.
+        self.assertNotEqual(mission.stage, 'complete')
+        stop_x = target[0]-.34
+        mission.update(stop_x, target[1], .5, 2.)
+        self.assertEqual(mission.stage, 'complete')
+        rear = 1.1*abs(math.cos(.5))+.6*abs(math.sin(.5))
+        self.assertGreater(stop_x-rear, 7.)
+
+    def test_terminal_gate_clears_farthest_endpoint_not_mean_plane(self):
+        mission = Mission()
+        mission.origin, mission.forward, mission.left = (0., 0.), (1., 0.), (0., 1.)
+        mapped(mission, [('red', 36.5, -2), ('green', 37.5, 2)], 0.)
+        mission.stage, mission.active_ids = 'gate_b', ['buoy-0', 'buoy-1']
+        mission.target = (39.2, 0.)
+        mission.refresh_target()
+        self.assertGreater(mission.gate_finish_s, 37.5+math.hypot(1.1, .6))
+        mission.update(38.9, 0., 0., 1.)
+        self.assertNotEqual(mission.stage, 'complete')
+        target = mission.target
+        mission.update(target[0]-.34, target[1], 0., 2.)
+        self.assertEqual(mission.stage, 'complete')
+
+    def test_exit_uncertainty_projects_covariance_onto_course_direction(self):
+        goals = []
+        for angle in (0., math.pi/2):
+            mission = Mission(turns=0)
+            mission.origin = (0., 0.)
+            mission.forward = (math.cos(angle), math.sin(angle))
+            mission.left = (-math.sin(angle), math.cos(angle))
+            mission.stage = 'gate_a'
+            buoy = Landmark('one', 'red', 0., 0., 0., 5, (.04, 0., 0., 1.))
+            goals.append(mission.gate_exit_goal([buoy], 0.))
+        self.assertAlmostEqual(goals[1]-goals[0], 2*(1.-.2))
+
+    def test_nonterminal_entry_does_not_extend_through_next_course_turn(self):
+        mission = Mission()
+        mapped(mission, [('red', 7, -2), ('green', 7, 2), ('red', 13, 0)], 0.)
+        for buoy in mission.landmarks:
+            buoy.covariance = (4., 0., 0., 4.)
+        self.assertEqual(mission.update(0, 0, 0, 0.), (9.2, 0.))
+        self.assertIsNone(mission.gate_finish_s)
 
 
 if __name__ == '__main__':
