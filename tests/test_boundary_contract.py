@@ -4,7 +4,7 @@ import copy
 import importlib.util
 import unittest
 
-from boundary_contract import EXPECTED_FRAMES, MISSION, PLACEHOLDER, REQUIRED_READY, diagnostic_level, validate_evidence
+from boundary_contract import EXPECTED_FRAMES, MISSION, PLACEHOLDER, REQUIRED_READY, diagnostic_level, validate_adapter_evidence, validate_evidence
 
 
 class BoundaryEvidenceTests(unittest.TestCase):
@@ -22,6 +22,11 @@ class BoundaryEvidenceTests(unittest.TestCase):
                         placeholder_subscribers=[], placeholder_clients=[])
         evidence.update(overrides)
         validate_evidence(**evidence)
+
+    def test_adapter_boundary_does_not_require_an_autonomy_application(self):
+        diagnostics = copy.deepcopy(self.diagnostics)
+        del diagnostics[PLACEHOLDER]
+        validate_adapter_evidence(diagnostics, EXPECTED_FRAMES)
 
     def test_all_sources_ready_does_not_make_placeholder_mission_ready(self):
         self.check()

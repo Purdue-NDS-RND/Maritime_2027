@@ -88,7 +88,7 @@ namespace. For example, without launch remapping, `vessel/odometry` under
 | `/perception/camera_0/detections` | `vision_msgs/msg/Detection2DArray` | Detector output, retaining the source image header. Successfully processed frames with no recognized markers publish empty arrays. |
 | `/perception/camera_0/debug/image` | `sensor_msgs/msg/Image` | Optional annotated detector image; enable `publish_debug_image:=true`. |
 | `/localization/buoys` | `maritime_interfaces/msg/BuoyEstimateArray` | Per-frame status and **only confirmed tracks newly updated by that frame**. Includes method, readiness, detail, category, track ID, and XY. Sensor-data QoS. |
-| `/mapping/buoys` | `maritime_interfaces/msg/BuoyMap` | Authoritative RGB metric-map snapshot: session ID, paused/detail fields, unresolved count, and all tracks that have XY, including tentative/stale/inconsistent tracks. Reliable, transient-local, history capacity 1. |
+| `/mapping/buoys` | `maritime_interfaces/msg/BuoyMap` | Authoritative RGB metric-map snapshot: session ID, paused/detail fields, unresolved count plus active `unresolved_world_ids`, and all tracks that have XY, including tentative/stale/inconsistent tracks. Reliable, transient-local, history capacity 1. |
 | `/mapping/observations` | `maritime_interfaces/msg/BearingObservationArray` | Bearings and association decisions for ready processed RGB frames, with session ID, original pose-bracket stamps and configured offset. Sensor-data QoS. |
 | `/mapping/occupancy_grid` | `nav_msgs/msg/OccupancyGrid` | Derived occupied footprints from confirmed/stale/inconsistent tracks; unknown elsewhere. Default 0.5 m cells over 100 m square. Reliable, transient-local, history capacity 1. |
 | `/mapping/costmap` | `nav_msgs/msg/OccupancyGrid` | Compatibility alias of `/mapping/occupancy_grid`. |
@@ -286,6 +286,24 @@ clock rewind pause the mapping session. Pose jump checks use 15 m/s and 4 rad/s
 bounds. A latched fault requires a session restart; the mapper does not silently
 move the existing map into a new coordinate system.
 
+`min_pose_motion_interval_s` (default 0.02 s) bounds sensitivity to tiny timestamp
+intervals. Poses closer together are withheld from interpolation, not restamped
+or used as fresh evidence. Motion is checked against the last accepted pose,
+using at least this interval for the immediate displacement/rotation envelope;
+once the interval elapses, the original rate bounds apply to the actual elapsed
+time. At defaults, a short-interval jump above 0.30 m or 0.08 rad still faults
+immediately. All received stamps, including withheld poses, retain the rewind
+and conflicting-duplicate checks. Missing future brackets retain the existing
+wait, gap and freshness limits. This is bounded downsampling, not clock repair.
+
+A pose fault emits one `POSE_FAULT_TRACE` JSON log with the last 100 received
+poses and covariances. `pose_short_interval_withheld` appears in mapping
+diagnostics. The optional simulation clock helper also retains 200 original and
+converted poses with their exact clock-reference brackets: the first three
+adjacent-rate anomalies emit `POSE_CLOCK_ANOMALY`, and a mapper ERROR emits one
+`POSE_CLOCK_TRACE`. These records diagnose the provisional receipt conversion;
+they do not establish hardware synchronization accuracy.
+
 The optional constant offset convention is:
 
 ```text
@@ -323,6 +341,7 @@ are read at startup; restart to apply changes.
 | `cameras` | `[camera_0]` | Camera names sharing one map. Launch sets this from camera arguments. |
 | `pose_time_offset_s` | `0.0` | Explicit verified constant timestamp offset. |
 | `max_pose_gap_s`, `pose_wait_s` | `0.3`, `0.5` s | Interpolation gap limit and wall-time input wait. |
+| `min_pose_motion_interval_s` | `0.02` s | Minimum separation of accepted poses; shorter inputs are checked for ordering/jumps and withheld from interpolation. |
 | `max_pending_frames` | `60` | Bound on queued detection arrays. |
 | `costmap_extent_m`, `costmap_resolution_m` | `100.0`, `0.5` m | Occupancy square extent and cell size; default is 200×200 cells. Existing parameter names are retained. |
 | `map_publish_hz` | `10.0` Hz | Wall-time publication rate of map, occupancy grid, markers and diagnostics. |

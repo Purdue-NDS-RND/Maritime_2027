@@ -431,16 +431,18 @@ but does not initialize a metric obstacle at an invented range.
 
 ### Costmap Output and Grid Configuration
 
-Publish `/mapping/costmap` as `nav_msgs/msg/OccupancyGrid`. Start with a fixed
-100 by 100-meter grid at 0.1-meter resolution, centered on the vessel's position
-when mapping starts. Extent and resolution are configurable starting values.
+Publish `/mapping/occupancy_grid` as `nav_msgs/msg/OccupancyGrid` (with
+`/mapping/costmap` as a compatibility alias). The mapper defaults to a fixed
+100 by 100-meter grid at 0.5-meter resolution. The navigation runner uses
+0.25-meter source cells and builds a separate bounded 0.1-meter planning grid.
+Extent and resolution are configurable.
 Flag observations outside the grid instead of silently recentering it.
 
 Mark confirmed buoy footprints occupied and retain unknown values elsewhere;
 reliable free-water detection is not part of this first implementation. Show
-position uncertainty separately in visualization. Boat-clearance inflation is
-deferred to navigation design. Exact occupied-value encoding and publication
-rate/QoS remain implementation-contract details to specify.
+position uncertainty separately in visualization. Physical cells are `100`,
+unknown cells are `-1`; snapshots publish at 10 Hz with transient-local QoS.
+Navigation applies clearance, hull geometry and graded uncertainty separately.
 
 Rebuild occupied regions from retained buoy records so position refinement
 removes obsolete footprints while preserving overlapping obstacles. The grid
@@ -507,8 +509,8 @@ can detect those hazards.
 
 Missing buoy detections do not establish that an area has been observed clear.
 Cells outside confirmed obstacle footprints remain unknown initially.
-The policy for entering
-unobserved areas belongs to later navigation design.
+Navigation requires an explicit bounded-water assumption before entering
+unknown cells; its detailed policy is in the navigation implementation guide.
 
 The stationary-buoy assumption is a deliberate initial simplification, not a
 claim that real buoys never move. Sustained drift, moving obstacles, or a buoy
@@ -547,32 +549,30 @@ the future GCS application or a running navigation planner/controller.
 
 ## Planning and Navigation
 
-This entire section records future direction. Planning and autonomous motion
-control are excluded from the first sensing and mapping implementation.
+The current Nav2 implementation and its operating assumptions are described in
+[map-based navigation](GATE_SLALOM_NAVIGATION.md). Simulation validation remains
+separate from hardware readiness.
 
 ### Inputs and Outputs
 
 ### Navigation Framework and Algorithms
 
-The intended direction is to use Nav2 or a comparable planning framework with
-the perceived costmap. Final framework and plugin selection remain open.
-ArduPilot will own low-level vessel movement control; onboard autonomy will
-choose where to go and monitor execution.
-
-Draft integration recommendation: use costmap-based path planning and a route
-execution component that sends intermediate position targets through MAVROS to
-ArduPilot. Nav2's standard controller produces velocity commands, so this
-position-target approach requires deliberate integration rather than assuming
-the complete default Nav2 control pipeline can be connected unchanged.
+Nav2 Smac State Lattice plans against a footprint-aware costmap built from physical
+occupancy and the shared buoy records. Regulated Pure Pursuit follows the path.
+The mission supervisor checks map progress, retains uncertainty and lifecycle
+information, constrains required crossing sides, and checks the predicted hull
+sweep before releasing body-forward speed and yaw-rate commands. ArduPilot
+continues to own steering and thrust control.
 
 ### Route Generation and Obstacle Handling
 
 ### Movement Commands and MAVROS Interface
 
-The preferred direction is to command target locations and let ArduPilot
-control steering and thrust toward them. Guided-mode local or global position
-targets are candidates; the exact MAVROS interface, target frames, update
-policy, speed constraints, and arrival behavior remain to be designed.
+The simulation command bridge accepts gated body-frame speed and yaw rate and
+uses raw MAVROS BODY_NED velocity/rate setpoints in armed GUIDED mode. An
+independent receipt watchdog zeros both commands. The autonomy package has no
+MAVROS or simulator transport imports. Hardware transport is not implemented
+by this simulation-only bridge.
 
 ArduPilot provides feedback control and boat position-maintenance behavior,
 but disturbance rejection is bounded by tuning, state-estimate quality, vessel
@@ -649,8 +649,9 @@ uses MAVROS connected to SITL rather than the camera bridge.
 Each Adapter publishes the fixed transform from `base_link` to each configured
 `camera_N_link` and from that mounting frame to `camera_N_optical_frame`.
 Mounting transforms reflect the simulated installation or physical calibration.
-Shared state integration owns estimated vessel-motion transforms, such as
-`odom -> base_link`; exact navigation frame names remain open.
+The navigation supervisor owns `map -> navigation_odom -> base_link` from the
+external estimated vessel state. The two local reference frames currently
+share an origin; this does not provide global drift correction.
 
 ### Scenario Configuration
 

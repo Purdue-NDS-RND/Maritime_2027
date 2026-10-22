@@ -23,12 +23,11 @@ failure; use `make down` before a fresh launch. The shutdown command remains
 available while a launcher holds the lock.
 
 For ROS runs the host launcher starts the simulator, waits for its healthcheck,
-then starts the Adapter and waits for semantic health before starting the
-bootstrap. Each handoff has a `STACK_STARTUP_TIMEOUT` deadline (180 seconds by
+then starts the Adapter and waits for semantic health. Navigation is started
+separately from `autonomy/`. Each handoff has a `STACK_STARTUP_TIMEOUT` deadline (180 seconds by
 default). Adapter health requires fresh OK camera source diagnostics when the
 camera is enabled, plus MAVROS source and FCU readiness; node presence alone is
-insufficient. Bootstrap health remains a process-liveness check and never
-implies mission readiness.
+insufficient. Simulation startup makes no mission-readiness claim.
 
 The launcher monitors service exits and sustained unhealthy status throughout
 the run. A failed handoff or runtime service failure stops the complete stack.
@@ -70,7 +69,7 @@ SITL parameters once, and repeat the full smoke test.
 | `SOFTWARE_RENDERING` | `0` | Use Mesa CPU rendering when set to `1` |
 | `WIPE_PARAMS` | `0` | Reset virtual EEPROM when set to `1` |
 | `GAZEBO_STARTUP_TIMEOUT` | `90` | Gazebo/BlueBoat readiness deadline |
-| `STACK_STARTUP_TIMEOUT` | `180` | Positive integer seconds per simulator/Adapter/bootstrap startup handoff |
+| `STACK_STARTUP_TIMEOUT` | `180` | Positive integer seconds per simulator/Adapter startup handoff |
 | `SIM_IMAGE` | `ardupilot-blueboat:4.7.0` | Local Docker image tag |
 
 ## Water profiles
@@ -91,15 +90,15 @@ configuration, movement, Hold, RTL, and disarm.
 Run `make lifecycle-smoke` explicitly from `Simulation/` with the simulator
 stopped. It invokes `tests/lifecycle_acceptance.py`; this acceptance harness is
 never part of runtime startup. It launches separate simulation runs to exercise
-bounded failed Gazebo/Adapter startup, simulator and autonomy service exits,
+bounded failed Gazebo/Adapter startup, simulator and Adapter service exits,
 required Adapter-child exit, camera/FCU silence, SIGINT/SIGTERM cleanup,
 double-start rejection, and parameter persistence. Test-only injections include
 a wrong SITL MAVROS output port (14559), stopping the camera boundary or MAVROS
-node, stopping exactly one required simulator or autonomy container, and an
+node, stopping exactly one required simulator or Adapter container, and an
 incompatible direct-world readiness case. Startup and silence
 waits are bounded; production readiness retries and data thresholds are unchanged.
 To rerun just the service-exit cases, use
-`python3 tests/lifecycle_acceptance.py --cases simulator_exit,autonomy_exit`.
+`python3 tests/lifecycle_acceptance.py --cases simulator_exit,adapter_exit`.
 Each requires the launcher to report the selected failed service, return nonzero,
 preserve failure evidence, and clean up the remaining stack.
 
@@ -114,9 +113,9 @@ hardware or application-readiness evidence.
 ## Deferred work
 
 The current ROS extension provides simulation bridges, camera normalization,
-MAVROS, diagnostics, explicit evaluators, and the non-commanding bootstrap.
-Perception, state integration, mapping, navigation, missions, and the Hardware
-Adapter remain later work. Preserve the ArduPilot/Gazebo foundation and the
+MAVROS, diagnostics, and explicit evaluators. RGB perception, mapping and gate/slalom
+navigation start separately from `autonomy/`. Hardware deployment and general
+mission readiness remain later work. Preserve the ArduPilot/Gazebo foundation and the
 implemented Adapter boundary when adding those application layers.
 # RGB-D extension invariants
 
@@ -133,7 +132,7 @@ implemented Adapter boundary when adding those application layers.
   `Adapter/simulation/ros_ws/`; maintain explicit evaluators in
   `Simulation/tests/evaluation/`. `autonomy/ros_ws/` must build without Gazebo,
   MAVROS, FCU transport, scenario manifests, or evaluation dependencies. The
-  current bootstrap is simulation-only and not an independent startup service.
+  legacy bootstrap is simulation-only and is not started by Simulation.
 - Keep perfect motion TF on `/blueboat/ground_truth/tf` and its evaluation-only
   static companion. Do not feed it into the shared navigation TF tree.
 - OpenCV ArUco logic belongs only in `sensor_smoke.py`, never in bringup.

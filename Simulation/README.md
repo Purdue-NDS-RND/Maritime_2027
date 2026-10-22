@@ -32,11 +32,11 @@ ArduPilot Rover 4.7.0 runs its real boat-control code in software-in-the-loop
 (SITL). QGroundControl runs on the Ubuntu host and connects as if this were a
 physical boat.
 
-This is a reusable ArduPilot baseline. Optional RGB-D buoy scenarios add one
-generic simulated RGB-D camera, ROS 2 Jazzy, Gazebo-to-ROS bridges, and MAVROS
-without changing the boat dynamics. They intentionally do not include a
-two-camera model, perception, mapping, navigation, autonomy, a GCS, payload
-mechanisms, or a digital twin of the competition LPV.
+This is a reusable ArduPilot baseline. RGB-D buoy scenarios provide selectable
+single/dual cameras, ROS 2 Jazzy, Gazebo-to-ROS bridges, and MAVROS without
+changing boat dynamics. Perception, mapping and navigation belong to `autonomy/`
+and start separately. Physical LPV modeling, payload mechanisms, and the project
+GCS remain separate work.
 
 ## What starts
 
@@ -54,8 +54,8 @@ produces persistent XY tracks through the same mapper used for live topics.
 
 With `SCENARIO=one|gate|multi|repeated_red`, the ROS profile starts the Simulation Adapter,
 its MAVROS endpoint on UDP `14552`, normalized RGB-D/camera-info interfaces,
-TF, simulation clock, the non-mission autonomy bootstrap, and evaluation-only
-ground truth.
+TF, simulation clock, and evaluation-only ground truth. The Adapter starts
+by default; navigation starts separately from `autonomy/`.
 
 QGroundControl stays outside Docker. On this workstation it is located at:
 
@@ -97,7 +97,7 @@ make validate  # Check scripts, assets, pins, and Compose configuration
 make smoke     # Test a running boat through MAVLink UDP 14551
 make teleop    # Arm and drive with the keyboard through pymavlink; QGC optional
 make record    # Open recording, dataset inspection, replay, and RViz menu
-make ros-build # Build simulator, simulation adapter, and autonomy images
+make ros-build # Build simulator and simulation Adapter images
 make sensor-smoke # Check RGB-D, ArUco visibility, depth, timing, and TF
 make mavros-smoke # Check the FCU control path through MAVROS
 make verify-rgbd  # Run the complete scenario and control regression suite
@@ -181,9 +181,9 @@ automation, while `container/` holds Docker and in-container startup files.
 
 ROS responsibilities live in sibling project areas: [`Adapter/`](../Adapter/README.md)
 owns the Gazebo bridges, MAVROS, and diagnostics; explicit evaluators live in
-`tests/evaluation/`. [`autonomy/`](../autonomy/README.md) contains only the
-temporary non-mission bootstrap. The simulation `ros` profile starts both
-services alongside the simulator; there is no standalone autonomy profile.
+`tests/evaluation/`. [`autonomy/`](../autonomy/README.md) owns perception, mapping
+and navigation. `make run` here starts the simulator and Adapter; `make run` in
+`autonomy/` starts navigation separately. Simulation starts no autonomy placeholder.
 
 ## Model limitation
 

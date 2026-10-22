@@ -30,6 +30,12 @@ python_sources=(
     ../autonomy/ros_ws/src/maritime_localization/setup.py
     ../autonomy/ros_ws/src/maritime_localization/maritime_localization/*.py
     ../autonomy/ros_ws/src/maritime_localization/launch/*.py
+    ../autonomy/tools/navigation.py ../autonomy/tools/navigation_preflight.py
+    scripts/navigation_bridge.py scripts/navigation_clock.py tests/lifecycle_acceptance.py
+    ../autonomy/ros_ws/src/maritime_navigation/maritime_navigation/*.py
+    ../autonomy/ros_ws/src/maritime_navigation/launch/*.py
+    tests/evaluation/navigation_command_smoke.py tests/evaluation/test_navigation_bridge.py
+    tests/evaluation/navigation_evaluate.py
     tests/evaluation/benchmarking/*.py
     ../tests/*.py
 )

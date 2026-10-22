@@ -2,6 +2,7 @@
 
 import threading
 import sys
+import cv2
 
 from cv_bridge import CvBridge
 import rclpy
@@ -22,6 +23,10 @@ class ArucoDetectorNode(Node):
         marker_ids = self.declare_parameter("marker_ids", [0, 1, 2, 3]).value
         categories = self.declare_parameter("marker_categories", ["white", "red", "green", "blue"]).value
         self.debug = self.declare_parameter("publish_debug_image", False).value
+        threads = self.declare_parameter("opencv_threads", 1).value
+        if not isinstance(threads, int) or not 1 <= threads <= 64:
+            raise ValueError('opencv_threads must be 1..64')
+        cv2.setNumThreads(threads)
         self.detector = ArucoBoxDetector(dictionary, marker_ids, categories)
         self.bridge = CvBridge()
         qos = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
@@ -36,7 +41,7 @@ class ArucoDetectorNode(Node):
         self.subscription = self.create_subscription(Image, "image", self.receive, qos)
         self.worker = threading.Thread(target=self.work, name="aruco-worker", daemon=True)
         self.worker.start()
-        self.get_logger().info("2D marker boxes only; configuration changes require a restart")
+        self.get_logger().info(f"2D marker boxes only; OpenCV threads={threads}; configuration changes require a restart")
 
     def receive(self, message):
         with self.condition:

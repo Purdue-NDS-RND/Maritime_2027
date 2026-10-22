@@ -16,6 +16,12 @@ BASE_WORLD = SIMULATION_ROOT / "worlds" / "blueboat_rgbd_base.sdf"
 
 
 class ScenarioRenderingTests(unittest.TestCase):
+    def test_gate_follows_competition_buoy_sides(self):
+        scenario = json.loads((SIMULATION_ROOT/'scenarios/gate.json').read_text())
+        by_marker = {b['marker_id']: b for b in scenario['buoys']}
+        self.assertLess(by_marker[1]['pose']['y'], 0.)
+        self.assertGreater(by_marker[2]['pose']['y'], 0.)
+
     def test_slalom_has_entry_exit_gates_and_alternating_turns(self):
         scenario = json.loads((SIMULATION_ROOT/'scenarios/slalom.json').read_text())
         result, _, manifest_path = self.render(scenario)

@@ -1,0 +1,17 @@
+<!-- Replan without clearing mapped obstacles or blind motion recoveries. -->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="PlanAndFollow">
+      <RateController hz="1.0">
+        <Fallback>
+          <ReactiveSequence>
+            <Inverter><GoalUpdated/></Inverter>
+            <IsPathValid path="{path}"/>
+          </ReactiveSequence>
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </Fallback>
+      </RateController>
+      <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="goal_checker"/>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

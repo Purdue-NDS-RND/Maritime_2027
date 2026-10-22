@@ -1,6 +1,7 @@
 """Simulation monitor clock adapter. Does not subscribe to simulator truth."""
 from collections import deque
 import copy
+import json
 import time
 
 import numpy as np
@@ -29,17 +30,30 @@ class LiveClock(Node):
         self.dropped = 0
         self.fault = None
         self.last_output = None
+        self.pose_trace = deque(maxlen=200)
+        self.trace_logged = False
+        self.anomalies_logged = 0
         self.output = self.create_publisher(Odometry, ALIGNED_POSE, qos_profile_sensor_data)
         self.diagnostics = self.create_publisher(DiagnosticArray, '/monitor/mapping/clock', 10)
         self.create_subscription(Clock, '/clock', self.on_clock, qos_profile_sensor_data)
         self.create_subscription(TimeReference, '/mavros/time_reference', self.on_reference, qos_profile_sensor_data)
         self.create_subscription(Odometry, pose_topic, self.on_pose, qos_profile_sensor_data)
+        self.create_subscription(DiagnosticArray, '/mapping/diagnostics', self.on_mapping_status, 10)
         # Release bracketed poses gradually: a one-Hz reference can unlock a
         # full second of odometry, which must not overflow keep-last-5 readers.
         self.create_timer(.01, self.drain)
         self.create_timer(1., self.status)
         self.get_logger().warning('EXPERIMENTAL receipt-clock adapter: unmeasured arrival delay; '
                                   '20 ms uncertainty floor is an assumption. No simulator truth input.')
+
+    def on_mapping_status(self, message):
+        failures = [s for s in message.status if s.name == 'bearing_ekf_buoy_mapping'
+                    and s.level == DiagnosticStatus.ERROR]
+        if not self.trace_logged and failures:
+            self.trace_logged = True
+            self.get_logger().error('POSE_CLOCK_TRACE '+json.dumps(dict(
+                reasons=[s.message for s in failures],
+                references=list(self.bridge.knots), poses=list(self.pose_trace))))
 
     def on_clock(self, message):
         stamp = ns(message.clock)
@@ -86,6 +100,25 @@ class LiveClock(Node):
                 self.dropped += 1
                 continue
             output = copy.deepcopy(message)
+            q = message.pose.pose.orientation
+            p = message.pose.pose.position
+            self.pose_trace.append(dict(source_ns=ns(message.header.stamp), converted_ns=stamp,
+                                        receipt_monotonic_s=arrival,
+                                        reference_bracket=next(((a, x, b, y)
+                                            for (a, x), (b, y) in zip(self.bridge.knots, list(self.bridge.knots)[1:])
+                                            if a <= ns(message.header.stamp) <= b), None),
+                                        position=[p.x, p.y, p.z], quaternion=[q.x, q.y, q.z, q.w]))
+            if len(self.pose_trace) >= 2 and self.anomalies_logged < 3:
+                before, after = list(self.pose_trace)[-2:]
+                dt = (after['converted_ns']-before['converted_ns'])/1e9
+                turn = 2*np.arccos(np.clip(abs(np.dot(before['quaternion'], after['quaternion'])), 0., 1.))
+                distance = np.linalg.norm(np.array(after['position'])-before['position'])
+                if dt > 0 and (turn > 4.*dt or distance > 15.*dt):
+                    # Evidence only: never alter stamps or the pose checker here.
+                    self.anomalies_logged += 1
+                    self.get_logger().warning('POSE_CLOCK_ANOMALY '+json.dumps(dict(
+                        converted_dt_s=dt, source_dt_s=(after['source_ns']-before['source_ns'])/1e9,
+                        distance_m=float(distance), turn_rad=float(turn), poses=list(self.pose_trace))))
             output.header.stamp.sec, output.header.stamp.nanosec = divmod(stamp, 1_000_000_000)
             # Same explicit provisional timing floor as replay normalization.
             twist = message.twist.twist

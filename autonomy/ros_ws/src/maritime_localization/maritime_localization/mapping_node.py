@@ -69,7 +69,9 @@ class BuoyMappingNode(Node):
                 or min(self.wait_s, self.resolution, self.extent, self.max_pose_gap_s, self.map_publish_hz) <= 0
                 or not 1 <= self.queue_limit <= 1000 or self.extent/self.resolution > 2000):
             raise ValueError('Invalid mapper input/timing/grid parameters')
-        self.poses = PoseBuffer(max_gap_s=self.max_pose_gap_s)
+        self.poses = PoseBuffer(max_gap_s=self.max_pose_gap_s,
+                               min_motion_interval_s=parameter('min_pose_motion_interval_s', .02))
+        self.pose_fault_logged = False
         self.calibration = {}
         self.mounts = {}
         self.pending = []
@@ -118,6 +120,11 @@ class BuoyMappingNode(Node):
                                     rigid_transform(pose.position, pose.orientation), covariance))
             if self.poses.fault:
                 self.mapper.pause(self.poses.fault)
+                if not self.pose_fault_logged:
+                    self.pose_fault_logged = True
+                    self.get_logger().error('POSE_FAULT_TRACE '+json.dumps(dict(
+                        session_id=self.mapper.session_id, reason=self.poses.fault,
+                        withheld=self.poses.withheld, poses=list(self.poses.trace))))
         except ValueError as error:
             self.mapper.pause(str(error))
         self.drain()
@@ -257,7 +264,8 @@ class BuoyMappingNode(Node):
         output = BuoyMap(session_id=self.mapper.session_id, paused=bool(self.mapper.paused_reason),
                          detail=self.mapper.paused_reason or '')
         output.header.frame_id, output.header.stamp = self.frame, ros_stamp(stamp)
-        output.unresolved_count = sum(track.mean is None for track in self.mapper.tracks)
+        output.unresolved_world_ids = [track.identifier for track in self.mapper.tracks if track.mean is None]
+        output.unresolved_count = len(output.unresolved_world_ids)
         for track in self.mapper.snapshot():
             age = max(0., (stamp-track.last_seen_ns)/1e9)
             confidence = min(1., track.confirmation_evidence/self.mapper.settings.confirmation_updates)*np.exp(-age/60.)
@@ -318,6 +326,7 @@ class BuoyMappingNode(Node):
         counters['stale_image_input'] = stale_inputs
         counters['pending_frames'] = len(self.pending)
         counters['pose_buffer_samples'] = len(self.poses.samples)
+        counters['pose_short_interval_withheld'] = self.poses.withheld
         counters.update({f'tracks_{state}': sum(track.state == state for track in self.mapper.tracks)
                          for state in ('unresolved', 'tentative', 'confirmed', 'stale', 'inconsistent')})
         diagnostics = DiagnosticStatus(name='bearing_ekf_buoy_mapping', hardware_id=self.mapper.session_id,

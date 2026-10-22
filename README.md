@@ -18,10 +18,10 @@ Project-wide mission, requirements, and architecture documentation belongs in
 ## Current simulator
 
 [`Simulation/`](Simulation/) is the current BlueBoat ArduPilot/Gazebo
-simulation baseline. It includes repeatable buoy scenarios, a single generic
-simulated RGB-D camera, an optional ROS 2 bridge, and MAVROS checks. It does not
-yet contain the planned perception, mapping, navigation, mission-management, or
-GCS applications.
+simulation baseline. It includes repeatable buoy scenarios, selectable single/dual
+RGB-D cameras, the Simulation Adapter, and MAVROS checks. Perception, mapping
+and gate/slalom navigation live in [`autonomy/`](autonomy/README.md) and start
+separately.
 
 Run simulator commands from `Simulation/`:
 
@@ -29,6 +29,14 @@ Run simulator commands from `Simulation/`:
 make validate
 make run
 make smoke
+```
+
+Build navigation after pulling changes with `make -C autonomy navigation-build`.
+For dual-camera navigation, start the two components in separate terminals:
+
+```bash
+make -C Simulation run SCENARIO=slalom BOAT_MODEL=dual WATER=calm
+make -C autonomy run ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
 ```
 
 See the [simulator README](Simulation/README.md) for setup, operation, testing,

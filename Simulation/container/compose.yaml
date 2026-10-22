@@ -101,20 +101,6 @@ services:
       start_period: 15s
     restart: "no"
 
-  autonomy:
-    profiles: ["ros"]
-    extends:
-      file: ../../deployment/compose.base.yaml
-      service: autonomy
-    environment:
-      ADAPTER_ENVIRONMENT: simulation
-      MARITIME_PREIMPLEMENTATION_PLACEHOLDER: "1"
-      RUN_ID: ${RUN_ID:-standalone}
-      RUN_CONFIG_SHA256: ${RUN_CONFIG_SHA256:-unknown}
-    depends_on:
-      adapter:
-        condition: service_healthy
-
   evaluation:
     profiles: ["evaluation"]
     image: ${EVALUATION_IMAGE:-maritime-sim-evaluation:jazzy}

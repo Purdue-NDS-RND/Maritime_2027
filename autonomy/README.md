@@ -1,5 +1,11 @@
 # Onboard Autonomy
 
+For this branch's architecture diagrams, node-by-node responsibilities and
+speed-development limits, start with the
+[experimental navigation system overview](../docs/NAVIGATION_SYSTEM_OVERVIEW.md).
+See [experiment commands and results](experiments/README.md) for the opt-in
+controller profile and recorded trials.
+
 Persistent RGB-only mapping is available through `pipeline.launch.py method:=bearing_ekf`.
 See [RGB mapping operation and design](../Simulation/docs/RGB_BUOY_MAPPING.md).
 It uses acquisition-time vessel poses, robust bearing initialization, and per-buoy EKFs.
@@ -15,12 +21,25 @@ headless operation and validation.
 This image contains no MAVROS runtime, GeographicLib datasets, FCU transport,
 Gazebo bridge, camera driver, scenario manifest, or simulation evaluator.
 
-The default service still runs only the named `maritime_bringup`
-simulation bootstrap placeholder. It starts only with both
-`ADAPTER_ENVIRONMENT=simulation` and
-`MARITIME_PREIMPLEMENTATION_PLACEHOLDER=1`; otherwise it fails closed. Its
-diagnostic is intentionally warning-level, publishes no vehicle commands, and
-reports mission readiness false.
+Start navigation here, after starting Simulation and its Adapter:
+
+```bash
+make navigation-build
+make run ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
+# For the standalone gate scenario:
+make run TASK=gate ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
+```
+
+These examples declare the initial bootstrap rectangle clear and permit planning
+through unknown water inside the operating bounds. Use the matching `slalom` or
+`gate` Simulation scenario; see the navigation guide before changing those bounds.
+
+`make run` (also named `make navigation`) launches the dual RGB navigator and
+its explicit simulation command session. Ctrl-C stops navigation and invokes
+HOLD/disarm; Simulation stays up. See [gate and slalom navigation](../docs/GATE_SLALOM_NAVIGATION.md).
+Simulation never starts this application or the legacy bootstrap automatically.
+The legacy `maritime_bringup` bootstrap remains available only for explicit
+preimplementation diagnostics and requires its simulation opt-in flags.
 
 `maritime_perception` adds an explicitly launched RGB-to-ArUco-box detector.
 `maritime_localization` supplies Bearing EKF Buoy Mapping: robust multi-view
@@ -33,15 +52,7 @@ added to the default simulation startup. See the
 [benchmark development guide](../Simulation/docs/BUOY_BENCHMARKS.md) for build,
 ROS replay benchmarks, live-topic launching, and optional offline inspection.
 
-Run the default bootstrap only through the Simulation profile:
-
-```bash
-cd ../Simulation
-SCENARIO=gate make run
-```
-
 The Simulation Adapter owns `/mavros/...`, MAVLink v2, source system 255,
-target 1/1, and UDP 14552. There is no standalone autonomy Compose profile and
-no supported hardware startup. A real environment-neutral autonomy application
-must replace the placeholder before integrated autonomy or vessel-readiness
-claims. Explicit detector tests do not establish mission readiness.
+target 1/1, and UDP 14552. The navigation ROS package has no vehicle transport
+or simulator dependency; the host launcher explicitly pairs it with the
+simulation-only command bridge. Hardware startup is not supported by this runner.

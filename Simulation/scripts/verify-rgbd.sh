@@ -16,6 +16,9 @@ stop_run() {
     fi
     runner_pid=
     ./scripts/run.sh --down >/dev/null 2>&1 || true
+    # A just-exiting launcher child can briefly retain the inherited lock FD.
+    # Wait for release before the next scenario instead of racing its startup.
+    flock -w 30 logs/.launcher.lock true
 }
 trap stop_run EXIT
 trap 'exit 130' INT
@@ -26,8 +29,7 @@ wait_for_health() {
     while ((SECONDS < deadline)); do
         sim_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' ardupilot-blueboat-sim 2>/dev/null || true)
         adapter_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' maritime-sim-adapter 2>/dev/null || true)
-        autonomy_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' maritime-autonomy 2>/dev/null || true)
-        [[ $sim_health == healthy && $adapter_health == healthy && $autonomy_health == healthy ]] && return 0
+        [[ $sim_health == healthy && $adapter_health == healthy ]] && return 0
         kill -0 "$runner_pid" 2>/dev/null || break
         sleep 2
     done

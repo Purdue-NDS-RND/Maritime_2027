@@ -4,6 +4,7 @@
     reference_frame: map
     body_frame: base_link
     max_pose_gap_s: 0.3
+    min_pose_motion_interval_s: 0.02
     pose_wait_s: 0.5
     max_pending_frames: 60
     costmap_extent_m: 100.0

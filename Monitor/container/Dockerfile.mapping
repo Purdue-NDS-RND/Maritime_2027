@@ -1,6 +1,7 @@
 # Optional simulation monitoring tools; truth and GUI dependencies stay out of
 # the production autonomy image. Build via make -C autonomy mapping-build.
-FROM maritime-autonomy:jazzy
+ARG AUTONOMY_IMAGE=maritime-autonomy:jazzy
+FROM ${AUTONOMY_IMAGE}
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3-matplotlib python3-tk xvfb xauth \
     && rm -rf /var/lib/apt/lists/*

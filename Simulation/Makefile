@@ -79,8 +79,18 @@ dual-camera-smoke:
 mavros-smoke:
 	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -e SIMULATION_EVALUATION=1 evaluation ros2 run blueboat_sim_evaluation mavros_smoke
 
+.PHONY: navigation-command-smoke
+navigation-command-smoke:
+	@mkdir -p logs/nav2-validation
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T \
+		-e SIMULATION_NAVIGATION=1 \
+		-v "$(abspath scripts):/navigation-scripts:ro" \
+		-v "$(abspath tests/evaluation/navigation_command_smoke.py):/command-smoke.py:ro" \
+		-v "$(abspath logs/nav2-validation):/results" \
+		evaluation python3 /command-smoke.py
+
 boundary-smoke:
-	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -v "$(abspath ../tests):/boundary-tests:ro" -e SIMULATION_EVALUATION=1 evaluation python3 /boundary-tests/ros_boundary_smoke.py
+	docker compose -f container/compose.yaml --profile ros --profile evaluation run --rm --no-deps -T -v "$(abspath ../tests):/boundary-tests:ro" -e SIMULATION_EVALUATION=1 evaluation python3 /boundary-tests/ros_boundary_smoke.py $(ARGS)
 
 verify-rgbd:
 	./scripts/verify-rgbd.sh
@@ -92,7 +102,7 @@ buoy-tracking-smoke:
 		-lc 'cmake -S /test -B /tmp/buoy-test && cmake --build /tmp/buoy-test -j2 && /tmp/buoy-test/buoy_tracking_test /tmp/tracking.sdf'
 
 lifecycle-smoke:
-	python3 tests/lifecycle_acceptance.py
+	python3 tests/lifecycle_acceptance.py $(ARGS)
 
 down:
 	./scripts/run.sh --down

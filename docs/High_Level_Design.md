@@ -144,10 +144,12 @@ Planning/navigation determines how the vessel moves to accomplish that
 objective. Keeping these responsibilities separate allows mission behavior and
 navigation methods to evolve independently.
 
-The planning framework remains open. Nav2 is a candidate, not an architectural
-requirement. The movement interface through MAVROS will be selected to suit the
-chosen approach; this document does not choose position targets, velocity
-commands, or another command form.
+The current implementation uses Nav2 for costmaps, path planning and path
+following. Mission management consumes the shared buoy map and constrains the
+required gate and slalom crossings. A separately gated vehicle bridge forwards
+body-frame speed and yaw rate to ArduPilot. See
+[map-based navigation](GATE_SLALOM_NAVIGATION.md) for interfaces, operating
+assumptions and validation limits.
 
 ## Overall Information Flow
 

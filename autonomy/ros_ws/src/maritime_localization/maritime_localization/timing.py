@@ -1,6 +1,7 @@
 """Bounded acquisition-time pose lookup. Never infer clock offsets from arrivals."""
 
 from dataclasses import dataclass
+from collections import deque
 
 import numpy as np
 from scipy.spatial.transform import Rotation, Slerp
@@ -15,20 +16,33 @@ class TimedPose:
 
 class PoseBuffer:
     def __init__(self, max_gap_s=.3, history_s=10., max_samples=1000,
-                 max_speed_mps=15., max_turn_rad_s=4.):
+                 max_speed_mps=15., max_turn_rad_s=4., min_motion_interval_s=.02):
+        if not np.isfinite([max_gap_s, history_s, max_speed_mps, max_turn_rad_s,
+                            min_motion_interval_s]).all() or not (
+                0 < min_motion_interval_s <= max_gap_s and history_s > 0
+                and max_samples >= 2 and max_speed_mps > 0 and max_turn_rad_s > 0):
+            raise ValueError('Invalid pose buffer limits')
         self.max_gap_ns = int(max_gap_s * 1e9)
         self.history_ns = int(history_s * 1e9)
         self.max_samples = max_samples
         self.max_speed = max_speed_mps
         self.max_turn = max_turn_rad_s
+        self.min_motion_ns = round(min_motion_interval_s * 1e9)
+        self.last_received = None
+        self.trace = deque(maxlen=100)
+        self.withheld = 0
         self.samples = []
         self.fault = None
 
     def add(self, sample):
         if self.fault:
             return
-        if self.samples:
-            previous = self.samples[-1]
+        self.trace.append(dict(stamp_ns=sample.stamp_ns,
+                               transform=sample.transform.tolist(),
+                               covariance=sample.covariance.tolist()))
+        # Ordering applies to ALL inputs, including poses withheld from lookup.
+        if self.last_received is not None:
+            previous = self.last_received
             dt = (sample.stamp_ns - previous.stamp_ns) / 1e9
             distance = np.linalg.norm(sample.transform[:3, 3] - previous.transform[:3, 3])
             turn = Rotation.from_matrix(previous.transform[:3, :3].T @ sample.transform[:3, :3]).magnitude()
@@ -37,8 +51,24 @@ class PoseBuffer:
                 return
             if dt == 0:
                 return
-            if distance > self.max_speed * dt or turn > self.max_turn * dt:
-                self.fault = 'Pose discontinuity/origin reset; restart mapping session'
+        self.last_received = sample
+        if self.samples:
+            previous = self.samples[-1]
+            interval_ns = sample.stamp_ns - previous.stamp_ns
+            dt = interval_ns / 1e9
+            distance = np.linalg.norm(sample.transform[:3, 3] - previous.transform[:3, 3])
+            turn = Rotation.from_matrix(previous.transform[:3, :3].T @ sample.transform[:3, :3]).magnitude()
+            # Do not divide tiny intervals into a noisy instantaneous rate.
+            # The minimum-window envelope STILL rejects large jumps immediately.
+            # Short-interval poses never enter interpolation or refresh its tail.
+            window = max(interval_ns, self.min_motion_ns) / 1e9
+            if distance > self.max_speed * window or turn > self.max_turn * window:
+                self.fault = ('Pose discontinuity/origin reset; restart mapping session '
+                              f'(dt={dt:.6f}s, window={window:.6f}s, '
+                              f'distance={distance:.6f}m, turn={turn:.6f}rad)')
+                return
+            if interval_ns < self.min_motion_ns:
+                self.withheld += 1
                 return
         self.samples.append(sample)
         cutoff = sample.stamp_ns - self.history_ns

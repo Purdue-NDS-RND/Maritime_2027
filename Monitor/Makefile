@@ -4,7 +4,7 @@ export ROS_DOMAIN_ID ?= 0
 export USE_SIM_TIME ?= false
 ARGS ?=
 
-.PHONY: help build shell topics nodes rviz rviz-sim graph config validate smoke
+.PHONY: help build shell topics nodes rviz rviz-sim rviz-nav graph config validate smoke
 
 help:
 	@printf '%s\n' \
@@ -15,6 +15,7 @@ help:
 	  '  make nodes       List ROS nodes' \
 	  '  make rviz        Open the testing preset using wall time by default' \
 	  '  make rviz-sim    Open the world, boat, buoys and camera simulation view' \
+	  '  make rviz-nav    Open Nav2 costs, planned route and hull in map coordinates' \
 	  '  make graph       Open rqt_graph' \
 	  '  make config      Print resolved container configuration' \
 	  '  make validate    Check launcher syntax and Compose configuration' \
@@ -46,6 +47,9 @@ rviz-sim:
 
 graph:
 	@./scripts/monitor gui rqt_graph $(ARGS)
+
+rviz-nav:
+	@USE_SIM_TIME=false ./scripts/monitor rviz-nav $(ARGS)
 
 config:
 	@./scripts/monitor config $(ARGS)
