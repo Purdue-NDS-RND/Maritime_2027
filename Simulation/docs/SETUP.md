@@ -96,3 +96,9 @@ setting is no longer used.
 The build needs internet access and several additional gigabytes of Docker
 storage. Verify available storage with `docker system df` and `df -h` before a
 clean rebuild. Do not remove unrelated Docker data to make room.
+
+During the 2026-10-22 acceptance run, apt no longer provided the Adapter's exact
+pinned MAVROS packages. Retained images with those verified versions still run;
+a clean Adapter build needs a verified package archive/mirror or a separately
+reviewed dependency update. See the
+[build limitation and validation record](../../autonomy/experiments/README.md#existing-clean-adapter-build-limitation).

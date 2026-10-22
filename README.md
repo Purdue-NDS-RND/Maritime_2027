@@ -31,6 +31,7 @@ make run
 make smoke
 ```
 
+Build navigation after pulling changes with `make -C autonomy navigation-build`.
 For dual-camera navigation, start the two components in separate terminals:
 
 ```bash

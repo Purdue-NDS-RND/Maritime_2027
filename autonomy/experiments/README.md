@@ -1,9 +1,92 @@
 # Navigation experiments
 
 This records navigation development on `experiment/nav2-course-tuning` and
-optional controller tuning. The map-backed navigation baseline, reduced rates,
-and pose timing hardening are prepared for `main`; the moderate-speed profile
+optional controller tuning. The shared baseline includes map-backed navigation,
+reduced rates, and pose timing hardening; the moderate-speed profile
 remains opt-in. Historical trial results below retain their original limitations.
+
+## Main baseline integration checks (2026-10-22)
+
+The broader integration run passed `make -C Simulation verify-rgbd` across
+`one`, `gate`, seeded `multi`, `repeated_red`, `slalom`, and the original
+camera-only ArduPilot smoke test. It also passed all 12 `lifecycle-smoke` cases:
+default Adapter startup, two bounded startup failures, simulator/child/Adapter
+exits, camera and FCU silence, SIGINT, SIGTERM, double-start rejection, and
+parameter persistence/reset. Original SITL EEPROM bytes are preserved and
+restored after the owned test stack stops.
+
+Additional checks passed: 48 ROS evaluation tests; 14 repository boundary tests
+(one ROS-only host skip covered by the 9-test ROS boundary run); 58 simulator
+unit tests (six MCAP host skips covered by the 12-test recording run); Monitor
+validation and cross-container smoke; and 14 live-mapping tests on the rebuilt
+viewer image. After the terminal-gate correction below, a fresh navigation image
+built through the supported Dockerfile passed 43 autonomy tests, 5 bridge tests,
+and all 3 real Nav2 scenarios, including the full-stern gate assertion. Its
+installed mapper/navigation sources were compared byte for byte with checkout.
+
+Evidence is under `Simulation/logs/merge-*.log`,
+`Simulation/logs/lifecycle-20261022T030905Z/`, and
+`Simulation/logs/merge-validation/`. GitHub reported no commit status entries or
+PR-triggered workflow runs; these are local/simulation checks, not CI results.
+
+The repeat run `navigation-20261021-232941` captured three actual adjacent-pose
+rate anomalies. Examples include 17.8 mm over 0.926 ms and 22.3 mm over 0.707 ms
+in converted time. Their original odometry headers were also less than 1 ms
+apart; another event's 1.004 ms source interval became 0.244 ms after conversion.
+Thus these events already contain upstream timing/pose inconsistency, and the
+converter can amplify it. The exact upstream cause and the historical
+rotation-specific incident are not proven. Offline replay confirms each captured
+pair would trip the old adjacent-rate rule, while all three captured histories
+pass the hardened checker with short-interval poses withheld. Evidence:
+`merge-validation/live-anomaly-replay.json` and the session's `clock.log`.
+
+### Terminal gate completion correction
+
+The repeat completed all six mission events and all independent buoy-crossing
+checks in 642.5 s, with minimum hull clearance 0.555 m, a healthy mapper, and
+verified HOLD/disarm. **It failed full-course acceptance:** the stern was still
+0.155 m short of the physical exit plane. This is not counted as another full
+slalom pass. The prior constant 2.2 m departure target used the estimated gate
+center without carrying its range uncertainty into the completion rule.
+
+Terminal gates now retain each landmark's covariance and footprint. Their
+departure goal clears the farther endpoint's two-sigma bound, footprint, maximum
+projected rear extent of the 2.2 x 1.2 m hull, and configured clearance. Padding
+also covers mission arrival tolerance, target-update deadband, and a small
+reserve. Completion explicitly requires the resulting course-coordinate
+`gate_finish_s`. Intermediate entry gates keep their existing departure distance
+to avoid extending that leg through the next course turn. Physical obstacle
+costs and the independent evaluator are unchanged.
+
+Regressions cover a 1 m underestimated range, skewed endpoints, covariance
+projection, and intermediate-entry behavior. The final correction passed the
+43-test autonomy suite and real Nav2 gate integration. **No full slalom was
+rerun after this final correction.** Broader seed, water, and hardware acceptance
+remain open; this merge establishes a development baseline.
+
+After the repeat session's verified HOLD/disarm, the Adapter later became
+unhealthy and the launcher removed the stack. The cause is unresolved; evidence
+is `merge-slalom-startup.log` and run `20261022T032843-235400/failure.log`.
+A subsequent stationary telemetry-service probe timed out before collecting its
+planned comparison; its direct Adapter health check passed. No telemetry cleanup
+behavior was changed on that evidence. The auxiliary retry was not run, the owned
+stack was stopped, and original SITL state was restored. Restart Simulation
+between trials; post-session Adapter readiness remains a follow-up limitation.
+
+### Existing clean Adapter build limitation
+
+The supported Adapter Dockerfile was unchanged from the prior `main`, but its
+clean build failed during this run because apt no longer serves pinned MAVROS
+`2.15.1-1noble.20260903.022619` and extras `2.15.1-1noble.20260903.025450`.
+Those versions were verified in the retained working image. The Adapter used
+for broad regressions has identical executable telemetry code (only a module
+docstring differs); a source-only rebuild on that retained image matches the
+checkout exactly and preserves installed packages. The simulator startup script
+also matches the checkout. No pinned versions were relaxed. A clean installation
+still needs a verified archive/mirror or a separately reviewed dependency update.
+The navigation and viewer images built successfully. Logs:
+`merge-adapter-build.log`, `merge-adapter-package-versions.log`,
+`merge-adapter-executable-match.log`, and `merge-adapter-source-build.log`.
 
 ## Start with the system overview
 
