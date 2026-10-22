@@ -20,7 +20,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from tf2_ros import TransformBroadcaster
 
 from maritime_localization.geometry import rigid_transform
-from maritime_navigation.costmap import InputProgress, SnapshotPair, active_bearings, planning_grid, resample_physical, swept_clear, validate_bounds
+from maritime_navigation.costmap import InputProgress, PlanningGridCache, SnapshotPair, active_bearings, planning_grid, resample_physical, swept_clear, validate_bounds
 from maritime_navigation.mission import Landmark, Mission, observation_goals, search_goal
 
 
@@ -42,6 +42,8 @@ class Navigator(Node):
         self.sigma = parameter('obstacle_sigma', 2.)
         self.clearance = parameter('obstacle_clearance_m', .15)
         self.planning_resolution = parameter('planning_resolution_m', .1)
+        self.planning_cache = PlanningGridCache(parameter('planning_grid_hz', 5.))
+        self.planning_build_ms = 0.
         self.uncertainty_mode = parameter('uncertainty_mode', 'graded')
         if (not math.isfinite(self.planning_resolution) or self.planning_resolution <= 0
                 or self.uncertainty_mode not in ('graded', 'hard')):
@@ -322,29 +324,53 @@ class Navigator(Node):
                 healthy = False
                 reason = 'waiting_for_unresolved_bearings'
             info = self.physical.info
-            try:
-                source, self.origin = resample_physical(
-                    np.asarray(self.physical.data).reshape(info.height, info.width),
+            constraints = self.constraints()
+            bearings = [b for _, b in self.bearings.values()]
+            # Include every raster/policy input, including same-stamp content
+            # changes. New timestamps alone must not force identical rebuilds.
+            key = (self.map.session_id, info.width, info.height, info.resolution,
+                   info.origin.position.x, info.origin.position.y, self.physical.data.tobytes(),
+                   tuple((t.world_id, t.x, t.y, tuple(t.covariance), t.footprint_radius_m, t.lifecycle)
+                         for t in self.map.tracks),
+                   tuple((b.origin_x, b.origin_y, b.world_bearing_rad, b.bearing_variance) for b in bearings),
+                   tuple(constraints), self.bounds, self.planning_resolution, self.sigma, self.clearance,
+                   self.assumed_water, self.uncertainty_mode,
+                   self.start_pose if self.bootstrap_enabled else None, self.stage == 'bootstrap')
+            previous_builds = self.planning_cache.builds
+            physical, tracks = self.physical, tuple(self.map.tracks)
+            clear_start = self.start_pose if self.bootstrap_enabled else None
+            bootstrap = self.stage == 'bootstrap'
+            def build():
+                started = time.monotonic()
+                source, origin = resample_physical(
+                    np.asarray(physical.data).reshape(info.height, info.width),
                     (info.origin.position.x, info.origin.position.y), info.resolution,
                     self.bounds, self.planning_resolution)
-                self.resolution = self.planning_resolution
-                self.grid = planning_grid(source, self.origin, self.resolution, self.bounds, self.map.tracks, self.sigma,
-                    self.clearance, self.assumed_water, self.constraints(),
-                    bearings=[b for _, b in self.bearings.values()],
-                    clear_start=self.start_pose if self.bootstrap_enabled else None,
-                    restrict_to_start=self.stage == 'bootstrap', uncertainty_mode=self.uncertainty_mode)
+                grid = planning_grid(source, origin, self.planning_resolution, self.bounds, tracks, self.sigma,
+                    self.clearance, self.assumed_water, constraints, bearings=bearings,
+                    clear_start=clear_start, restrict_to_start=bootstrap, uncertainty_mode=self.uncertainty_mode)
+                return grid, origin, (time.monotonic()-started)*1000
+            try:
+                cached = self.planning_cache.update(key, now, build)
             except ValueError as error:
                 self.fault = 'invalid_map: '+str(error)
                 healthy = False
                 reason = self.fault
             else:
-                output = copy.deepcopy(self.physical)
-                output.header.stamp = self.get_clock().now().to_msg()
-                output.info.resolution = self.resolution
-                output.info.height, output.info.width = self.grid.shape
-                output.info.origin.position.x, output.info.origin.position.y = self.origin
-                output.data = array('b', self.grid.tobytes())
-                self.planning.publish(output)
+                if cached is None:
+                    healthy = False
+                    reason = 'waiting_for_planning_grid'
+                else:
+                    self.grid, self.origin, self.planning_build_ms = cached
+                    self.resolution = self.planning_resolution
+                    if self.planning_cache.builds != previous_builds:
+                        output = copy.deepcopy(self.physical)
+                        output.header.stamp = self.get_clock().now().to_msg()
+                        output.info.resolution = self.resolution
+                        output.info.height, output.info.width = self.grid.shape
+                        output.info.origin.position.x, output.info.origin.position.y = self.origin
+                        output.data = array('b', self.grid.tobytes())
+                        self.planning.publish(output)
                 if healthy:
                     reason = 'following_path' if self.target else self.stage
         terminal = self.stage in ('complete', 'fault') or bool(self.fault or self.progress.fault)
@@ -404,6 +430,8 @@ class Navigator(Node):
             assumed_bounded_water=self.assumed_water, uncertainty_mode=self.uncertainty_mode,
             pose_age_s=now-self.pose_arrival if math.isfinite(self.pose_arrival) else None,
             map_progress_age_s=now-self.progress.progress if math.isfinite(self.progress.progress) else None,
+            planning_grid_builds=self.planning_cache.builds, planning_grid_build_ms=self.planning_build_ms,
+            tick_ms=(time.monotonic()-now)*1000,
             elapsed=now-self.started))))
 
 
@@ -421,5 +449,6 @@ def main(args=None):
                 message = TwistStamped()
                 message.header.frame_id = 'base_link'
                 node.command.publish(message)
+        node.planning_cache.close()
         node.destroy_node()
         rclpy.try_shutdown()

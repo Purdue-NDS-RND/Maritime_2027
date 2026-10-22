@@ -1,12 +1,13 @@
 """Safety properties of planning on an incomplete RGB-derived map."""
 import math
+from concurrent.futures import Future
 from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'ros_ws/src/maritime_navigation'))
-from maritime_navigation.costmap import InputProgress, SnapshotPair, active_bearings, planning_grid, resample_physical, swept_clear
+from maritime_navigation.costmap import InputProgress, PlanningGridCache, SnapshotPair, active_bearings, planning_grid, resample_physical, swept_clear
 from maritime_navigation.mission import observation_goals
 
 
@@ -15,7 +16,105 @@ def track(x=5., y=0., variance=.04, lifecycle='confirmed'):
                            footprint_radius_m=.35, lifecycle=lifecycle)
 
 
+class ControlledExecutor:
+    """Complete builds explicitly to exercise a slow worker without sleeping."""
+    def __init__(self):
+        self.jobs = []
+
+    def submit(self, build):
+        future = Future()
+        self.jobs.append((future, build))
+        return future
+
+    def finish(self):
+        future, build = self.jobs.pop(0)
+        try:
+            future.set_result(build())
+        except Exception as error:
+            future.set_exception(error)
+
+
 class CostmapTests(unittest.TestCase):
+    def test_sparse_bearing_costs_match_direct_angular_policy(self):
+        origin, resolution, bounds = (-10., -10.), .25, [-8, -8, 18, 8]
+        source = np.zeros((80, 120), dtype=np.int8)
+        yy, xx = np.indices(source.shape)
+        xx, yy = origin[0]+(xx+.5)*resolution, origin[1]+(yy+.5)*resolution
+        for mode in ('graded', 'hard'):
+            for heading, variance in [(-3.13, .001), (3.13, .001), (.7, .1), (-2., .5), (1., 3.)]:
+                bearing = SimpleNamespace(origin_x=.125, origin_y=.125,
+                    world_bearing_rad=heading, bearing_variance=variance)
+                expected = planning_grid(source, origin, resolution, bounds, [])
+                distance = np.hypot(xx-bearing.origin_x, yy-bearing.origin_y)
+                angle = np.arctan2(yy-bearing.origin_y, xx-bearing.origin_x)-heading
+                angle = np.arctan2(np.sin(angle), np.cos(angle))
+                width = max(math.radians(3), 3*math.sqrt(variance))
+                padding = np.arcsin(np.minimum(1., (.35+.15+resolution)/np.maximum(distance, .01)))
+                sector = np.abs(angle) <= width+padding
+                if mode == 'hard':
+                    expected[sector] = 100
+                else:
+                    soft = np.rint(85*np.clip(1-np.abs(angle)/(width+padding), 0., 1.)).astype(np.int16)
+                    expected[sector] = np.maximum(expected[sector], soft[sector])
+                actual = planning_grid(source, origin, resolution, bounds, [], bearings=[bearing], uncertainty_mode=mode)
+                np.testing.assert_array_equal(actual, expected)
+
+    def test_cached_geometry_does_not_make_republished_evidence_fresh(self):
+        executor = ControlledExecutor()
+        cache, progress = PlanningGridCache(executor=executor), InputProgress()
+        grid = self.grid()
+        progress.update('one', 10, 0.)
+        self.assertIsNone(cache.update('unchanged-geometry', 0., lambda: grid))
+        executor.finish()
+        first = cache.update('unchanged-geometry', .01, lambda: grid)
+        progress.update('one', 10, 3.)
+        self.assertIs(cache.update('unchanged-geometry', 3., lambda: self.fail('Duplicate rebuild')), first)
+        self.assertFalse(progress.ready(3.))
+        progress.update('one', 11, 3.1)
+        self.assertTrue(progress.ready(3.1))
+        self.assertEqual(cache.builds, 1)
+
+    def test_new_obstacle_replaces_cached_grid_when_worker_finishes(self):
+        executor = ControlledExecutor()
+        cache = PlanningGridCache(executor=executor)
+        cache.update('clear', 0., self.grid)
+        executor.finish()
+        clear = cache.update('clear', .01, self.grid)
+        self.assertTrue(swept_clear(clear, (-10, -10), .25, 0., 0., 0., .4, 0.))
+        obstacle = lambda: self.grid([track(x=2.)])
+        self.assertIs(cache.update('new-obstacle', .1, obstacle), clear)
+        cache.update('new-obstacle', .2, obstacle)
+        executor.finish()
+        blocked = cache.update('new-obstacle', .3, obstacle)
+        self.assertFalse(swept_clear(blocked, (-10, -10), .25, 0., 0., 0., .4, 0.))
+        self.assertEqual(cache.builds, 2)
+
+    def test_rejected_grid_is_not_committed_to_cache(self):
+        executor = ControlledExecutor()
+        cache = PlanningGridCache(executor=executor)
+        cache.update('clear', 0., self.grid)
+        executor.finish()
+        cache.update('clear', .01, self.grid)
+        cache.update('invalid', .2, lambda: self.grid([track(variance=-1.)]))
+        executor.finish()
+        with self.assertRaises(ValueError):
+            cache.update('invalid', .3, self.grid)
+        self.assertEqual(cache.key, 'clear')
+        self.assertEqual(cache.builds, 1)
+
+    def test_slow_worker_is_bounded_and_cannot_authorize_stale_geometry(self):
+        executor = ControlledExecutor()
+        cache = PlanningGridCache(executor=executor)
+        cache.update('clear', 0., self.grid)
+        executor.finish()
+        cache.update('clear', .01, self.grid)
+        cache.update('obstacle', .2, lambda: self.grid([track(x=2.)]))
+        self.assertIsNone(cache.update('newer-obstacle', .51, self.grid))
+        self.assertEqual(len(executor.jobs), 1, 'Do not queue obsolete geometry')
+        executor.finish()
+        self.assertIsNone(cache.update('newer-obstacle', .8, self.grid))
+        self.assertEqual(len(executor.jobs), 1)
+
     def test_opposing_survey_viewpoints_fit_declared_start_with_turning_hull(self):
         start = (0., 0., .7)
         grid = planning_grid(np.full((200, 300), -1), (-10., -10.), .1, [-8, -8, 18, 8], [],

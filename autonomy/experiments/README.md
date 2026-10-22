@@ -3,6 +3,21 @@
 These experiments live on `experiment/nav2-course-tuning`. Performance fixes
 are integrated separately into `main`; navigation is not merged there.
 
+## Start with the system overview
+
+Read the [experimental navigation overview](../../docs/NAVIGATION_SYSTEM_OVERVIEW.md)
+for architecture diagrams, every navigation node's responsibilities, the RGB
+mapping and Nav2 flow, map representations, stop/fault behavior, and monitoring
+commands. It distinguishes ROS nodes from the mission/costmap modules inside
+the supervisor.
+
+The boat's reported real-world 1 m/s capability is a future test target.
+The current supervisor **and** command bridge reject forward commands above
+0.50 m/s; the default is still 0.20 m/s. The overview includes the
+[changes and measurements needed for faster trials](../../docs/NAVIGATION_SYSTEM_OVERVIEW.md#speed-development-toward-1-ms).
+
+## Run a controller comparison
+
 The first comparison changes only Regulated Pure Pursuit's desired speed from
 0.20 to 0.35 m/s. The standard Nav2 YAML remains the default. The experimental
 YAML does not alter the hull, physical obstacle clearance, graded uncertainty,
@@ -34,6 +49,142 @@ NAVIGATION_IMAGE=maritime-autonomy-nav2-experiment:jazzy \
 
 Compare independent course completion and hull clearance before elapsed time.
 Passing a gate does not establish slalom performance or repeatability.
+
+## Reduced map rates (2026-10-21)
+
+The navigation runner now requests 5 Hz shared-map/physical-grid snapshots.
+The standalone mapper's default remains 10 Hz. The supervisor builds/publishes
+planning grids at up to 5 Hz and caches unchanged geometry; header timestamp
+changes alone do not trigger a rebuild. Cell content, mapped geometry/covariance,
+bearings and mission policy changes are included in the cache key.
+
+Global/local Nav2 costmaps update at 2/10 Hz and publish at 1 Hz each. The
+controller and supervisor remain 10 Hz, the command bridge remains 20 Hz, and
+camera capture, desired speed and freshness thresholds are unchanged.
+
+One background worker builds immutable input snapshots at up to 5 Hz, coalescing
+new requests while busy. The command loop uses its last completed grid. If
+geometry has changed and that grid's source is over 0.5 s old, commands stop
+with `waiting_for_planning_grid` until a usable result arrives. Sensor progress checks,
+permanent-pause/session-reset faults and per-command hull sweeps remain active.
+Old map publications cannot refresh acquisition evidence.
+
+`/navigation/status` adds `planning_grid_builds`, `planning_grid_build_ms` and
+`tick_ms`. A read-only acceptance probe checks live ROS parameters, topic rates,
+build rate and callback timings:
+
+```bash
+# From the repository root, after building this branch's navigation image:
+docker run --rm --network host -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
+  -v "$PWD/Simulation/tests/evaluation/navigation_rate_probe.py:/probe.py:ro" \
+  -v "$PWD/Simulation/logs:/results" \
+  "${NAVIGATION_IMAGE:-maritime-autonomy-nav2-experiment:jazzy}" \
+  bash -lc 'source /etc/maritime_autonomy_setup.bash && python3 /probe.py \
+    --duration 60 --output /results/navigation-rates.json'
+```
+
+This probe requires this branch's interfaces, a running navigation session and
+the same ROS domain. Host simulation timing is not a Jetson benchmark.
+
+### Final sparse-sector validation and remaining blocker
+
+Static validation, **39 autonomy unit tests**, **5 bridge tests**, and all three
+real Nav2 integration scenarios passed with the final optimized image. Detour
+and narrow-gate minimum hull clearances were 1.140 m and 0.451 m. Stale-map
+stopping/recovery, blocking walls, session resets and permanent mapper-pause
+handling remain covered. The stalled-worker test verifies bounded outstanding
+work and the 0.5 s cached-source stop.
+
+The final live slalom's first 60 s rate probe passed every check: 5 Hz map
+snapshots, 10 Hz commands, 0.110 s maximum command gap, 3.83 grid builds/s,
+11.4 ms supervisor tick p99, and no worker-backlog stops in that window.
+Active global/local costmap update settings were 2/10 Hz, publication 1/1 Hz.
+Evidence: `Simulation/logs/nav-rate-validation/final-slalom-rates.json`.
+
+**Full-course acceptance did not pass.** Session `navigation-20261021-205903`
+cleared the entry gate and first turn, then at 147.3 s hit the existing mapper
+pose-discontinuity fault: `dt=0.000446s`, zero translation, `turn=0.001834rad`.
+The supervisor latched the fault, commands stopped, and HOLD/disarm was verified.
+The evaluator reported no clearance violation. Its underlying pose/timestamp
+cause remains unresolved; no fault threshold was weakened. Results must not be
+reported as a successful full slalom or as Jetson acceptance.
+
+The default-speed live gate result below validates the same background-worker
+architecture before the geometry-equivalent sparse-sector optimization. A
+successful full course on the final implementation remains required before
+promoting these navigation changes as a validated course baseline.
+
+### Background-worker validation before sparse sector optimization
+
+- Static Simulation validation, 38 autonomy unit tests and 5 command-bridge
+  tests passed.
+- Real Nav2 detour and 3 m gate fixtures passed with minimum hull clearance
+  1.202 m and 0.452 m. Tests cover stale snapshots, new blocking walls, recovery,
+  map-session reset, and permanent mapper pause without later resumption.
+  The blocked-route fixture observes the injected wall in the planning grid
+  and requires a sustained stop within its original 8 s reaction budget.
+- Live default-speed gate passed in 96.6 s, minimum conservative clearance
+  0.227 m, whole-stern exit 0.698 m, both cameras contributed, HOLD/disarm verified.
+  Session `navigation-20261021-204623`.
+- The 60 s gate probe passed: occupancy 5.00 Hz, gated commands 10.00 Hz,
+  maximum command gap 0.109 s, supervisor tick p99 12.7 ms. The initial full-slalom
+  probe also passed: commands 10.00 Hz, maximum gap 0.118 s, tick p99 14.1 ms,
+  grid builds 3.86/s. Evidence: `worker-gate-rates.json` and
+  `worker-slalom-rates.json` in `Simulation/logs/nav-rate-validation/`.
+
+These measurements are from the simulation PC, with RViz/recording closed.
+They do not establish Jetson deadlines or repeatability across seeds/water.
+
+The heavier turn-2/turn-3 probe kept 10.00 Hz commands with a 0.116 s maximum
+gap and 14.8 ms tick p99, but worker builds reached 296 ms and triggered backlog
+stops. A 30 s performance window measured 0.748 RTF, below its 0.8 target.
+Session `navigation-20261021-204940` then reached the exit gate but latched the
+known mapper pose-discontinuity fault (`dt=0.000680s`, translation `0.020760m`)
+at 432.6 s and verified HOLD/disarm. It did not pass the full course; no clearance
+violation was reported. Fault thresholds were unchanged.
+
+This led to sparse unresolved-bearing evaluation: conservative ray-cone bounds
+select candidate cells before applying the original angular cost formula. The
+39-unit-test suite includes exact grid comparisons across heading wrap, narrow
+and wide uncertainty, and graded/hard modes. A host benchmark on the default
+planning extent with eight metric obstacles produced identical grids while
+reducing median build time from 59/119/305 ms to 24/40/89 ms for 4/12/32 bearings.
+Evidence: `Simulation/logs/nav-rate-validation/grid-benchmark.json`. This is a
+focused numerical benchmark, not an end-to-end or Jetson speedup claim.
+
+### Earlier synchronous candidate (superseded)
+
+- `make -C Simulation validate`: passed.
+- 37 autonomy unit tests and 5 simulation command-bridge tests: passed.
+- Real Nav2 detour and 3 m gate fixtures: passed with 5 Hz source snapshots;
+  minimum hull clearance 1.163 m and 0.452 m respectively. Duplicate/stale-map
+  stopping and recovery, new blocking obstacles, session-reset faults, cached
+  geometry reuse, and permanent mapper-pause/no-resume behavior passed.
+- Live default-speed dual-camera gate: passed in 104.4 s, minimum conservative
+  clearance 0.198 m, whole-stern exit 0.681 m, both cameras contributed, and
+  HOLD/disarm verified. Session `navigation-20261021-184730`.
+- A 60 s live rate probe measured 5.00 Hz map snapshots, 10.00 Hz gated commands,
+  and 3.82 planning-grid builds/s under the 5 Hz cap. Active parameters matched
+  global/local update rates 2/10 Hz and publication rates 1/1 Hz. Supervisor tick
+  p95/p99 were 44.3/60.9 ms on the simulation PC; maximum command gap was 0.195 s.
+  Evidence: `Simulation/logs/nav-rate-validation/gate-rates.json`.
+- A 30 s simulation performance window passed its 0.8 minimum real-time factor
+  requirement at 0.813, with no clock rewind. This is not a controlled CPU
+  speedup comparison. Evidence: `Simulation/logs/nav-rate-performance.log`.
+
+The first scheduler candidate stopped movement whenever changed geometry was
+waiting for its build slot. A live probe exposed excessive stop/start commands;
+that candidate was interrupted through verified HOLD/disarm and replaced by
+the bounded cached-grid refresh described above. Its evidence is retained in
+`Simulation/logs/nav-rate-validation/first-scheduler/` and session
+`navigation-20261021-184307`; it is not a completed acceptance run.
+
+The next synchronous candidate passed the gate above but full-slalom profiling
+found 150-220 ms grid builds blocking the supervisor and a 317 ms command gap.
+Session `navigation-20261021-185107` was stopped through verified HOLD/disarm.
+That result led to the background worker and 0.5 s backlog stop described above;
+the synchronous timing results are not acceptance evidence for the final worker.
+Saved probe evidence is `Simulation/logs/nav-rate-validation/synchronous-scheduler/`.
 
 ## First live trials, 2026-10-18
 

@@ -75,8 +75,8 @@ global_costmap:
     ros__parameters:
       global_frame: map
       robot_base_frame: base_link
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 2.0
+      publish_frequency: 1.0
       resolution: 0.1
       track_unknown_space: true
       transform_tolerance: 1.0
@@ -104,7 +104,7 @@ local_costmap:
       height: 16
       resolution: 0.1
       update_frequency: 10.0
-      publish_frequency: 2.0
+      publish_frequency: 1.0
       track_unknown_space: true
       transform_tolerance: 1.0
       footprint: '[[1.1, 0.6], [1.1, -0.6], [-1.1, -0.6], [-1.1, 0.6]]'

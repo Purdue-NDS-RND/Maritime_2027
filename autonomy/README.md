@@ -1,5 +1,11 @@
 # Onboard Autonomy
 
+For this branch's architecture diagrams, node-by-node responsibilities and
+speed-development limits, start with the
+[experimental navigation system overview](../docs/NAVIGATION_SYSTEM_OVERVIEW.md).
+See [experiment commands and results](experiments/README.md) for the opt-in
+controller profile and recorded trials.
+
 Persistent RGB-only mapping is available through `pipeline.launch.py method:=bearing_ekf`.
 See [RGB mapping operation and design](../Simulation/docs/RGB_BUOY_MAPPING.md).
 It uses acquisition-time vessel poses, robust bearing initialization, and per-buoy EKFs.
@@ -19,10 +25,14 @@ Start navigation here, after starting Simulation and its Adapter:
 
 ```bash
 make navigation-build
-make run ARGS=--evaluate
+make run ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
 # For the standalone gate scenario:
-make run TASK=gate ARGS=--evaluate
+make run TASK=gate ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
 ```
+
+These examples declare the initial bootstrap rectangle clear and permit planning
+through unknown water inside the operating bounds. Use the matching `slalom` or
+`gate` Simulation scenario; see the navigation guide before changing those bounds.
 
 `make run` (also named `make navigation`) launches the dual RGB navigator and
 its explicit simulation command session. Ctrl-C stops navigation and invokes

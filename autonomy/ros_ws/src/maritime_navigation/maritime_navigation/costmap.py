@@ -1,6 +1,46 @@
 """Planning policy over the physical RGB map. No ROS or simulator dependencies."""
 import math
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
+
+
+class PlanningGridCache:
+    """Bound grid builds while keeping the command loop independent.
+
+    One worker builds immutable snapshots; newer pending requests are coalesced.
+    Changed geometry may use the last completed grid for at most max_age seconds
+    from its source snapshot. Returning None requires callers to stop commands.
+    Sensor acquisition freshness remains the separate InputProgress contract.
+    """
+    def __init__(self, frequency=5., executor=None, max_age=.5):
+        if not math.isfinite(frequency) or not 0 < frequency <= 10:
+            raise ValueError('Planning grid frequency must be in (0, 10] Hz')
+        self.period = 1./frequency
+        self.executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix='planning_grid')
+        self.max_age = max_age
+        self.key = self.value = None
+        self.built_at = -math.inf
+        self.submitted_at = -math.inf
+        self.future = None
+        self.pending_key = None
+        self.builds = 0
+
+    def update(self, key, now, build):
+        if self.future is not None and self.future.done():
+            future, self.future = self.future, None
+            # Commit only a successful build; never cache rejected geometry.
+            value = future.result()
+            self.key, self.value, self.built_at = self.pending_key, value, self.submitted_at
+            self.builds += 1
+        if self.future is None and (self.value is None or key != self.key) and now-self.submitted_at >= self.period-1e-9:
+            self.pending_key, self.submitted_at = key, now
+            self.future = self.executor.submit(build)
+        if key != self.key and now-self.built_at > self.max_age:
+            return None
+        return self.value
+
+    def close(self):
+        self.executor.shutdown(wait=True, cancel_futures=True)
 
 
 class InputProgress:
@@ -133,18 +173,31 @@ def planning_grid(physical, origin, resolution, bounds, tracks, sigma=2., cleara
                                       bearing.world_bearing_rad, bearing.bearing_variance))) or bearing.bearing_variance < 0:
             raise ValueError('Invalid unresolved bearing')
         dx, dy = xx-bearing.origin_x, yy-bearing.origin_y
-        distance = np.hypot(dx, dy)
-        angle = np.arctan2(dy, dx)-bearing.world_bearing_rad
-        angle = np.arctan2(np.sin(angle), np.cos(angle))
         angular_width = max(math.radians(3), 3*math.sqrt(bearing.bearing_variance))
-        padding = np.arcsin(np.minimum(1., (.35+clearance+resolution)/np.maximum(distance, .01)))
-        sector = (np.abs(angle) <= angular_width+padding) & ~startup
+        radius = .35+clearance+resolution
+        if angular_width < math.pi/2:
+            # A ray cone padded by radius contains every possible sector cell.
+            # Cross/projection tests are cheap; evaluate the original angular
+            # policy only for candidates, rather than trig over the whole map.
+            cosine, sine = math.cos(bearing.world_bearing_rad), math.sin(bearing.world_bearing_rad)
+            along, across = dx*cosine+dy*sine, np.abs(dy*cosine-dx*sine)
+            cosine, sine = math.cos(angular_width), math.sin(angular_width)
+            candidate = ((across*cosine-along*sine <= radius+1e-9)
+                         & (along*cosine+across*sine >= -1e-9) & ~startup)
+        else:
+            candidate = ~startup
+        rows, cols = np.nonzero(candidate)
+        distance = np.hypot(dx[candidate], dy[candidate])
+        angle = np.arctan2(dy[candidate], dx[candidate])-bearing.world_bearing_rad
+        angle = np.arctan2(np.sin(angle), np.cos(angle))
+        padding = np.arcsin(np.minimum(1., radius/np.maximum(distance, .01)))
+        sector = np.abs(angle) <= angular_width+padding
         if uncertainty_mode == 'hard':
-            result[sector] = 100
+            result[rows[sector], cols[sector]] = 100
         else:
             soft = np.rint(85*np.clip(1-np.abs(angle)/(angular_width+padding), 0., 1.)).astype(np.int16)
-            known = sector & (result >= 0)
-            result[known] = np.maximum(result[known], soft[known])
+            known = sector & (result[rows, cols] >= 0)
+            result[rows[known], cols[known]] = np.maximum(result[rows[known], cols[known]], soft[known])
     if restrict_to_start:
         result[~startup] = 100
     for track in tracks:

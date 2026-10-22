@@ -149,7 +149,7 @@ def main():
                          ['-v', f'{ROOT}/Simulation/scripts/navigation_clock.py:/navigation_clock.py:ro',
                           '-v', f'{ROOT}/Monitor/tools:/clock-tools:ro']))
         mapper_config = output/'mapper.yaml'
-        mapper_config.write_text('/localization/buoy_mapper:\n  ros__parameters:\n    pose_wait_s: 2.0\n    costmap_resolution_m: 0.25\n')
+        mapper_config.write_text('/localization/buoy_mapper:\n  ros__parameters:\n    pose_wait_s: 2.0\n    costmap_resolution_m: 0.25\n    map_publish_hz: 5.0\n')
         mapping_launch = ['ros2', 'launch', 'maritime_localization', 'pipeline.launch.py',
             'use_sim_time:=true', 'pose_topic:=/navigation/mapping_odometry',
             'mapper_parameters:=/mapper.yaml', 'camera_layout:=single', f'camera:={cameras[0]}']

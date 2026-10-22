@@ -33,20 +33,24 @@ class Fixture(Node):
         self.create_subscription(TwistStamped, '/navigation/velocity', self.on_command, 10)
         self.create_subscription(String, '/navigation/status', self.on_status, 10)
         self.create_subscription(NavigationPath, '/plan', self.on_path, 10)
+        self.create_subscription(OccupancyGrid, '/navigation/planning_grid', self.on_planning_grid, durable)
         self.x = self.y = self.yaw = self.speed = self.rate = 0.
         self.status = {}
         self.last_command = 0.
+        self.last_motion = time.monotonic()
         self.positions = []
         self.paths = []
         self.commands = []
         self.pending_grids = []
         self.freeze = False
         self.blocked = False
+        self.wall_received = False
         self.paused = False
         self.session = 'integration-one'
         self.gate = os.environ.get('NAV2_TEST_SCENARIO') == 'gate'
         self.stamp = self.get_clock().now().to_msg()
         self.started = time.monotonic()
+        self.next_map_at = self.started
         self.create_timer(.1, self.tick)
         self.create_timer(.01, self.release_grid)
 
@@ -58,11 +62,20 @@ class Fixture(Node):
         assert message.header.frame_id == 'base_link'
         self.speed, self.rate = message.twist.linear.x, message.twist.angular.z
         self.last_command = time.monotonic()
+        if abs(self.speed) > 1e-6 or abs(self.rate) > 1e-6:
+            self.last_motion = self.last_command
         self.commands.append((len(self.positions), self.speed, self.rate))
 
     def on_path(self, message):
         self.paths.append((len(self.positions), [(p.pose.position.x, p.pose.position.y)
                                                for p in message.poses]))
+
+    def on_planning_grid(self, message):
+        info = message.info
+        col = math.floor((5.-info.origin.position.x)/info.resolution)
+        rows = [math.floor((y-info.origin.position.y)/info.resolution) for y in (-8., -4., 0., 4., 8.)]
+        self.wall_received = (0 <= col < info.width and all(0 <= row < info.height and
+            message.data[row*info.width+col] == 100 for row in rows))
 
     def on_status(self, message):
         self.status = json.loads(message.data)
@@ -85,6 +98,9 @@ class Fixture(Node):
         odom.pose.pose.orientation.z, odom.pose.pose.orientation.w = math.sin(self.yaw/2), math.cos(self.yaw/2)
         odom.twist.twist.linear.x, odom.twist.twist.angular.z = self.speed, self.rate
         self.odom.publish(odom)
+        if time.monotonic() < self.next_map_at:
+            return
+        self.next_map_at = time.monotonic()+.195
         if not self.freeze:
             self.stamp = odom.header.stamp
         mapped = BuoyMap(session_id=self.session, paused=self.paused,
@@ -162,12 +178,20 @@ def main():
                     json.dumps(dict(passed=True, final_status=node.status), indent=2)+'\n')
                 return
             node.freeze = True
+            cached_builds = node.status['planning_grid_builds']
             until(node, lambda: node.status.get('reason') == 'waiting_for_fresh_inputs' and node.speed == 0, 5)
+            # Allow an in-flight snapshot or unresolved-track retirement; old
+            # repeated acquisition stamps must not cause continuous rebuilds.
+            assert node.status['planning_grid_builds']-cached_builds <= 2, 'Duplicate snapshots repeatedly rebuilt geometry'
             print('PASS: duplicate map snapshots stop motion despite continued publication', flush=True)
             node.freeze = False
             until(node, lambda: node.x > 1., 20)
             node.blocked = True
-            until(node, lambda: node.speed == 0., 8)
+            # The wall is initially beyond the immediate hull-sweep horizon.
+            # Allow the existing 8 s reaction budget for Nav2 invalidation, and
+            # require a sustained stop rather than an unrelated transient zero.
+            until(node, lambda: node.wall_received and node.speed == 0. and node.rate == 0.
+                  and time.monotonic()-node.last_motion > .5, 8)
             before = node.x
             deadline = time.monotonic()+3
             until(node, lambda: time.monotonic() > deadline, 4)

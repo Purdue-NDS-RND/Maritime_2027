@@ -152,7 +152,7 @@ not supported.
 
 The map and physical grid are paired by acquisition stamp in a bounded buffer;
 separate topic arrival times do not invalidate the last complete snapshot.
-Repeated 10 Hz map publications do not count as new observations. The movement
+Repeated map publications (5 Hz in the navigation runner) do not count as new observations. The movement
 gate stops when map acquisition progress/receipt exceeds two seconds, odometry
 progress exceeds 0.5 seconds, the mapper pauses, or controller commands exceed
 0.3 seconds. Brief odometry gaps stop commands while retaining the Nav2 action;
@@ -220,6 +220,20 @@ Starting configuration: 0.2 m/s desired speed, 1.0 m minimum lattice curve radiu
 10 Hz controller/supervisor and 1 Hz path-validity checks. These are provisional simulation
 values, not measured hardware limits. Do not claim course acceptance from a
 healthy lifecycle node or an ideal kinematic integration test.
+
+Navigation requests 5 Hz map snapshots. One background worker rebuilds planning
+grids at up to 5 Hz and reuses unchanged geometry. New requests are coalesced;
+changed geometry stops commands if the cached result's source is over 0.5 s old.
+Grid construction does not block the 10 Hz command loop. Sensor freshness and
+terminal-fault checks remain separate and immediate.
+Global/local costmaps update at 2/10 Hz and publish for inspection at 1 Hz each.
+Controller, supervisor, bridge and freshness deadlines are unchanged. The status
+fields `planning_grid_builds`, `planning_grid_build_ms` and `tick_ms` expose
+build counts and host callback timings; these are not Jetson benchmark results.
+The latest rate/integration checks pass, but full-course acceptance remains
+blocked by the mapper pose-discontinuity fault observed in the latest live
+slalom. See the [experiment validation record](../autonomy/experiments/README.md#final-sparse-sector-validation-and-remaining-blocker)
+for exact measurements and failed-session evidence.
 
 Nav2 references: [Smac State Lattice](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/planners_plugins/smac/smac_lattice/configuring_smac_lattice/),
 [Regulated Pure Pursuit](https://docs.nav2.org/jazzy/configuration_and_development/configuration_guide/controller_plugins/configuring_regulated_pp/).
