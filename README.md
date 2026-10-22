@@ -35,7 +35,7 @@ For dual-camera navigation, start the two components in separate terminals:
 
 ```bash
 make -C Simulation run SCENARIO=slalom BOAT_MODEL=dual WATER=calm
-make -C autonomy run ARGS=--evaluate
+make -C autonomy run ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'
 ```
 
 See the [simulator README](Simulation/README.md) for setup, operation, testing,

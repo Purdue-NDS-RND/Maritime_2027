@@ -1,7 +1,9 @@
 # Navigation experiments
 
-These experiments live on `experiment/nav2-course-tuning`. Performance fixes
-are integrated separately into `main`; navigation is not merged there.
+This records navigation development on `experiment/nav2-course-tuning` and
+optional controller tuning. The map-backed navigation baseline, reduced rates,
+and pose timing hardening are prepared for `main`; the moderate-speed profile
+remains opt-in. Historical trial results below retain their original limitations.
 
 ## Start with the system overview
 

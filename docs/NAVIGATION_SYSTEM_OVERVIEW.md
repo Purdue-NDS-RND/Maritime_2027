@@ -1,7 +1,8 @@
-# Experimental navigation: system overview
+# Map-backed navigation: system overview
 
-This is a reading guide to `experiment/nav2-course-tuning`, reviewed against
-the branch source on 2026-10-21. Start here for architecture; use the
+This is a reading guide to the shared map-backed Nav2 baseline, developed on
+`experiment/nav2-course-tuning` and reviewed against source on 2026-10-21.
+Start here for architecture; use the
 [experiment README](../autonomy/experiments/README.md) for trial commands and
 results, and [navigation operation](GATE_SLALOM_NAVIGATION.md) for detailed
 startup and interface rules.

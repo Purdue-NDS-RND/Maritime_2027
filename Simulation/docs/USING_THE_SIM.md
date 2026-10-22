@@ -178,7 +178,9 @@ to become healthy, then use another terminal for `make sensor-smoke` or
 `make mavros-smoke`. `Ctrl+C` stops Gazebo, SITL, MAVROS, and the ROS bridges.
 The launcher waits for simulator health and semantic Adapter source readiness
 before reporting startup complete. Navigation starts separately with
-`make -C ../autonomy run ARGS=--evaluate`. Failed startup or a running service failure
+`make -C ../autonomy run ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'`.
+The water bounds and initial clear area must match the actual scenario.
+Failed startup or a running service failure
 stops the complete stack. `make down` also removes the recorded temporary
 display authorization file while retaining logs and SITL parameters. Run
 identity and resolved configuration are saved under `logs/runs/`; see the

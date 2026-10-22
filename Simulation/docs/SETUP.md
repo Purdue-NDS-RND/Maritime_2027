@@ -89,7 +89,9 @@ smoke tests. The autonomy image has none of those environment-facing runtime
 dependencies.
 Use `ADAPTER_IMAGE` to override the Adapter image. Build navigation separately
 with `make -C ../autonomy navigation-build`; start it with
-`make -C ../autonomy run ARGS=--evaluate`. The former combined `ROS_IMAGE`
+`make -C ../autonomy run ARGS='--assume-bounded-water --bootstrap-clear-start --evaluate'`.
+These flags explicitly declare bounded water and a clear initial observation area.
+The former combined `ROS_IMAGE`
 setting is no longer used.
 The build needs internet access and several additional gigabytes of Docker
 storage. Verify available storage with `docker system df` and `df -h` before a
