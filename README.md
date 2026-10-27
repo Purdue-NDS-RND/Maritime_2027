@@ -14,16 +14,18 @@ may later support football toss or colored buoy contact.
 | --- | --- |
 | [boat/](boat/README.md) | GPS route execution, task coordination, Pixhawk integration, status |
 | [drone/](drone/README.md) | Survey, object detection, geolocation |
-| [gcs/](gcs/README.md) | Map review, route generation, mission upload, monitoring |
+| [gcs/](gcs/README.md) | Web app for map review, route generation, mission upload, monitoring |
 | [shared/](shared/README.md) | Future common code/data definitions; no service |
 | [simulation/](simulation/README.md) | Retained Gazebo/SITL runtime, assets, tests |
-| [docs/](docs/README.md) | Direction, migration notes, setup and hardware knowledge |
+| [docs/](docs/README.md) | Working design, competition references and hardware knowledge |
 
 Boat, drone, and GCS are scaffolds only. No new mission implementation, message
-schemas, networking, or detailed high level design is included. Each vehicle
-has a Jetson for application processing and a Pixhawk for control. ROS 2 is used
+schemas or networking is implemented. The [working design](docs/design.md)
+records the ongoing design discussion. Each vehicle has a Jetson for application
+processing and a Pixhawk for control. ROS 2 is used
 within vehicle applications; the vehicle-to-GCS protocol is undecided.
 
-Start with [the migration plan](docs/migration_plan.md) and
-[setup instructions](docs/setup.md). The existing simulator can be run with
+Start with [the working design](docs/design.md) and
+[Milestone 1](docs/milestone1.md) for current development scope, then
+[simulator setup](simulation/docs/SETUP.md). The existing simulator can be run with
 `make -C simulation run`; it does not yet implement the new boat application.

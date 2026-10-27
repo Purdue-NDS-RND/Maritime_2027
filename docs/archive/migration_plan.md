@@ -1,4 +1,8 @@
-# Migration plan
+# Repository migration — historical record
+
+This records the completed cleanup on 2026-10-27. Design statements and open
+questions below reflect that time; use the [working design](../design.md) for
+current decisions.
 
 ## System direction
 

@@ -1,8 +1,10 @@
 # Hardware knowledge
 
 Both vehicles will have a Jetson for application processing and a Pixhawk for
-control. Exact models, firmware, GPS/corrections, physical transport and driver
-versions remain to be confirmed. Firmware and host drivers stay outside apps.
+control. The test boat runs ArduPilot and already supports GPS waypoint missions.
+Exact hardware models, firmware versions, drone firmware, GPS/corrections,
+physical transport and driver versions remain to be confirmed. Firmware and host
+drivers stay outside apps.
 
 The old plan mentioned a boat Jetson Orin Nano and two ZED X Mini cameras with
 a capture card and MIPI cables. These were planning notes, not verified hardware

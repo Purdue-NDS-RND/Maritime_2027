@@ -44,7 +44,7 @@ Without `WATER`, explicit and noninteractive launches retain their original
 world-specific water defaults. Setting only `WATER` in an interactive terminal
 skips the water question and opens scene selection. Generated water worlds live
 under `logs/generated-worlds/`; each run records the chosen preset in its separate
-`water.json`. The Adapter's scene-manifest schema stays unchanged.
+`water.json`.
 Water rendering and menu behavior are covered by retained simulator tests.
 
 Gazebo starts first. The launcher waits for an advancing world clock and the

@@ -1,5 +1,13 @@
 # Repository guidelines
 
+Read `docs/design.md` and `docs/milestone1.md` before planning or implementing
+new application work. The milestone defines the current scope: simulator object
+map export, minimal web GCS with manual route editing, and boat/ArduPilot slalom
+execution. Automatic route generation and drone mapping are deferred. Keep the
+boat independently testable with manually supplied routes. Implementation has
+not started; documentation of the milestone alone is not an instruction to
+implement it.
+
 `boat/` owns supplied GPS route execution, tasks, Pixhawk integration and status.
 `drone/` owns surveys, object detection and geolocation. `gcs/` owns map review,
 route generation, mission upload and monitoring. `shared/` is common code/data,

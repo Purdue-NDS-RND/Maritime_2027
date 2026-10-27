@@ -1,5 +1,8 @@
 # Migration validation — 2026-10-27
 
+Historical evidence from the repository cleanup, not current runtime acceptance.
+For current setup and available checks, see the [simulator guide](../../simulation/README.md).
+
 Final checks ran after removing the entire adapter and ROS integration layer:
 
 | Check | Result |
