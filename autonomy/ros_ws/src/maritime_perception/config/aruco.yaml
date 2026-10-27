@@ -1,6 +1,0 @@
-/**:
-  ros__parameters:
-    aruco_dictionary: DICT_4X4_50
-    marker_ids: [0, 1, 2, 3]
-    marker_categories: [white, red, green, blue]
-    publish_debug_image: false

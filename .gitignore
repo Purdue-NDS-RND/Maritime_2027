@@ -3,7 +3,7 @@ __pycache__/
 **/ros_ws/build/
 **/ros_ws/install/
 **/ros_ws/log/
-Simulation/logs/
 /.vscode
 /.codex
 /.agents
+/.aws

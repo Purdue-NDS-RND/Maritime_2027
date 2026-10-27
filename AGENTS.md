@@ -1,66 +1,40 @@
-# Repository Guidelines
+# Repository guidelines
 
-## Project Structure & Module Organization
+`boat/` owns supplied GPS route execution, tasks, Pixhawk integration and status.
+`drone/` owns surveys, object detection and geolocation. `gcs/` owns map review,
+route generation, mission upload and monitoring. `shared/` is common code/data,
+not a service. Object coordinates and route waypoints are different concepts.
 
-`Simulation/` contains the BlueBoat ArduPilot/Gazebo simulator. Treat it
-as the active project root when running its commands. Key areas are
-`config/` for SITL parameters, `worlds/` for Gazebo worlds, `models/` for
-vehicle and buoy assets, and `scenarios/` for editable JSON layouts.
-`Adapter/simulation/ros_ws/` owns simulation-only ROS bridges, camera frames,
-MAVROS, and Adapter diagnostics. `Simulation/tests/evaluation/` owns explicit
-simulation-only evaluators. `autonomy/ros_ws/` contains only the temporary
-simulation bootstrap and must not depend on Gazebo, simulation truth, MAVROS,
-or FCU transport. `deployment/` holds shared service
-configuration. Runtime output
-belongs in `logs/`; do not commit generated logs, rendered scenario files, or
-Python cache files. Project-wide mission, requirements, and architecture
-documentation lives in `docs/`. Simulator setup, operation, troubleshooting,
-and maintenance documentation lives in `Simulation/docs/`.
+This is a clean restart around the retained simulator. The four application/
+shared directories are README-only scaffolds. Develop the high level design
+with the user before implementing algorithms, ROS packages, networking or schemas.
+Do not restore the old adapter, mapping, navigation or monitoring architecture.
+Initial boat routes must be testable without drone/GCS, cameras, Nav2, onboard
+buoy mapping or continuous replanning. Camera-free feasibility needs evaluation
+against survey/GPS/tracking error, buoy movement and whole-hull clearance.
 
-## Build, Test, and Development Commands
+Future apps are independently containerized, with multiple ROS nodes permitted
+inside a vehicle app container. Use ROS 2 inside vehicle applications. Vehicle-GCS
+networking is undecided. Pixhawk firmware and host drivers remain outside app
+containers. Jetson and desktop builds may differ.
 
-Run commands from `Simulation/`:
+Run simulator commands from `simulation/`: `make validate`, `make build`,
+`make run`, `make smoke`, `make down`. Simulation is one Gazebo/SITL/MAVProxy
+container. `make smoke` needs a running boat and exercises actual movement,
+HOLD, RTL and disarm. `make sensor-smoke` checks Gazebo cameras when enabled;
+`make buoy-tracking-smoke` checks the buoy plugin. Preserve relevant simulator
+checks, but do not expand legacy integration validation for this restart.
+Configuration parsing and container health alone are not control acceptance.
 
-```bash
-make validate       # check scripts, assets, pinned sources, and Compose config
-make build          # build/update the simulator image
-make run            # start the GUI simulator
-make smoke          # acceptance test of a running boat via MAVLink
-make verify-rgbd    # complete RGB-D scenario and control regression suite
-make lifecycle-smoke # explicit startup/failure cleanup and parameter regression
-make down           # stop containers while retaining logs and SITL state
-```
+Preserve simulator source pins, dynamics, parameters, camera calibration assets,
+executable bits and direct MAVLink ports unless a change explicitly targets them.
+Run appropriate static checks for path/configuration changes. Keep runtime logs,
+recordings, generated SDF/manifests, EEPROM and caches out of Git under
+`simulation/logs/`. Project direction/setup lives in `docs/`; simulator usage in
+`simulation/docs/`.
 
-Use `SCENARIO=gate make run` for RGB-D work. Run `make validate` before a
-build and the relevant smoke test after changes. `make smoke` requires a
-running simulator; `make sensor-smoke` and `make mavros-smoke` run the explicit
-simulation-only evaluation image and require the running Simulation Adapter.
-`make lifecycle-smoke` starts its own simulation runs and
-requires the stack to be stopped; run it after launcher or lifecycle changes.
-
-## Coding Style & Naming Conventions
-
-Keep shell scripts POSIX-compatible where practical, use `set -euo pipefail`
-when editing Bash entrypoints, and preserve executable bits on runnable
-scripts. Python uses four-space indentation, `snake_case` functions and
-modules, and focused command-line scripts. Name Gazebo assets descriptively
-(`blueboat_harbor.sdf`) and scenario layouts with lowercase names such as
-`gate.json`. Keep environment variables uppercase (`WORLD`, `BUOY_SEED`).
-
-## Testing Guidelines
-
-Validation is layered: static checks (`make validate`), simulator control
-acceptance (`make smoke`), and RGB-D/MAVROS regressions when applicable.
-Do not treat a healthy container alone as success—record the semantic test
-result. Changes to models, scenarios, bridges, frames, or MAVROS must run
-`make verify-rgbd`. Keep test helpers named by purpose, e.g.
-`sensor_smoke.py` and `mavros_smoke.py`.
-
-## Commits & Pull Requests
-
-History currently contains only the initial import; use short imperative
-subjects such as `Add harbor buoy scenario` or `Fix MAVROS readiness check`.
-Keep commits scoped to one concern. Pull requests should explain the runtime
-impact, list validation commands and results, link the relevant issue, and
-include screenshots or logs for visual/simulation behavior changes. Do not
-silently change pinned upstream revisions, boat dynamics, or MAVLink ports.
+Preserve uncommitted work and local data. Git history is the archive; do not
+create an old implementation directory or modify `archive/pre-revamp`. Work on
+`revamp`; do not force push, delete remote branches or merge this migration into
+main. Use focused changes, four-space Python indentation, snake_case and strict
+Bash entrypoints. PRs should explain runtime impact and actual validation limits.
