@@ -15,9 +15,12 @@ import time
 from pymavlink import mavutil
 from boat_app.executor import Executor
 from boat_app.mission import Mission
+from boat_app.profiles import request_position_rate
+from calibration_result import successful
 
 ALLOWED = {'WP_RADIUS':(.05,10), 'WP_PIVOT_ANGLE':(0,180), 'WP_PIVOT_RATE':(1,180),
-           'WP_ACCEL':(.01,10), 'WP_JERK':(0,100)}
+           'WP_ACCEL':(.01,10), 'WP_JERK':(0,100), 'ATC_STR_RAT_FF':(0,3),
+           'ATC_SPEED_P':(.01,2), 'ATC_SPEED_I':(0,2)}
 
 
 def set_parameter(controller, name, value):
@@ -44,7 +47,7 @@ def run(args):
         raise RuntimeError('previous parameter restoration failed; restore and verify before further experiments: '+str(sentinel))
     overrides=json.loads(args.overrides)
     if set(overrides)-set(ALLOWED):
-        raise ValueError('only the five documented WP parameters may be overridden')
+        raise ValueError('only documented waypoint, steering feedforward and speed P/I parameters may be overridden')
     for name,value in overrides.items():
         low,high=ALLOWED[name]
         if type(value) not in (int,float) or not math.isfinite(value) or not low<=value<=high:
@@ -65,10 +68,13 @@ def run(args):
         controller.fresh()
         if controller.armed:
             raise RuntimeError('calibration requires disarmed vehicle')
+        result['position_rate_hz']=args.position_hz
+        result['position_source_intervals_ms']=request_position_rate(controller,args.position_hz)
         controller.command(mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE,mavutil.mavlink.MAVLINK_MSG_ID_AUTOPILOT_VERSION)
         if controller.firmware_version is None:
             controller.wait(lambda m:m.get_type()=='AUTOPILOT_VERSION')
-        result['firmware']={'flight_sw_version':controller.firmware_version}
+        result['firmware']={'flight_sw_version':controller.firmware_version,
+                            'git_hash_short':controller.firmware_hash}
         result['baseline']={name:controller.parameter(name) for name in ALLOWED}
         for name,value in overrides.items():
             result['original'][name]=controller.parameter(name)
@@ -106,10 +112,17 @@ def run(args):
         if restoration_errors:
             sentinel.write_text(json.dumps({'original':result['original'],'errors':restoration_errors},indent=2)+'\n')
             result['restoration_error']=restoration_errors
+        try:
+            # Restore the explicitly recorded launcher stream-rate baseline.
+            controller.command(mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,
+                               mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 1e6/args.baseline_position_hz)
+            result['telemetry_restored_hz']=args.baseline_position_hz
+        except Exception as error:
+            result['cleanup_error']=result.get('cleanup_error','')+'; telemetry restoration: '+str(error)
         link.close()
         args.output.write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
     print(json.dumps({key:value for key,value in result.items() if key not in ('samples','events','start_physics','end_physics')},indent=2))
-    return 0 if result.get('boat_outcome',{}).get('state')=='complete' and not result.get('restoration_error') else 1
+    return 0 if successful(result) else 1
 
 
 if __name__=='__main__':
@@ -118,4 +131,6 @@ if __name__=='__main__':
     parser.add_argument('--truth',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--overrides',default='{}')
+    parser.add_argument('--position-hz',type=int,choices=(4,10,20),default=4)
+    parser.add_argument('--baseline-position-hz',type=int,choices=(4,10,20),default=4)
     raise SystemExit(run(parser.parse_args()))

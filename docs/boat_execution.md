@@ -173,10 +173,17 @@ root in `operations.json`; mission/event evidence retains individual sessions.
 GCS profiles are read-only files under `/profiles`. The boat checks active
 firmware version and source hash, configured geometry identity
 (`BOAT_GEOMETRY_SHA256`) and readbacks of the five measured waypoint parameters
-both at upload and at start. It never silently changes those parameters. Local
+both at upload and at start. Profiles can also specify steering feedforward
+`ATC_STR_RAT_FF` and speed P/I gains `ATC_SPEED_P` / `ATC_SPEED_I`; missing gains
+require the original defaults 0.2 / 0.1 / 0.2 respectively. A measured profile
+cannot authorize different live gains. The boat never silently changes them.
+Selected position rates (4/10/20 Hz) are requested and checked against actual
+source-timestamp frame spacing at both upload and start, not just command ACKs.
+The simulator launcher must select the matching MAVProxy stream rate. Local
 file/ROS tests retain the explicit `local-file-unvalidated` profile and remain
 independent of the map/GCS. This development test path does not establish
 clearance approval. No buoy map/truth is sent in the boat mission.
 
-All 23 current boat tests pass. Live gate and calibration evidence and the
-remaining GCS/slalom acceptance limits are in [the handoff](milestone1_handoff.md).
+All 26 current boat tests pass. Three consecutive browser-started full slaloms
+passed the selected simulator acceptance at a commanded 2.0 m/s target. Measured
+speeds, independent hull/finish checks, GCS-loss evidence and physical limits are in [the handoff](milestone1_handoff.md).

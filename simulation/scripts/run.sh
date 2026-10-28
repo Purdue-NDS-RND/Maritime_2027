@@ -31,6 +31,7 @@ Environment:
   WATER=calm|normal|harsh  Override water independently of the world/scenario
   SIM_GPU=auto|nvidia|mesa Prefer working NVIDIA graphics, or select a renderer
   CAMERAS=on|off         Explicitly enable/disable scenario cameras (default on)
+  MAVLINK_STREAMRATE=4|10|20 Telemetry stream rate in Hz (default 4)
   CAMERA_FPS=15           RGB-D capture rate in simulation Hz (8..60; 30 supported)
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
 EOF
@@ -128,6 +129,11 @@ if [[ -n ${BOAT_MODEL:-} ]]; then
     export CAMERA_ENABLED=1
 fi
 export CAMERA_FPS=${CAMERA_FPS:-15}
+export MAVLINK_STREAMRATE=${MAVLINK_STREAMRATE:-4}
+case "$MAVLINK_STREAMRATE" in
+    4|10|20) ;;
+    *) echo "ERROR: MAVLINK_STREAMRATE must be 4, 10, or 20 Hz." >&2; exit 2 ;;
+esac
 python3 - "$CAMERA_FPS" <<'PY'
 import sys
 try:
@@ -327,6 +333,7 @@ echo "Boat model: ${BOAT_MODEL:-single}"
 echo "Graphics: $SIM_GPU_RESOLVED (requested ${SIM_GPU:-auto})"
 echo "World: ${WORLD:-blueboat_waves.sdf}; scenario: ${scenario:-none}; display: $DISPLAY"
 echo "MAVLink: ${MAVLINK_QGC:-udp:127.0.0.1:14550} (QGC), ${MAVLINK_API:-udp:127.0.0.1:14551} (student API)"
+echo "MAVLink stream rate: $MAVLINK_STREAMRATE Hz"
 if pgrep -f '[Q]GroundControl' >/dev/null 2>&1; then
     echo "QGroundControl is running and should auto-connect on UDP 14550."
 else

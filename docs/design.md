@@ -1,6 +1,6 @@
 # System design — working draft
 
-Status: working design, with Milestone 1 implementation in progress. See
+Status: working design, with Milestone 1 simulator acceptance completed. See
 [the current handoff](milestone1_handoff.md) for implemented interfaces and
 measured acceptance limits. Choices marked provisional and open questions
 must not be treated as settled requirements.

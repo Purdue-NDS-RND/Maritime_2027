@@ -1,10 +1,13 @@
 # Milestone 1: camera-free slalom through the web GCS
 
-Status: in progress. Map export, a minimal GCS and boat HTTP command ownership
-are implemented. Boat-only gate passage passed at 0.5 m/s; the full browser
-workflow and 2 m/s repeatability are not accepted. See the
-[implementation handoff](milestone1_handoff.md) and
-[boat execution](boat_execution.md) for behavior and actual validation limits.
+Status: complete for the selected simulator acceptance on 2026-10-28. Three
+consecutive browser-started full slaloms passed at a commanded 2.0 m/s target
+with frozen scene, map, mission, profile and settings. Minimum independent
+whole-hull clearance was 1.26091 m; all passage/side/stern, contact and finish
+checks passed. GCS backend loss/reconnect also passed during the third run.
+This establishes simulator acceptance; physical-boat performance is unverified.
+See the [implementation handoff](milestone1_handoff.md) and
+[boat execution](boat_execution.md) for measured speeds, artifacts and limits.
 
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
@@ -50,7 +53,8 @@ places and edits waypoints in the GCS.
    and produces an object map with GPS coordinates for GCS import. Use the
    resolved scene rather than assuming an arbitrary source file matches the
    running world. The current scene renderer already records local model
-   positions in a generated manifest; geographic conversion still needs work.
+   positions in a generated manifest; export and multi-position geographic alignment
+   are implemented and have live evidence in the handoff.
 3. Verify the local-world-to-GPS conversion against ArduPilot's geographic
    reference and the simulator's axes. Check more than a single origin point:
    scale, direction and heading errors must not create a plausible-looking but
@@ -62,8 +66,9 @@ places and edits waypoints in the GCS.
    route and clearance margins and rerun checks after edits.
 6. The operator approves the route. The GCS sends the complete mission to the
    boat application, which uploads it to ArduPilot and confirms acceptance
-   before execution. Exact approval, upload and start mechanics remain to be
-   specified; do not treat a transmission attempt as successful acceptance.
+   before execution. Approval freezes the complete inputs; Upload and Start are
+   separate operator actions. Each returns a boat operation ID whose confirmed
+   result is distinct from transmission receipt.
 7. ArduPilot executes the route. The boat reports mission progress and vehicle
    status to the GCS. The boat needs neither simulator object truth nor
    continuing movement commands from the GCS.
@@ -81,12 +86,15 @@ places and edits waypoints in the GCS.
   this is not gate/slalom or whole-hull acceptance. See [runtime evidence](boat_execution.md#runtime-evidence).
 - [x] Export the resolved simulator object map and verify its GPS alignment.
   Four live positions/two headings passed; maximum error 0.015 m.
-- [ ] Build the minimal GCS map view and manual waypoint editor, configurable
+- [x] Build the minimal GCS map view and manual waypoint editor, configurable
   speed/clearance, and route clearance checks.
-- [ ] Connect GCS mission approval/upload/start and progress reporting through
+- [x] Connect GCS mission approval/upload/start and progress reporting through
   the boat application.
-- [ ] Demonstrate simple gate passage before attempting the complete slalom.
-- [ ] Evaluate the full slalom, repeat the run, and record measured results.
+- [x] Demonstrate simple gate passage before attempting the complete slalom.
+  A live browser mission passed at 0.5 m/s with independent whole-hull evaluation;
+  backend loss did not interrupt execution and reconnect did not restart it.
+- [x] Evaluate the full slalom, repeat the run, and record measured results.
+  Three consecutive frozen 2.0 m/s target passes are recorded in the handoff.
 
 These are steps within one milestone, not additional applications or services.
 Implement only the definitions and interfaces needed for these steps.

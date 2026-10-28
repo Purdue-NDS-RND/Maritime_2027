@@ -1,9 +1,11 @@
 import copy
+import math
+import random
 from pathlib import Path
 import sys
 import unittest
 sys.path[:0]=[str(Path(__file__).resolve().parents[1]/'scripts'),str(Path(__file__).resolve().parents[2])]
-from evaluate_run import evaluate
+from evaluate_run import evaluate, project_footprint
 from shared.geometry import polygon_clearance
 
 
@@ -58,6 +60,47 @@ class EvaluationTests(unittest.TestCase):
     def test_unverified_contact_recorder_inconclusive(self):
         self.course['contact_recorder_verified']=False
         self.assertEqual(self.result()['outcome'],'inconclusive')
+
+    def test_full_attitude_projection_and_explicit_attitude_limit(self):
+        for sample in self.samples:
+            sample['poses'][0]['pose'][3:5] = [.3, -.2]
+        self.assertEqual(self.result()['outcome'], 'passed')
+        self.course['max_roll_pitch_rad'] = .05
+        self.assertEqual(self.result()['outcome'], 'inconclusive')
+
+    def test_gate_checks_include_tilted_collision_height(self):
+        for sample in self.samples:
+            sample['poses'][0]['pose'][1] = 1.3
+            sample['poses'][0]['pose'][3] = math.pi/4
+        self.course['finish']['y'] = 1.3
+        self.assertIn('footprint outside gate opening: gate', self.result()['failures'])
+
+    def test_missing_height_is_inconclusive(self):
+        del self.footprint['max_abs_z_m']
+        self.assertEqual(self.result()['outcome'], 'inconclusive')
+
+
+class ProjectionTests(unittest.TestCase):
+    def test_ninety_degree_pitch_projects_collision_height(self):
+        footprint = {'polygon': [(-2,-1),(2,-1),(2,1),(-2,1)], 'max_abs_z_m': .4}
+        polygon = project_footprint(footprint, 0, 0, 0, math.pi/2, 0)
+        self.assertAlmostEqual(max(p[0] for p in polygon), .4)
+        self.assertAlmostEqual(min(p[0] for p in polygon), -.4)
+        self.assertAlmostEqual(max(p[1] for p in polygon), 1)
+
+    def test_projection_contains_rotated_prism_points(self):
+        footprint = {'polygon': [(-.6,-.3),(.6,-.3),(.6,.3),(-.6,.3)], 'max_abs_z_m': .4}
+        rng = random.Random(24)
+        for _ in range(30):
+            roll, pitch, yaw = [rng.uniform(-math.pi, math.pi) for _ in range(3)]
+            projected = project_footprint(footprint, 2, -3, roll, pitch, yaw)
+            for _ in range(30):
+                x, y, z = rng.uniform(-.6,.6), rng.uniform(-.3,.3), rng.uniform(-.4,.4)
+                # Apply three separate rotations, independently of the matrix implementation.
+                y, z = y*math.cos(roll)-z*math.sin(roll), y*math.sin(roll)+z*math.cos(roll)
+                x, z = x*math.cos(pitch)+z*math.sin(pitch), -x*math.sin(pitch)+z*math.cos(pitch)
+                x, y = x*math.cos(yaw)-y*math.sin(yaw), x*math.sin(yaw)+y*math.cos(yaw)
+                self.assertLessEqual(polygon_clearance(projected, (2+x,-3+y), 0), 1e-10)
 
 class ContactProofTests(unittest.TestCase):
     def test_boolean_alone_cannot_verify_live_contact_recorder(self):

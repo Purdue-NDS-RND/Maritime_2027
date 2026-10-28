@@ -12,7 +12,34 @@ import math
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from shared.geometry import polygon_clearance, transform_polygon
+from shared.geometry import polygon_clearance
+from footprint import hull
+
+
+def project_footprint(footprint, x, y, roll, pitch, yaw):
+    """Project a conservative collision prism using the full body attitude.
+
+    Every collision vertex is inside polygon x [-max_abs_z, max_abs_z], including
+    the all-angle propulsor bounds. A rigid transform preserves containment;
+    projecting its vertices and taking their convex hull preserves it again.
+    Buoys remain infinite vertical cylinders for this conservative XY check.
+    """
+    vertical = footprint['max_abs_z_m']
+    if not isinstance(vertical, (int, float)) or not math.isfinite(vertical) or vertical <= 0:
+        raise ValueError('missing or invalid collision vertical extent')
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    # Gazebo Euler angles use Rz(yaw) Ry(pitch) Rx(roll).
+    xx, xy, xz = cy*cp, cy*sp*sr-sy*cr, cy*sp*cr+sy*sr
+    yx, yy, yz = sy*cp, sy*sp*sr+cy*cr, sy*sp*cr-cy*sr
+    vertices = []
+    for px, py in footprint['polygon']:
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (px, py)):
+            raise ValueError('invalid collision polygon')
+        for pz in (-vertical, vertical):
+            vertices.append((x+xx*px+xy*py+xz*pz, y+yx*px+yy*py+yz*pz))
+    return hull(vertices)
 
 
 def evaluate(samples, footprint, course, start_s, end_s):
@@ -48,19 +75,22 @@ def evaluate(samples, footprint, course, start_s, end_s):
             missing.append('invalid physics pose')
             continue
         x, y, z, roll, pitch, yaw = poses['blueboat/base_link']
-        if abs(roll) > course.get('max_roll_pitch_rad', 0.05) or abs(pitch) > course.get('max_roll_pitch_rad', 0.05):
+        limit = course.get('max_roll_pitch_rad')
+        if limit is not None and (abs(roll) > limit or abs(pitch) > limit):
             missing.append('boat attitude exceeds footprint projection envelope')
-        polygon = transform_polygon(footprint['polygon'], x, y, yaw)
-        # Bound possible XY displacement from roll/pitch of the collision Z extent.
-        vertical = footprint.get('max_abs_z_m')
-        if vertical is None:
-            missing.append('missing collision vertical extent')
-            vertical = 0
-        attitude_margin = (vertical * (abs(math.sin(roll)) + abs(math.sin(pitch)))
-                           + footprint.get('enclosing_radius_m', 1) * (abs(1-math.cos(roll)) + abs(1-math.cos(pitch)) + abs(math.sin(roll)*math.sin(pitch))))
+        try:
+            polygon = project_footprint(footprint, x, y, roll, pitch, yaw)
+        except (ValueError, KeyError, TypeError) as error:
+            missing.append(str(error))
+            continue
         step_minimum = math.inf
+        enclosing_radius = max(math.hypot(px-x, py-y) for px, py in polygon)
         for name, buoy in course['buoys'].items():
-            separation = polygon_clearance(polygon, poses[name][:2], buoy['radius_m']) - attitude_margin
+            # An enclosing circle gives a lower bound. A distant buoy cannot
+            # improve the minimum already computed from an exact polygon check.
+            if math.dist((x, y), poses[name][:2])-enclosing_radius-buoy['radius_m'] > step_minimum:
+                continue
+            separation = polygon_clearance(polygon, poses[name][:2], buoy['radius_m'])
             step_minimum = min(step_minimum, separation)
             minimum = min(minimum, separation)
         speed = 0
@@ -132,6 +162,7 @@ def evaluate(samples, footprint, course, start_s, end_s):
     if not course.get('contact_recorder_verified', False):
         missing.append('live contact recorder has not been verified against deliberate contact')
     return {'outcome': 'inconclusive' if missing else 'failed' if failures else 'passed',
+            'footprint_projection': 'full attitude projection of the enclosing collision prism',
             'missing_evidence': sorted(set(missing)), 'failures': sorted(set(failures)),
             'physics_samples': count, 'minimum_clearance_m': minimum if math.isfinite(minimum) else None,
             'passages': passages, 'finish_settled': finished,

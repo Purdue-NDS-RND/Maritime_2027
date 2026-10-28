@@ -6,6 +6,11 @@ STATE_DIR="$LOG_DIR/state"
 WORLD=${WORLD:-blueboat_waves.sdf}
 MAVLINK_QGC=${MAVLINK_QGC:-udp:127.0.0.1:14550}
 MAVLINK_API=${MAVLINK_API:-udp:127.0.0.1:14551}
+MAVLINK_STREAMRATE=${MAVLINK_STREAMRATE:-4}
+case "$MAVLINK_STREAMRATE" in
+    4|10|20) ;;
+    *) echo "ERROR: MAVLINK_STREAMRATE must be 4, 10, or 20 Hz." >&2; exit 2 ;;
+esac
 CAMERA_ENABLED=${CAMERA_ENABLED:-0}
 GAZEBO_STARTUP_TIMEOUT=${GAZEBO_STARTUP_TIMEOUT:-90}
 WIPE_PARAMS=${WIPE_PARAMS:-0}
@@ -143,7 +148,7 @@ sitl_args=(
     --custom-location=51.566151,-4.034345,0.0,0
     --out "$MAVLINK_QGC"
     --out "$MAVLINK_API"
-    --mavproxy-args "--non-interactive --streamrate=4 --logfile=$MAVLINK_LOG"
+    --mavproxy-args "--non-interactive --streamrate=$MAVLINK_STREAMRATE --logfile=$MAVLINK_LOG"
 )
 case "${WIPE_PARAMS,,}" in
     1|true|yes|on) sitl_args+=(--wipe-eeprom) ;;

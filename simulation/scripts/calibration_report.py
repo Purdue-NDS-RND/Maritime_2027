@@ -8,12 +8,23 @@ from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from shared.geometry import to_local,segment_distance
+from calibration_result import restoration_verified, successful
 
 
-def summarize(path,reference):
+def summarize(path,reference, diagnostic=False):
     data=json.loads(Path(path).read_text())
-    start=next(p['pose'][:2]for p in data['start_physics']['poses']if p['name']=='blueboat/base_link')
+    # A navigation completion is insufficient if cleanup or restoration failed.
+    restoration_ok = restoration_verified(data)
+    usable = successful(data)
+    if not usable and not diagnostic:
+        raise ValueError('calibration requires completed navigation, confirmed cleanup and full parameter restoration')
+    if len(data.get('samples', [])) < 2:
+        raise ValueError('calibration requires trajectory samples')
+    start_pose=next(p['pose']for p in data['start_physics']['poses']if p['name']=='blueboat/base_link')
+    start=start_pose[:2]
     route=[start]+[to_local(p,reference)for p in data['mission']['waypoints']]
+    initial_heading = (90-math.degrees(start_pose[5])) % 360
+    first_heading = math.degrees(math.atan2(route[1][0]-start[0], route[1][1]-start[1])) % 360
     tracking,gps,speeds,truth_speeds=[],[],[],[]
     previous=None;stop_start=None;max_stop_distance=0;finish_error=0
     for sample in data['samples']:
@@ -42,8 +53,15 @@ def summarize(path,reference):
         u,v=(b[0]-a[0],b[1]-a[1]),(c[0]-b[0],c[1]-b[1])
         angles.append(math.degrees(math.acos(max(-1,min(1,(u[0]*v[0]+u[1]*v[1])/(math.hypot(*u)*math.hypot(*v)))))))
     return {'source_sha256':hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+            'calibration_usable':usable, 'cleanup_verified':not bool(data.get('cleanup_error')),
             'mission_id':data['mission']['mission_id'],'commanded_speed_m_s':data['mission']['speed_m_s'],
+            'initial_heading_deg':initial_heading, 'first_leg_heading_deg':first_heading,
+            'initial_heading_error_deg':abs((initial_heading-first_heading+180) % 360-180),
             'maximum_cross_track_m':max(tracking),'maximum_gps_truth_error_m':max(gps),
+            'position_error_method':'latest reported position versus latest physics pose; includes telemetry age',
+            'requested_position_rate_hz':data.get('position_rate_hz',4),
+            'maximum_reported_position_age_s':max((s['status']['position_age_s'] for s in data['samples']
+                                                 if s['status'].get('position_age_s') is not None),default=None),
             'empirical_position_tracking_bound_m':max(tracking)+max(gps),
             'maximum_stop_travel_m':max_stop_distance,'finish_truth_error_m':finish_error,
             'elapsed_sim_s':data['end_physics']['time_s']-data['start_physics']['time_s'],
@@ -51,11 +69,12 @@ def summarize(path,reference):
             'actual_peak_speed_m_s':max(truth_speeds,default=0),'minimum_leg_m':min(legs),
             'maximum_leg_m':max(legs),'maximum_turn_deg':max(angles,default=0),
             'boat_reported_outcome':data['boat_outcome']['state'],'applied_parameters':data['applied'],
-            'parameter_restoration_verified':all(abs(v-data['original'][k])<1e-4 for k,v in data['restored'].items()) and not data.get('restoration_error')}
+            'parameter_restoration_verified':restoration_ok}
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('recording',type=Path);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--diagnostic', action='store_true', help='Summarize a failed run; never qualifies it as calibrated')
     args=parser.parse_args()
-    args.output.write_text(json.dumps(summarize(args.recording,{'latitude':51.566151,'longitude':-4.034345}),indent=2)+'\n')
+    args.output.write_text(json.dumps(summarize(args.recording,{'latitude':51.566151,'longitude':-4.034345}, args.diagnostic),indent=2)+'\n')

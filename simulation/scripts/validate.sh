@@ -21,6 +21,7 @@ python_sources=(
     scripts/scene_snapshot.py scripts/export_map.py scripts/export_active.py scripts/alignment_probe.py
     scripts/alignment_report.py scripts/footprint.py scripts/evaluate_run.py scripts/calibrate.py
     scripts/calibration_report.py scripts/make_course.py tests/test_scene_export.py tests/test_evaluator.py
+    scripts/calibration_result.py tests/test_calibration.py
     tests/test_scenario_rendering.py
 )
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
@@ -163,3 +164,4 @@ python3 -m unittest discover -s tests -p test_camera_rate.py -q
 
 python3 -m unittest discover -s tests -p test_scene_export.py -q
 python3 -m unittest discover -s tests -p test_evaluator.py -q
+python3 -m unittest discover -s tests -p test_calibration.py -q

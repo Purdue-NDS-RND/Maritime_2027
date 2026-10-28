@@ -162,3 +162,19 @@ Every run writes:
 
 `logs/state/eeprom.bin` preserves parameters between containers. Reset it on a
 single start with `WIPE_PARAMS=1 make run`.
+
+### Development telemetry rate
+
+The retained MAVProxy default is 4 Hz. For the measured higher-speed milestone
+profiles, explicitly select the matching telemetry rate:
+
+```bash
+MAVLINK_STREAMRATE=20 CAMERAS=off WATER=calm SCENARIO=slalom make run
+```
+
+Allowed values are 4, 10 and 20 Hz. This changes telemetry delivery, not model
+dynamics or controller gains. MAVProxy periodically enforces its launcher rate;
+a client message-interval ACK alone does not prove sustained delivery at another
+rate. Boat profiles verify observed source frame spacing at upload/start. Record
+the selected rate with the run and use the profile's measured rate. Physical
+vehicle networking and bandwidth acceptance remain outside this simulation test.

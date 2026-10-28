@@ -18,6 +18,7 @@ function App() {
     const [workspace,setWorkspace]=useState({map:null,draft:null,approval:null});
     const [profiles,setProfiles]=useState([]), [status,setStatus]=useState(null), [received,setReceived]=useState(0);
     const [message,setMessage]=useState('Import a simulator object map to begin.'), [validation,setValidation]=useState(null);
+    const [passageText,setPassageText]=useState('[]'), [passageError,setPassageError]=useState('');
     const [dirty,setDirty]=useState(false), [busy,setBusy]=useState(false), [tiles,setTiles]=useState(false), [tileError,setTileError]=useState(false);
     const [operations,setOperations]=useState(()=>JSON.parse(localStorage.getItem('maritime-operations')||'[]'));
     const [results,setResults]=useState({});
@@ -27,12 +28,17 @@ function App() {
     function edit(next) {
         setWorkspace(w=>({...w,draft:next,approval:null})); setDirty(true); setValidation(null);
     }
+    function editPassages(text) {
+        setPassageText(text);
+        try {const roles=JSON.parse(text);if(!Array.isArray(roles))throw new Error();setPassageError('');edit({...draft,passages:roles});}
+        catch {setPassageError('Passage roles must be a valid JSON list.');setWorkspace(w=>({...w,approval:null}));setDirty(true);setValidation(null);}
+    }
     useEffect(()=>{
         const map=L.map('course-map',{attributionControl:true,maxZoom:24}).setView([51.566151,-4.034345],20);
         mapRef.current=map; layers.current=L.layerGroup().addTo(map); vehicleLayer.current=L.layerGroup().addTo(map);
         map.on('click',e=>{const {draft,edit}=current.current;edit({...draft,waypoints:[...draft.waypoints,point(e.latlng)]});});
         setReady(true);
-        api('workspace').then(w=>{setWorkspace(w);if(w.map)map.fitBounds([latlng(w.map.geographic_reference),...w.map.buoys.map(b=>latlng(b.centre))],{padding:[60,60],maxZoom:22});}).catch(e=>setMessage(e.message));
+        api('workspace').then(w=>{setWorkspace(w);setPassageText(JSON.stringify(w.draft?.passages||[],null,2));setPassageError('');if(w.map)map.fitBounds([latlng(w.map.geographic_reference),...w.map.buoys.map(b=>latlng(b.centre))],{padding:[60,60],maxZoom:22});}).catch(e=>setMessage(e.message));
         api('profiles').then(setProfiles).catch(e=>setMessage(e.message));
         return ()=>map.remove();
     },[]);
@@ -51,7 +57,7 @@ function App() {
         if(!ready)return;
         if(tileRef.current){tileRef.current.remove();tileRef.current=null;}
         setTileError(false);
-        if(tiles){const tile=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,maxNativeZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});tile.on('tileerror',()=>setTileError(true));tile.addTo(mapRef.current);tileRef.current=tile;}
+        if(tiles){const tile=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:24,maxNativeZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});tile.on('tileerror',()=>setTileError(true));tile.addTo(mapRef.current);tileRef.current=tile;}
     },[tiles,ready]);
     useEffect(()=>{
         if(!ready)return; const group=layers.current;group.clearLayers();
@@ -76,7 +82,7 @@ function App() {
         if(!ready)return; vehicleLayer.current.clearLayers();
         if(status?.position)L.marker(latlng(status.position),{icon:icon('▲','#ffbd69')}).addTo(vehicleLayer.current).bindTooltip(`Boat · ${status.heading_deg?.toFixed(1)??'?'}°`);
     },[status,ready]);
-    async function save(){const value=await api('workspace','PUT',{draft});setWorkspace(value);setDirty(false);return value;}
+    async function save(){if(passageError)throw new Error(passageError);const value=await api('workspace','PUT',{draft});setWorkspace(value);setDirty(false);return value;}
     async function action(name){setBusy(true);try{
         if(['validate','approve'].includes(name)&&dirty)await save();
         if(['upload','start'].includes(name)&&dirty)throw new Error('Save, validate and approve the edited route first.');
@@ -86,7 +92,7 @@ function App() {
         if(value.operation_id)setOperations(ids=>[...new Set([...ids,value.operation_id])]);
         setMessage(value.operation_id?'Request received. Confirm the operation result below.':name==='validate'?(value.valid?'Route validation passed.':`${value.errors.length} validation failures.`):'Route approved. Upload and Start remain separate.');
     }catch(e){setMessage(e.message);}finally{setBusy(false);}}
-    async function importMap(event){const file=event.target.files[0];if(!file)return;try{const objectMap=JSON.parse(await file.text());const next={...blank(),start:objectMap.geographic_reference,finish:objectMap.geographic_reference};const value=await api('workspace','PUT',{map:objectMap,draft:next});setWorkspace(value);setDirty(false);setValidation(null);mapRef.current.fitBounds([latlng(objectMap.geographic_reference),...objectMap.buoys.map(b=>latlng(b.centre))],{padding:[60,60],maxZoom:22});setMessage('Map imported. Click the workspace to add waypoints.');}catch(e){setMessage(e.message);}}
+    async function importMap(event){const file=event.target.files[0];if(!file)return;try{const objectMap=JSON.parse(await file.text());const next={...blank(),start:objectMap.geographic_reference,finish:objectMap.geographic_reference};const value=await api('workspace','PUT',{map:objectMap,draft:next});setWorkspace(value);setPassageText('[]');setPassageError('');setDirty(false);setValidation(null);mapRef.current.fitBounds([latlng(objectMap.geographic_reference),...objectMap.buoys.map(b=>latlng(b.centre))],{padding:[60,60],maxZoom:22});setMessage('Map imported. Click the workspace to add waypoints.');}catch(e){setMessage(e.message);}}
     const stale=!status||status.connection_lost||status.heartbeat_age_s===null||status.heartbeat_age_s>3||status.position_age_s===null||status.position_age_s>3||Date.now()-received>3500;
     function updatePoint(index,key,value){edit({...draft,waypoints:draft.waypoints.map((p,i)=>i===index?{...p,[key]:Number(value)}:p)});}
     return <main>
@@ -94,8 +100,8 @@ function App() {
       <div className="layout"><section className="map-panel"><div className="map-toolbar"><label className="button">Import object map<input aria-label="Import object map" type="file" accept=".json" onChange={importMap} hidden/></label><span>Click to add · drag to move</span><label><input type="checkbox" checked={tiles} onChange={e=>setTiles(e.target.checked)}/> OSM background</label></div><div id="course-map"/><div className="map-caption">{tileError?'Background unavailable. Course editing remains available.':workspace.map?`${workspace.map.buoys.length} buoys · captured ${workspace.map.captured_at}`:'Offline map · tiles optional'}</div></section>
       <aside><h2>Mission settings</h2><div className="fields">{[['speed_m_s','Target speed (m/s)',0.1],['clearance_m','Hull clearance (m)',0.05],['finish_radius_m','Finish radius (m)',0.1],['start_heading_deg','Start heading (degrees)',0.1]].map(([key,label,step])=><label key={key}>{label}<input type="number" step={step} value={draft[key]} onChange={e=>edit({...draft,[key]:Number(e.target.value)})}/></label>)}<label>Measured navigation profile<select aria-label="Navigation profile" value={draft.navigation_profile_id} onChange={e=>edit({...draft,navigation_profile_id:e.target.value})}><option value="">Select profile</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.id} · {p.status}</option>)}</select></label></div>{!profiles.length&&<p className="note">No calibrated profile installed. Editing and saving are available; approval requires measured tracking evidence.</p>}
       <h2>Route <small>{draft.waypoints.length} waypoints</small></h2><div className="waypoints">{draft.waypoints.map((p,i)=><div className="waypoint" key={i}><b>{i+1}</b><input aria-label={`Waypoint ${i+1} latitude`} type="number" step="0.0000001" value={p.latitude} onChange={e=>updatePoint(i,'latitude',e.target.value)}/><input aria-label={`Waypoint ${i+1} longitude`} type="number" step="0.0000001" value={p.longitude} onChange={e=>updatePoint(i,'longitude',e.target.value)}/><button aria-label={`Move waypoint ${i+1} up`} disabled={!i} onClick={()=>{const points=[...draft.waypoints];[points[i-1],points[i]]=[points[i],points[i-1]];edit({...draft,waypoints:points});}}>↑</button><button aria-label={`Delete waypoint ${i+1}`} onClick={()=>edit({...draft,waypoints:draft.waypoints.filter((_,n)=>n!==i)})}>×</button></div>)}</div><div className="secondary-actions"><button disabled={!draft.waypoints.length} onClick={()=>edit({...draft,finish:draft.waypoints.at(-1)})}>Use last waypoint as finish</button><button disabled={stale} onClick={()=>edit({...draft,start:status.position,start_heading_deg:status.heading_deg})}>Use boat as start</button><button onClick={async()=>{try{await save();setMessage('Draft saved.');}catch(e){setMessage(e.message);}}}>Save draft</button></div>
-      <h2>Course order / sides</h2><label>Course task <select value={draft.task||'gate_only'} onChange={e=>edit({...draft,task:e.target.value})}><option value="gate_only">Entrance gate only</option><option value="slalom">Full slalom</option></select></label><p className="note">Enter ordered passage roles as JSON. Gate: id, kind, red, green. Turn: id, kind, buoy, side (left/right of course direction).</p><textarea aria-label="Course passage order" defaultValue={JSON.stringify(draft.passages,null,2)} key={workspace.map?.scene_id||'none'} onBlur={e=>{try{edit({...draft,passages:JSON.parse(e.target.value)});}catch{setMessage('Passage roles must be valid JSON.');}}}/>
-      <h2>Operator actions</h2><div className="commands">{['validate','approve','upload','start','stop','disarm'].map(name=><button key={name} className={name==='stop'?'stop':''} disabled={(busy&&name!=='stop')||(['upload','start'].includes(name)&&(!workspace.approval||dirty||stale))||(name==='disarm'&&stale)} onClick={()=>action(name)}>{name[0].toUpperCase()+name.slice(1)}</button>)}</div><p className="approval">{dirty?'Unsaved changes · approval revoked':workspace.approval?'Approved revision '+workspace.approval.envelope.revision_sha256.slice(0,12):'Draft · no current approval'}</p></aside></div>
+      <h2>Course order / sides</h2><label>Course task <select value={draft.task||'gate_only'} onChange={e=>edit({...draft,task:e.target.value})}><option value="gate_only">Entrance gate only</option><option value="slalom">Full slalom</option></select></label><p className="note">Enter ordered passage roles as JSON. Gate: id, kind, red, green. Turn: id, kind, buoy, side (left/right of course direction).</p><textarea aria-label="Course passage order" value={passageText} onChange={e=>editPassages(e.target.value)}/>{passageError&&<p className="error" role="alert">{passageError}</p>}
+      <h2>Operator actions</h2><div className="commands">{['validate','approve','upload','start','stop','disarm'].map(name=><button key={name} className={name==='stop'?'stop':''} disabled={(busy&&name!=='stop')||(passageError&&['validate','approve','upload','start'].includes(name))||(['upload','start'].includes(name)&&(!workspace.approval||dirty||stale))||(name==='disarm'&&stale)} onClick={()=>action(name)}>{name[0].toUpperCase()+name.slice(1)}</button>)}</div><p className="approval">{dirty?'Unsaved changes · approval revoked':workspace.approval?'Approved revision '+workspace.approval.envelope.revision_sha256.slice(0,12):'Draft · no current approval'}</p></aside></div>
       <section className="feedback" aria-live="polite"><p>{message}</p>{validation?.errors.map((e,i)=><p className="error" key={i}>{e.reason}</p>)}<div className="telemetry">{status&&<><span>Mode {status.mode} · {status.armed?'ARMED':'disarmed'}</span><span>Speed {status.speed_m_s?.toFixed(2)??'—'} m/s · heading {status.heading_deg?.toFixed(1)??'—'}°</span><span>Item {status.current_item??'—'} / {status.route_waypoint_count}</span><span>{status.detail}</span></>}</div>{operations.map(id=><p className="operation" key={id}>{results[id]?.command||'Operation'} · {results[id]?.state||'outcome unknown'} · {results[id]?.detail||id}</p>)}{workspace.map&&<details><summary>Scene identity</summary><code>{workspace.map.scene_id}</code><p>Run {workspace.map.run_id}</p></details>}</section>
     </main>;
 }
