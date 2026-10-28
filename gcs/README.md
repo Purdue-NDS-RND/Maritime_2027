@@ -60,7 +60,7 @@ telemetry can work while the boat mission HTTP API is unavailable.
 | `GCS_MAVLINK_BAUD` | `57600` | Serial baud; match the radio's configured host baud |
 | `GCS_MAVLINK_SYSTEM_ID` | `1` | Selected ArduPilot vehicle |
 | `GCS_MAVLINK_COMPONENT_ID` | `1` | Selected autopilot component |
-| `GCS_IMAGE` | `maritime-course-gcs:milestone1` | Image for build/run |
+| `GCS_IMAGE` | `maritime-gcs:latest` | Image for build/run |
 
 For example, `GCS_MAVLINK_CONNECTION=udpin:127.0.0.1:14552 make run` selects a
 different MAVProxy output, which must already be configured to forward there.

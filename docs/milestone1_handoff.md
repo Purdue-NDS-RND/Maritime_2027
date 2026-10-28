@@ -126,7 +126,7 @@ copying current scripts/models/configuration. It preserves the original image:
 
 ```bash
 make build-cached
-SIM_IMAGE=maritime-milestone1-sim:current CAMERAS=off WATER=calm SCENARIO=slalom WIPE_PARAMS=1 make run
+CAMERAS=off WATER=calm SCENARIO=slalom WIPE_PARAMS=1 make run
 ```
 
 The live calibration command used the boat image, mounted simulator tooling
@@ -134,7 +134,7 @@ and exclusive UDP 14551 ownership, for example from the repository root:
 
 ```bash
 docker run --rm --network host --user 1000:1000 \
-  -v "$PWD/simulation:/simulation" maritime-boat:milestone1 \
+  -v "$PWD/simulation:/simulation" maritime-boat:latest \
   python3 /simulation/scripts/calibrate.py \
   /simulation/logs/calibration/gate-0.5.json \
   --truth /simulation/logs/runs/20261028T011251-321764/truth.jsonl \
@@ -609,3 +609,13 @@ was checked against the running simulator. This does not extend the earlier
 full-course/clearance acceptance to hardware. Physical RFD900 operation, RF
 coverage and latency remain unverified. See [live position](gcs_live_position.md)
 and the [manual tracking test](../simulation/docs/GCS_LIVE_POSITION.md).
+
+## Canonical runtime images
+
+Current commands use `maritime-sim:latest`, `maritime-boat:latest` and
+`maritime-gcs:latest`. Earlier image names above identify historical evidence;
+their tags are superseded and may have been removed after source/image checks.
+Image IDs remain in the ignored run inventories. See [runtime maintenance](runtime_maintenance.md)
+for the fresh integration check and cleanup. Plain simulator `make run` now
+selects calm water, cameras off and slalom; telemetry remains 4 Hz. Reproducing
+the measured slalom profile requires explicit 20 Hz and staged profile settings.

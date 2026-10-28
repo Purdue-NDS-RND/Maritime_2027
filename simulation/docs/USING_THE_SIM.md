@@ -8,9 +8,9 @@ Run from the host terminal (QGroundControl is optional):
 make run
 ```
 
-The terminal menu first asks for water: **calm**, **normal waves** (default), or
-**harsh waves**. Then choose the scene: open water (default), harbor/dock, single
-buoy, red/green gate, multiple buoys, repeated red buoys, slalom, or camera only. Type
+The terminal menu first asks for water: **calm** (default), **normal waves**, or
+**harsh waves**. Then choose the scene: open water, harbor/dock, single
+buoy, red/green gate, multiple buoys, repeated red buoys, slalom (default), or camera only. Type
 `q` at any prompt to cancel before startup. Invalid answers are re-prompted.
 The water choice applies independently to every scene, including buoy scenes.
 Presets reuse the existing regular-wave settings: calm amplitude 0 m / period
@@ -19,29 +19,29 @@ not calibrated sea-state classifications. Both physics and surface rendering
 use the selected parameters. Source world files are never overwritten.
 
 For buoy scenarios, enter an optional integer seed to randomize buoy poses
-reproducibly, or leave it blank for the fixed layout. Then select the boat:
-**single camera** (forward, default) or **dual camera** (-45/+45 degrees).
-An explicit
-`BOAT_MODEL=single|dual` selects the same layout without a model prompt; old
-explicit world launches without this variable preserve their existing behavior.
+reproducibly, or leave it blank for the fixed layout. Cameras default to off;
+choose on to select single or dual camera layout. The menu also selects telemetry
+at 4 (default), 10 or 20 Hz. Environment values skip their corresponding prompts.
+The launcher prints all resolved settings before Docker startup. `SIM_GPU` and
+`CAMERA_FPS` remain environment controls documented by `scripts/run.sh --help`.
+An explicit `BOAT_MODEL=single|dual` enables cameras unless `CAMERAS` is supplied.
 See [camera boat selection](DUAL_CAMERA.md).
 
 Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
-launches (redirected input or output) keep the existing defaults and never
+launches (redirected input or output) use calm water, cameras off and slalom and never
 prompt. Use `./scripts/run.sh --non-interactive` for default startup without a
 menu in a terminal. Builds and `make down` also never prompt.
 
 For explicit launches, combine water with a scene:
 
 ```bash
-BOAT_MODEL=dual WATER=calm SCENARIO=gate make run
+CAMERAS=on BOAT_MODEL=dual WATER=calm SCENARIO=gate make run
 WATER=normal SCENARIO=multi make run
 WATER=calm SCENARIO=slalom make run
 WATER=harsh WORLD=blueboat_harbor.sdf make run
 ```
 
-Without `WATER`, explicit and noninteractive launches retain their original
-world-specific water defaults. Setting only `WATER` in an interactive terminal
+Without `WATER`, all launches use calm water. Setting only `WATER` in an interactive terminal
 skips the water question and opens scene selection. Generated water worlds live
 under `logs/generated-worlds/`; each run records the chosen preset in its separate
 `water.json`.
@@ -122,7 +122,7 @@ selected mode, and keep a clear stop or Hold action available before arming.
 
 ## Calm-water troubleshooting
 
-The default world uses a regular 0.08 m wave. To remove wave motion without
+The source waves world uses a regular 0.08 m wave; launches default to calm. To remove wave motion without
 removing buoyancy or hydrodynamic forces:
 
 ```bash

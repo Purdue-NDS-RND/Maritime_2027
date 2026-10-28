@@ -60,6 +60,13 @@ make validate
 make build
 ```
 
+Runtime builds use `maritime-sim:latest` (`SIM_IMAGE` overrides it).
+`make build-cached` rebuilds plugins/application files over the installed canonical
+image after verifying all four source pins; `BASE_IMAGE` can override that base.
+It requires an existing base; `make build` is the clean bootstrap path.
+Boat and GCS builds use `maritime-boat:latest` and `maritime-gcs:latest`, with
+`BOAT_IMAGE` and `GCS_IMAGE` overrides.
+
 The first build compiles ArduPilot Rover, the official ArduPilot Gazebo bridge,
 and ASV Wave Sim. It requires network access and may take several minutes.
 

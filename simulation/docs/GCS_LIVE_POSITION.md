@@ -12,9 +12,8 @@ Run from `simulation/` in a desktop terminal:
 CAMERAS=off WATER=calm SCENARIO=slalom make run
 ```
 
-Use an image built from this checkout. The local development image used for the
-live-marker check was `maritime-milestone1-sim:followup`; select it with
-`SIM_IMAGE=maritime-milestone1-sim:followup` if present. See [setup](SETUP.md) to
+Use the canonical `maritime-sim:latest` image built from this checkout.
+See [setup](SETUP.md) to
 build the simulator on another machine. Wait for Gazebo and ArduPilot readiness.
 
 Leave the boat application stopped during keyboard driving: both use UDP 14551.
@@ -30,8 +29,7 @@ make -C gcs build
 make -C gcs run
 ```
 
-For the already-built local feature image, use
-`GCS_IMAGE=maritime-course-gcs:live-position make -C gcs run` instead.
+If the canonical GCS image is already built, only `make -C gcs run` is needed.
 Open <http://localhost:8080>. The saved workspace loads if present. On a fresh
 checkout, an imported course map/route must be prepared separately; the live
 boat marker itself does not require a map import. Manual panning/zooming may be

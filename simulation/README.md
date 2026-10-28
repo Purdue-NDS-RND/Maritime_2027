@@ -8,7 +8,7 @@ From this directory:
 
 ```bash
 make validate
-make run                         # Interactive water/scene/camera selection
+make run                         # Calm, cameras off, slalom; terminal setup menu
 WORLD=blueboat_calm.sdf make run # Direct world, no camera by default
 SCENARIO=gate make run           # Existing Gazebo buoy scene
 make smoke                       # Running boat: movement, HOLD, RTL, disarm
