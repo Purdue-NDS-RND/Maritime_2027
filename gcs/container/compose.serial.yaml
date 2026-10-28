@@ -1,0 +1,9 @@
+# Optional direct USB serial access; normally use a host MAVLink forwarder.
+services:
+  gcs:
+    devices:
+      - "${GCS_SERIAL_DEVICE:?Set GCS_SERIAL_DEVICE to the host radio device}:/dev/gcs-radio"
+    group_add:
+      - "${GCS_SERIAL_GID:?Set GCS_SERIAL_GID to the device numeric group ID}"
+    environment:
+      GCS_MAVLINK_CONNECTION: /dev/gcs-radio

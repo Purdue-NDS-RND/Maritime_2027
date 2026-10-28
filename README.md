@@ -25,7 +25,12 @@ implemented; see the [handoff](docs/milestone1_handoff.md) for measured limits.
 Drone remains a scaffold. Physical vehicle-GCS networking is undecided. The [working design](docs/design.md)
 records the design discussion. Each vehicle has a Jetson for application
 processing and a Pixhawk for control. ROS 2 is used
-within vehicle applications. The development GCS uses boat-owned loopback HTTP.
+within vehicle applications. The development GCS uses boat-owned loopback HTTP
+for mission commands and status, plus passive MAVLink telemetry for live map
+position. The React/Leaflet browser at localhost:8080 displays an oriented boat
+symbol and heading label. UDP and serial radio connections are configurable;
+physical radio operation remains unverified. See [live position](docs/gcs_live_position.md)
+and the [simulator tracking test](simulation/docs/GCS_LIVE_POSITION.md).
 
 Start with [the working design](docs/design.md) and
 [Milestone 1](docs/milestone1.md) for current development scope, then

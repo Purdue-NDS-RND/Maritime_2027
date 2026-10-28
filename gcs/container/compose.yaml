@@ -1,7 +1,7 @@
 name: maritime-course-gcs
 services:
   gcs:
-    image: maritime-course-gcs:milestone1
+    image: ${GCS_IMAGE:-maritime-course-gcs:milestone1}
     build:
       context: ../..
       dockerfile: gcs/container/Dockerfile
@@ -10,6 +10,10 @@ services:
     environment:
       GCS_DATA: /data
       GCS_PROFILES: /profiles
+      GCS_MAVLINK_CONNECTION: ${GCS_MAVLINK_CONNECTION:-udpin:127.0.0.1:14550}
+      GCS_MAVLINK_BAUD: ${GCS_MAVLINK_BAUD:-57600}
+      GCS_MAVLINK_SYSTEM_ID: ${GCS_MAVLINK_SYSTEM_ID:-1}
+      GCS_MAVLINK_COMPONENT_ID: ${GCS_MAVLINK_COMPONENT_ID:-1}
     volumes:
       - ../../simulation/logs/gcs:/data
       - ../../simulation/logs/profiles:/profiles:ro

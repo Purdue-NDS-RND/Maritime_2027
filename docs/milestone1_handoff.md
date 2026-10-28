@@ -588,3 +588,24 @@ networking. The separately documented total-telemetry-loss recovery policy is
 still undecided: after restoration the failed application does not silently
 resume or claim HOLD; the observed AUTO case required explicit operator STOP.
 No unapproved recovery-policy change was made. No commit or push was performed.
+
+## Follow-up: live GCS map telemetry and orientation
+
+The web GCS now has a passive MAVLink reader, independent of the boat's HTTP
+mission interface. It defaults to simulator UDP 14550; the boat retains UDP
+14551. Connection, serial baud and target autopilot IDs are configurable for
+future radio use, including host-forwarded or directly mapped serial devices.
+The reader does not send commands or change stream rates. The browser samples
+the latest snapshot through a 5 Hz event stream and shows an outlined boat with
+a clear bow, forward arrow and permanent compass/degrees label. Stale data
+greys the last known position; unknown heading has a neutral question-mark
+symbol. Mission commands and completion remain boat-owned.
+
+All 25 GCS tests passed, including real UDP/serial pseudo-terminal input and a
+real HTTP/SSE movement/loss test with the boat API blocked. The production
+frontend build and UDP/serial Compose checks passed. The operator reported live
+simulator movement working; Chrome rendering of the updated oriented marker
+was checked against the running simulator. This does not extend the earlier
+full-course/clearance acceptance to hardware. Physical RFD900 operation, RF
+coverage and latency remain unverified. See [live position](gcs_live_position.md)
+and the [manual tracking test](../simulation/docs/GCS_LIVE_POSITION.md).

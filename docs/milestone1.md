@@ -43,7 +43,10 @@ places and edits waypoints in the GCS.
   cameras, MAVROS, Nav2, onboard mapping or continuous replanning prerequisites.
 - Development transport is loopback HTTP from GCS to the boat (8091), with
   ROS 2 retained inside the boat app. The GCS serves React/Leaflet and FastAPI
-  together on desktop localhost:8080. Physical vehicle networking remains open.
+  together on desktop localhost:8080. A subsequent live-position update adds
+  passive MAVLink map telemetry, independently of mission HTTP, with UDP/serial
+  configuration and an oriented boat marker. See [live position](gcs_live_position.md).
+  Physical radio operation and mission networking remain unverified.
 
 ## End-to-end flow
 

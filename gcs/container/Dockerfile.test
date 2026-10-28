@@ -1,4 +1,5 @@
-FROM maritime-course-gcs:milestone1
+ARG GCS_TEST_BASE=maritime-course-gcs:milestone1
+FROM ${GCS_TEST_BASE}
 COPY gcs/requirements-test.txt /tmp/requirements-test.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-test.txt
 COPY gcs/tests /app/gcs/tests

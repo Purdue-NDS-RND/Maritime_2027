@@ -48,8 +48,11 @@ later if needed. Other competition tasks are outside the current design scope.
    verified; stopping does not imply guaranteed station keeping.
 
 The development GCS is a web application accessed through a browser on the
-desktop at localhost:8080, using React/Leaflet and FastAPI. These choices do not determine the vehicle-GCS network
-protocol. No application scaffolding is required during this design discussion.
+desktop at localhost:8080, using React/Leaflet and FastAPI. Its live map uses
+passive MAVLink telemetry, with configurable UDP or serial connections, streamed
+from the backend to the browser. Mission delivery still uses the boat HTTP API;
+radio-only delivery to the onboard application remains undecided. See
+[live position](gcs_live_position.md) for implemented behavior and limits.
 
 The initial GCS view shows labeled objects, route waypoints and clearance
 margins from above. A stitched aerial image and a custom drone survey interface
@@ -76,8 +79,10 @@ areas with application-level containers. Multiple ROS 2 nodes may share a
 vehicle application container. `shared/` holds common definitions, not a service.
 Pixhawk firmware and host drivers stay outside application containers. Desktop
 and Jetson builds may differ. The removed adapter is not part of this design. Development mission transfer
-uses boat-owned loopback HTTP on port 8091; physical vehicle-GCS networking
-remains undecided.
+uses boat-owned loopback HTTP on port 8091. GCS map telemetry independently reads
+the simulator's UDP 14550 output, preserving UDP 14551 for the boat app. A host
+radio forwarder or configurable direct serial reader supports future shore
+telemetry. Physical radio operation and mission transport remain unverified.
 
 ## Navigation and accuracy
 

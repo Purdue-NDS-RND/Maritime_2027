@@ -14,7 +14,11 @@ camera serial assignments or hardware FCU URL was found in the removed code.
 `simulation/config/blueboat.parm` preserves SITL parameters. Camera payloads in
 `simulation/models/` preserve simulated optics/mounts. Source dependency pins
 remain in the simulator Dockerfile and Compose file. The simulator exposes
-MAVLink on UDP 14550 (QGroundControl) and 14551 (program/tests). This does not
-choose vehicle-GCS networking or hardware integration.
+MAVLink on UDP 14550 (ground station) and 14551 (boat app/program/tests). The web
+GCS now consumes 14550 by default; other ground stations need a separate
+forwarded output. Its telemetry connection, serial baud and autopilot IDs are
+configurable for future radio use such as an RFD900, either through a host
+forwarder or direct device access. No physical radio/device configuration has
+been verified. This does not choose mission delivery to the onboard application.
 
 The approximate BlueBoat dynamics are not calibrated competition-boat dynamics.

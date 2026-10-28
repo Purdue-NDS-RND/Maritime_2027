@@ -1,4 +1,6 @@
-"""FastAPI backend; boat HTTP is the sole vehicle interface."""
+"""Boat HTTP owns commands; passive MAVLink supplies map telemetry."""
+import asyncio
+from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
@@ -7,11 +9,26 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 from fastapi import FastAPI, HTTPException, Request as IncomingRequest
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from .workspace import Workspace
+from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
 
 workspace = Workspace(os.getenv('GCS_DATA', '/data'), os.getenv('GCS_PROFILES', '/profiles'))
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    telemetry = Telemetry(TelemetryConfig.from_env())
+    app.state.telemetry = telemetry
+    telemetry.start()
+    try:
+        yield
+    finally:
+        telemetry.stop()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.middleware('http')
@@ -107,6 +124,25 @@ def disarm():
 @app.get('/api/status')
 def status():
     return boat('/status')
+
+
+@app.get('/api/telemetry')
+def telemetry_snapshot(request: IncomingRequest):
+    return request.app.state.telemetry.snapshot()
+
+
+async def telemetry_events(telemetry):
+    # One latest snapshot per tick. No client queue can accumulate an old track.
+    while True:
+        yield 'data: ' + json.dumps(telemetry.snapshot(), allow_nan=False) + '\n\n'
+        await asyncio.sleep(0.2)
+
+
+@app.get('/api/telemetry/events')
+async def live_telemetry(request: IncomingRequest):
+    return StreamingResponse(telemetry_events(request.app.state.telemetry),
+                             media_type='text/event-stream',
+                             headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.get('/api/operations/{operation_id}')

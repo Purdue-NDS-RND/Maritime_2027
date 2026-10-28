@@ -1,2 +1,4 @@
 fastapi==0.115.12
 uvicorn==0.34.2
+pymavlink==2.4.50
+pyserial==3.5

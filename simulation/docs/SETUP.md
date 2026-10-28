@@ -36,7 +36,11 @@ sudo apt install make xauth
 
 No host ROS or Gazebo installation is required.
 
-## 3. Make QGroundControl executable
+## 3. Choose a ground station
+
+The project web GCS uses the simulator's UDP `14550` output for live position.
+See the [live tracking test](GCS_LIVE_POSITION.md). It does not require
+QGroundControl. If using QGroundControl instead, make its AppImage executable:
 
 ```bash
 chmod +x /home/ppatel/Applications/QGroundControl-v5.1.4-x86_64.AppImage
@@ -44,6 +48,8 @@ chmod +x /home/ppatel/Applications/QGroundControl-v5.1.4-x86_64.AppImage
 
 Launch it normally from the desktop or terminal. QGroundControl should
 automatically discover the simulated boat on UDP port `14550`.
+Do not run it on that port alongside the web GCS telemetry reader; configure
+separate MAVProxy outputs for multiple consumers.
 
 ## 4. Validate and build
 
