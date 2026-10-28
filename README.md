@@ -19,13 +19,14 @@ may later support football toss or colored buoy contact.
 | [simulation/](simulation/README.md) | Retained Gazebo/SITL runtime, assets, tests |
 | [docs/](docs/README.md) | Working design, competition references and hardware knowledge |
 
-Boat, drone, and GCS are scaffolds only. No new mission implementation, message
-schemas or networking is implemented. The [working design](docs/design.md)
-records the ongoing design discussion. Each vehicle has a Jetson for application
+The [boat application](boat/README.md) provides the first boat-only supplied GPS
+mission implementation. Drone and GCS remain scaffolds; vehicle-GCS networking
+is undecided. The [working design](docs/design.md)
+records the design discussion. Each vehicle has a Jetson for application
 processing and a Pixhawk for control. ROS 2 is used
 within vehicle applications; the vehicle-to-GCS protocol is undecided.
 
 Start with [the working design](docs/design.md) and
 [Milestone 1](docs/milestone1.md) for current development scope, then
 [simulator setup](simulation/docs/SETUP.md). The existing simulator can be run with
-`make -C simulation run`; it does not yet implement the new boat application.
+`make -C simulation run`; the boat application runs separately.

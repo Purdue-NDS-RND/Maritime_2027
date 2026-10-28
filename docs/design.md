@@ -150,6 +150,11 @@ competition-boat dynamics.
 
 ## Open decisions
 
+The first boat-only slice selects ROS 2 Jazzy and direct `pymavlink`, with local
+JSON mission files and ROS services for testing. See [boat execution](boat_execution.md)
+for the implemented semantics and limits. These local interfaces do not settle
+the vehicle-GCS protocol or final clearance/acceptance settings.
+
 - First-milestone mission input, progress and completion semantics.
 - Route geometry, turning behavior, operating speed and clearance validation.
 - Error measurements, numeric margins and GPS/RTK hardware availability.

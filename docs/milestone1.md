@@ -1,6 +1,7 @@
 # Milestone 1: camera-free slalom through the web GCS
 
-Status: planned; implementation has not started.
+Status: in progress. The first boat-only execution slice is implemented; see
+[boat execution](boat_execution.md) for behavior and actual validation limits.
 
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
@@ -70,9 +71,10 @@ places and edits waypoints in the GCS.
 
 ## Implementation order
 
-- [ ] Establish a boat-only execution path for a manually supplied GPS mission,
+- [x] Establish a boat-only execution path for a manually supplied GPS mission,
   including upload acceptance, start, progress and completion. Keep this path
-  usable independently of the web GCS.
+  usable independently of the web GCS. The first open-water example passed;
+  this is not gate/slalom or whole-hull acceptance. See [runtime evidence](boat_execution.md#runtime-evidence).
 - [ ] Export the resolved simulator object map and verify its GPS alignment.
 - [ ] Build the minimal GCS map view and manual waypoint editor, configurable
   speed/clearance, and route clearance checks.

@@ -1,0 +1,12 @@
+{
+  "mission_id": "open-water-north-12m-example",
+  "speed_m_s": 1.0,
+  "waypoints": [
+    {"latitude": 51.5662590, "longitude": -4.0343450}
+  ],
+  "finish_radius_m": 3.0,
+  "finish_speed_m_s": 0.2,
+  "finish_settle_s": 5.0,
+  "timeout_s": 120.0,
+  "max_start_distance_m": 20.0
+}

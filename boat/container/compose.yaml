@@ -1,0 +1,19 @@
+name: maritime-boat
+services:
+  boat:
+    image: maritime-boat:jazzy
+    build:
+      context: ..
+      dockerfile: container/Dockerfile
+    network_mode: host
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HOME: /tmp
+      ROS_LOG_DIR: /logs/ros
+      ROS_DOMAIN_ID: ${BOAT_ROS_DOMAIN_ID:-27}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+    volumes:
+      - ${MISSION_DIR:-../examples}:/mission:ro
+      - ../../simulation/logs/boat:/logs
+    command: ["python3", "-m", "boat_app.node", "--ros-args", "-p", "connection:=${BOAT_CONNECTION:-udpin:127.0.0.1:14551}"]
+    stop_grace_period: 20s
