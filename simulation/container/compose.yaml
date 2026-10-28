@@ -2,7 +2,7 @@ name: ardupilot-blueboat
 
 services:
   simulator:
-    image: ${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
+    image: ${SIM_IMAGE:-maritime-sim:latest}
     container_name: ardupilot-blueboat-sim
     build:
       context: ..

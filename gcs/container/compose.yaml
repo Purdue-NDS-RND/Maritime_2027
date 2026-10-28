@@ -1,7 +1,7 @@
 name: maritime-course-gcs
 services:
   gcs:
-    image: ${GCS_IMAGE:-maritime-course-gcs:milestone1}
+    image: ${GCS_IMAGE:-maritime-gcs:latest}
     build:
       context: ../..
       dockerfile: gcs/container/Dockerfile

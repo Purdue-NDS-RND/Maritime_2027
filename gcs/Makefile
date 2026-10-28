@@ -14,5 +14,5 @@ validate:
 	docker compose -f container/compose.yaml config --quiet
 
 test:
-	docker build -f container/Dockerfile.test -t maritime-course-gcs:test ..
-	docker run --rm --network none maritime-course-gcs:test
+	docker build -f container/Dockerfile.test --build-arg GCS_TEST_BASE="$${GCS_IMAGE:-maritime-gcs:latest}" -t "$${GCS_TEST_IMAGE:-maritime-gcs:test}" ..
+	docker run --rm --network none "$${GCS_TEST_IMAGE:-maritime-gcs:test}"

@@ -21,16 +21,18 @@ Internal form: scripts/run.sh [--build|--build-only|--rebuild-only|--down|--non-
   --down          Stop and remove this project's container
   --non-interactive Start with environment/defaults without the setup menu
 
+Defaults: calm water, cameras off, fixed slalom.
 In a terminal, starting without WORLD or SCENARIO opens a quick setup menu.
 Explicit WORLD/SCENARIO selections and redirected input/output skip the menu.
 
 Environment:
-  SCENARIO=one|gate|multi|repeated_red|slalom  Launch a Gazebo buoy scenario
+  SCENARIO=one|gate|multi|repeated_red|slalom  Launch a Gazebo buoy scenario (default slalom)
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
   BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat
-  WATER=calm|normal|harsh  Override water independently of the world/scenario
+  WATER=calm|normal|harsh  Override water independently (default calm)
   SIM_GPU=auto|nvidia|mesa Prefer working NVIDIA graphics, or select a renderer
-  CAMERAS=on|off         Explicitly enable/disable scenario cameras (default on)
+  SIM_IMAGE=<tag>         Runtime/build image (default maritime-sim:latest)
+  CAMERAS=on|off         Explicitly enable/disable scenario cameras (default off)
   MAVLINK_STREAMRATE=4|10|20 Telemetry stream rate in Hz (default 4)
   CAMERA_FPS=15           RGB-D capture rate in simulation Hz (8..60; 30 supported)
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
@@ -52,6 +54,17 @@ if [[ $action == up && $interactive == 1 && -t 0 && -t 1 && -z ${WORLD:-} && -z 
     source "$PROJECT_DIR/scripts/run-menu.sh"
     configure_simulation
 fi
+
+# Resolve once for both terminal and unattended launches. Explicit worlds remain supported.
+if [[ -z ${WORLD:-} && -z ${SCENARIO:-} ]]; then
+    export SCENARIO=slalom
+fi
+export WATER=${WATER:-calm}
+export CAMERAS=${CAMERAS:-${BOAT_MODEL:+on}}
+export CAMERAS=${CAMERAS:-off}
+printf 'Resolved launch: image=%s water=%s cameras=%s scenario=%s world=%s boat=%s seed=%s camera_fps=%s telemetry_hz=%s gpu=%s\n' \
+    "${SIM_IMAGE:-maritime-sim:latest}" "$WATER" "$CAMERAS" "${SCENARIO:-none}" "${WORLD:-generated}" \
+    "${BOAT_MODEL:-single}" "${BUOY_SEED:-fixed}" "${CAMERA_FPS:-15}" "${MAVLINK_STREAMRATE:-4}" "${SIM_GPU:-auto}"
 
 if [[ $(uname -s) != Linux ]]; then
     echo "ERROR: this project requires native Linux for host networking and X11 forwarding." >&2
@@ -81,7 +94,7 @@ export RENDER_GID=${RENDER_GID:-$(getent group render | cut -d: -f3 || true)}
 VIDEO_GID=${VIDEO_GID:-$HOST_GID}
 RENDER_GID=${RENDER_GID:-$HOST_GID}
 export VIDEO_GID RENDER_GID
-export SIM_IMAGE=${SIM_IMAGE:-ardupilot-blueboat:4.7.0}
+export SIM_IMAGE=${SIM_IMAGE:-maritime-sim:latest}
 
 compose_files=(-f container/compose.yaml)
 if [[ -d /dev/dri ]]; then
@@ -142,11 +155,11 @@ try:
 except (ValueError, AssertionError):
     raise SystemExit('ERROR: CAMERA_FPS must be finite and between 8 and 60.')
 PY
-case "${CAMERAS:-on}" in
+case "${CAMERAS:-off}" in
     on|off) ;;
     *) echo 'ERROR: CAMERAS must be on or off.' >&2; exit 2 ;;
 esac
-if [[ ${CAMERAS:-on} == off && -n ${BOAT_MODEL:-} ]]; then
+if [[ ${CAMERAS:-off} == off && -n ${BOAT_MODEL:-} ]]; then
     echo 'ERROR: CAMERAS=off cannot select a camera BOAT_MODEL.' >&2
     exit 2
 fi
@@ -180,14 +193,14 @@ if [[ -n $scenario ]]; then
         --output-world logs/generated-worlds/active.sdf
         --manifest logs/generated-worlds/active.manifest.json
         --boat-model "${BOAT_MODEL:-single}"
-        --cameras "${CAMERAS:-on}"
+        --cameras "${CAMERAS:-off}"
     )
     if [[ -n ${BUOY_SEED:-} ]]; then
         render_args+=(--seed "$BUOY_SEED")
     fi
     python3 scripts/render_scenario.py "${render_args[@]}"
     export WORLD=active.sdf CAMERA_ENABLED=1
-    [[ ${CAMERAS:-on} != off ]] || export CAMERA_ENABLED=0
+    [[ ${CAMERAS:-off} != off ]] || export CAMERA_ENABLED=0
 else
     mkdir -p logs/generated-worlds
     selected_world=${WORLD:-blueboat_waves.sdf}

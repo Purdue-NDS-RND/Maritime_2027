@@ -9,11 +9,11 @@ build:
 	./scripts/run.sh --build-only
 
 # Rebuild application/plugin sources over verified immutable source checkouts.
-# Keep the original simulator image tag available for rollback.
+# Uses the installed canonical runtime as its verified dependency base.
 build-cached:
 	docker build -f container/Dockerfile.cached \
-		--build-arg BASE_IMAGE="$${BASE_IMAGE:-ardupilot-blueboat:4.7.0}" \
-		-t "$${SIM_IMAGE:-maritime-milestone1-sim:current}" .
+		--build-arg BASE_IMAGE="$${BASE_IMAGE:-maritime-sim:latest}" \
+		-t "$${SIM_IMAGE:-maritime-sim:latest}" .
 
 rebuild:
 	./scripts/run.sh --rebuild-only
@@ -30,7 +30,7 @@ teleop:
 		--user 0 \
 		$(foreach device,$(wildcard /dev/input/event*),--device $(device)) \
 		-v "$(CURDIR)/scripts/teleop_wasd.py:/tmp/teleop_wasd.py:ro" \
-		--entrypoint python3 "$${SIM_IMAGE:-ardupilot-blueboat:4.7.0}" /tmp/teleop_wasd.py
+		--entrypoint python3 "$${SIM_IMAGE:-maritime-sim:latest}" /tmp/teleop_wasd.py
 
 sensor-smoke:
 	docker compose -f container/compose.yaml exec -T simulator python3 /opt/boat_sim/scripts/gazebo_sensor_smoke.py
@@ -38,7 +38,7 @@ sensor-smoke:
 buoy-tracking-smoke:
 	@mkdir -p logs
 	docker run --rm -e GZ_PARTITION=buoy_tracking_test --entrypoint bash \
-		-v "$(CURDIR)/tests/buoy_tracking:/test:ro" "$${SIM_IMAGE:-ardupilot-blueboat:4.7.0}" \
+		-v "$(CURDIR)/tests/buoy_tracking:/test:ro" "$${SIM_IMAGE:-maritime-sim:latest}" \
 		-lc 'cmake -S /test -B /tmp/buoy-test && cmake --build /tmp/buoy-test -j2 && /tmp/buoy-test/buoy_tracking_test /tmp/tracking.sdf'
 
 down:

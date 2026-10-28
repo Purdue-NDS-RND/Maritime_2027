@@ -1,7 +1,7 @@
 name: maritime-boat
 services:
   boat:
-    image: ${BOAT_IMAGE:-maritime-boat:jazzy}
+    image: ${BOAT_IMAGE:-maritime-boat:latest}
     build:
       context: ..
       dockerfile: container/Dockerfile

@@ -126,7 +126,7 @@ PY
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
         docker compose -f container/compose.yaml config --quiet
-    if docker image inspect ardupilot-blueboat:4.7.0 >/dev/null 2>&1; then
+    if docker image inspect "${SIM_IMAGE:-maritime-sim:latest}" >/dev/null 2>&1; then
         for scenario in one gate multi repeated_red slalom gate-calm gate-normal gate-harsh; do
             cp "$tmp_dir/$scenario.sdf" "$tmp_dir/$scenario-resolved.sdf"
             sed -i \
@@ -136,7 +136,7 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
         done
         docker run --rm --entrypoint bash \
             -v "$PROJECT_DIR:/work:ro" -v "$tmp_dir:/validation:ro" \
-            ardupilot-blueboat:4.7.0 -lc '
+            "${SIM_IMAGE:-maritime-sim:latest}" -lc '
                 set -e
                 python3 /work/scripts/augment_blueboat_model.py \
                     --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \

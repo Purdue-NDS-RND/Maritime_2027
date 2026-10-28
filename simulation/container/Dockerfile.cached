@@ -1,6 +1,6 @@
 # Development rebuild using an existing image whose source pins are verified.
 # The full Dockerfile remains the clean dependency build.
-ARG BASE_IMAGE=ardupilot-blueboat:4.7.0
+ARG BASE_IMAGE=maritime-sim:latest
 FROM ${BASE_IMAGE}
 USER root
 RUN test "$(git -c safe.directory='*' -C /opt/ardupilot rev-parse HEAD)" = 1511f27194f1dcc3728270883047bdf022b3fd53 \
