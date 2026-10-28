@@ -18,6 +18,9 @@ python_sources=(
     scripts/render_boat.py tests/test_boat_models.py
     scripts/configure_camera_rate.py tests/test_camera_rate.py tests/test_gpu_selection.py
     scripts/render_water.py tests/test_water_rendering.py tests/test_run_menu.py
+    scripts/scene_snapshot.py scripts/export_map.py scripts/export_active.py scripts/alignment_probe.py
+    scripts/alignment_report.py scripts/footprint.py scripts/evaluate_run.py scripts/calibrate.py
+    scripts/calibration_report.py scripts/make_course.py tests/test_scene_export.py tests/test_evaluator.py
     tests/test_scenario_rendering.py
 )
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
@@ -157,3 +160,6 @@ echo "Static validation passed."
 python3 -m unittest discover -s tests -p test_boat_models.py -q
 python3 -m unittest discover -s tests -p test_gpu_selection.py -q
 python3 -m unittest discover -s tests -p test_camera_rate.py -q
+
+python3 -m unittest discover -s tests -p test_scene_export.py -q
+python3 -m unittest discover -s tests -p test_evaluator.py -q

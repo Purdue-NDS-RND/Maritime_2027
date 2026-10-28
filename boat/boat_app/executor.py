@@ -14,6 +14,8 @@ class MissionError(RuntimeError):
 
 class Executor:
     def __init__(self, link, emit, clock=time.monotonic):
+        self.cancel_check = lambda: None
+        self.on_receive = lambda: None
         self.link = link
         self.emit = emit
         self.clock = clock
@@ -24,6 +26,9 @@ class Executor:
         self.armed = False
         self.position = None
         self.speed = None
+        self.heading = None
+        self.firmware_version = None
+        self.firmware_hash = None
         self.fix = 0
         self.last_heartbeat = -math.inf
         self.last_position = -math.inf
@@ -51,7 +56,7 @@ class Executor:
             "system_id": self.system, "component_id": self.component,
             "mode": self.mode, "armed": self.armed,
             "position": vars(self.position) if self.position else None,
-            "speed_m_s": self.speed, "gps_fix": self.fix,
+            "heading_deg": self.heading, "speed_m_s": self.speed, "gps_fix": self.fix,
             "heartbeat_age_s": self.age(self.last_heartbeat),
             "position_age_s": self.age(self.last_position),
             "current_item": self.current, "last_reached_item": self.reached,
@@ -63,6 +68,8 @@ class Executor:
         return age if math.isfinite(age) else None
 
     def receive(self, timeout=0):
+        self.cancel_check()
+        self.on_receive()
         now = self.clock()
         if now - self.last_send >= 1:
             self.link.mav.heartbeat_send(
@@ -94,8 +101,12 @@ class Executor:
             # Reject unavailable velocity and invalid GPS coordinates.
             if abs(msg.lat) <= 900000000 and abs(msg.lon) <= 1800000000 and abs(msg.vx) < 32767 and abs(msg.vy) < 32767:
                 self.position = Point(msg.lat / 1e7, msg.lon / 1e7)
+                self.heading = msg.hdg / 100 if getattr(msg, "hdg", 65535) != 65535 else None
                 self.speed = math.hypot(msg.vx, msg.vy) / 100
                 self.last_position = now
+        elif kind == "AUTOPILOT_VERSION":
+            self.firmware_version = msg.flight_sw_version
+            self.firmware_hash = bytes(msg.flight_custom_version).decode("ascii", errors="replace").rstrip("\x00")
         elif kind == "GPS_RAW_INT":
             self.fix, self.last_gps = msg.fix_type, now
         elif kind == "HOME_POSITION":
@@ -136,6 +147,7 @@ class Executor:
     def command(self, command, *params):
         self.drain()
         values = list(params) + [0] * (7 - len(params))
+        self.cancel_check()
         self.link.mav.command_long_send(self.system, self.component, command, 0, *values)
         ack = self.wait(lambda m: m.get_type() == "COMMAND_ACK" and m.command == command)
         if ack.result != mavutil.mavlink.MAV_RESULT_ACCEPTED:
@@ -146,6 +158,7 @@ class Executor:
         if name not in modes:
             raise MissionError(f"ArduPilot mode {name} is unavailable")
         target = modes[name]
+        self.cancel_check()
         self.link.mav.set_mode_send(self.system, mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, target)
         self.wait(lambda m: m.get_type() == "HEARTBEAT" and m.custom_mode == target)
 

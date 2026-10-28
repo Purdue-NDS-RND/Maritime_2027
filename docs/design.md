@@ -1,7 +1,8 @@
 # System design — working draft
 
-Status: in discussion. This records the decisions made so far; it is not an
-implementation specification. Choices marked provisional and open questions
+Status: working design, with Milestone 1 implementation in progress. See
+[the current handoff](milestone1_handoff.md) for implemented interfaces and
+measured acceptance limits. Choices marked provisional and open questions
 must not be treated as settled requirements.
 
 ## Goals and scope
@@ -46,9 +47,8 @@ later if needed. Other competition tasks are outside the current design scope.
    start the next challenge. Exact Pixhawk stopping behavior remains to be
    verified; stopping does not imply guaranteed station keeping.
 
-The GCS is a web application accessed through a browser. React for the frontend
-and FastAPI for the backend are the preferred, provisional stack. Hosting
-location remains open. These choices do not determine the vehicle-GCS network
+The development GCS is a web application accessed through a browser on the
+desktop at localhost:8080, using React/Leaflet and FastAPI. These choices do not determine the vehicle-GCS network
 protocol. No application scaffolding is required during this design discussion.
 
 The initial GCS view shows labeled objects, route waypoints and clearance
@@ -68,13 +68,16 @@ are not prerequisites.
 
 The drone sends its map to the GCS. The GCS sends the prepared mission to the
 boat. Both vehicles report status. No initial direct boat-to-drone link is
-required. Delivery, acknowledgement, formats and network protocol remain open.
+required. Development delivery/acknowledgement now uses the boat HTTP operation API;
+physical vehicle formats and network transport remain open.
 
 `boat/`, `drone/`, `gcs/` and `simulation/` are independently runnable application
 areas with application-level containers. Multiple ROS 2 nodes may share a
 vehicle application container. `shared/` holds common definitions, not a service.
 Pixhawk firmware and host drivers stay outside application containers. Desktop
-and Jetson builds may differ. The removed adapter is not part of this design.
+and Jetson builds may differ. The removed adapter is not part of this design. Development mission transfer
+uses boat-owned loopback HTTP on port 8091; physical vehicle-GCS networking
+remains undecided.
 
 ## Navigation and accuracy
 
@@ -96,9 +99,9 @@ mission. Another survey is a possible future recovery option; automatic
 resurvey is not required initially. Responses to faults encountered during
 execution are still open.
 
-Mission speed is configurable. Initial planning favors reliable passage and
-clearance over shortest distance or fastest time. Select a conservative starting
-speed through testing; no numeric default has been agreed. Clearance validation
+Mission speed is configurable. Milestone 1 now selects a 2.0 m/s target,
+0.25 m whole-footprint clearance, and staged development starting at 0.5 m/s;
+see its acceptance table. These settings do not establish real-boat limits. Clearance validation
 must account for the intended speed's effect on path tracking and turns.
 
 For Evade, the proposed strategy is to identify detector towers and plan a

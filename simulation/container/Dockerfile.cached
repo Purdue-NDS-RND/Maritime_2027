@@ -1,0 +1,26 @@
+# Development rebuild using an existing image whose source pins are verified.
+# The full Dockerfile remains the clean dependency build.
+ARG BASE_IMAGE=ardupilot-blueboat:4.7.0
+FROM ${BASE_IMAGE}
+USER root
+RUN test "$(git -c safe.directory='*' -C /opt/ardupilot rev-parse HEAD)" = 1511f27194f1dcc3728270883047bdf022b3fd53 \
+ && test "$(git -c safe.directory='*' -C /opt/ardupilot_gazebo rev-parse HEAD)" = 082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5 \
+ && test "$(git -c safe.directory='*' -C /opt/SITL_Models rev-parse HEAD)" = 25bc38ed8c6c0345840159a8cbc0b02781d52f3c \
+ && test "$(git -c safe.directory='*' -C /opt/asv_wave_sim rev-parse HEAD)" = ca8629df4e191235753dfae92ef725d30b923364
+COPY plugins /opt/boat_sim/plugins
+RUN cmake -S /opt/boat_sim/plugins -B /tmp/current-plugins -DCMAKE_INSTALL_PREFIX=/opt/boat_sim \
+ && cmake --build /tmp/current-plugins -j2 && cmake --install /tmp/current-plugins
+COPY worlds /opt/boat_sim/worlds
+COPY models /opt/boat_sim/models
+COPY config /opt/boat_sim/config
+COPY scenarios /opt/boat_sim/scenarios
+COPY --chmod=0755 scripts /opt/boat_sim/scripts
+COPY --chmod=0755 container/start-sim.sh /usr/local/bin/start-sim.sh
+COPY --chmod=0755 container/healthcheck.sh /usr/local/bin/healthcheck.sh
+COPY --chmod=0755 container/sitl-process-wrapper.sh /usr/local/bin/sitl-process-wrapper.sh
+RUN python3 /opt/boat_sim/scripts/augment_blueboat_model.py --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \
+ --payload /opt/boat_sim/models/blueboat_rgbd/camera_payload.sdf --output /opt/boat_sim/models/blueboat_rgbd/model.sdf \
+ --expected-sha256 fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57 \
+ && python3 /opt/boat_sim/scripts/augment_blueboat_model.py --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \
+ --payload /opt/boat_sim/models/blueboat_dual_rgbd/camera_payload.sdf --output /opt/boat_sim/models/blueboat_dual_rgbd/model.sdf \
+ --boat-model dual --expected-sha256 fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57

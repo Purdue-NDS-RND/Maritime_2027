@@ -6,14 +6,19 @@ import json
 from pathlib import Path
 import signal
 import time
+import threading
 
 from pymavlink import mavutil
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
+from .control import Control
+from .http_api import serve
 from .executor import Executor
 from .mission import Mission
 
@@ -24,6 +29,8 @@ class BoatNode(Node):
         self.declare_parameter("connection", "udpin:127.0.0.1:14551")
         self.declare_parameter("mission_file", "/mission/mission.json")
         self.declare_parameter("log_dir", "/logs")
+        self.declare_parameter("http_port", 8091)
+        self.record_lock = threading.Lock()
         self.log_dir = Path(self.get_parameter("log_dir").value)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.owner_lock = (self.log_dir / ".boat-owner.lock").open("a")
@@ -37,18 +44,21 @@ class BoatNode(Node):
         link = mavutil.mavlink_connection(connection, source_system=245, source_component=191)
         self.controller = Executor(link, self.record)
         self.record({"event": "session", "connection": connection, "run_id": run_id})
-        self.command_services = [self.create_service(Trigger, f"~/{name}", self.handler(name))
+        self.control = Control(self.controller, self.log_dir)
+        self.http = serve(self.control, self.get_parameter("http_port").value)
+        self.command_group = ReentrantCallbackGroup()
+        self.command_services = [self.create_service(Trigger, f"~/{name}", self.handler(name), callback_group=self.command_group)
                                  for name in ("upload", "start", "stop", "disarm")]
-        self.create_timer(0.1, self.controller.tick)
         self.create_timer(0.5, self.publish_status)
         self.get_logger().info(f"Waiting for boat on {connection}; evidence: {self.run_dir}")
 
     def record(self, event):
-        self.events.write(json.dumps({"time_utc": datetime.now(timezone.utc).isoformat(),
+        with self.record_lock:
+            self.events.write(json.dumps({"time_utc": datetime.now(timezone.utc).isoformat(),
                                       "monotonic_s": time.monotonic(), **event}, allow_nan=False) + "\n")
 
     def publish_status(self):
-        status = self.controller.status()
+        status = self.control.status()
         self.publisher.publish(String(data=json.dumps(status, allow_nan=False)))
         self.record({"event": "status", **status})
 
@@ -57,18 +67,20 @@ class BoatNode(Node):
             del request
             try:
                 if name == "upload":
-                    if self.controller.state in ("executing", "stopping", "starting"):
-                        raise ValueError("stop the current mission before replacing it")
-                    # Invalidate local start authorization even if replacement parsing fails.
-                    if self.controller.state == "uploaded":
-                        self.controller.transition("ready", "replacement requested; previous start authorization revoked")
                     mission = Mission.load(self.get_parameter("mission_file").value)
-                    snapshot = self.run_dir / f"mission-{mission.sha256}.json"
-                    snapshot.write_text(json.dumps(mission.as_dict(), indent=2) + "\n")
-                    self.controller.upload(mission)
+                    envelope = {"approval_id": "local-file-" + mission.sha256,
+                                "revision_sha256": mission.sha256,
+                                "navigation_profile_id": "local-file-unvalidated",
+                                "mission": mission.as_dict()}
+                    operation = self.control.submit(name, envelope, mission.mission_id)
                 else:
-                    getattr(self.controller, name)()
-                response.success, response.message = True, self.controller.detail
+                    operation = self.control.submit(name, mission_id=self.control.status().get("mission_id"))
+                deadline = time.monotonic() + 180
+                while operation["state"] in ("pending", "running") and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                    operation = self.control.operation(operation["operation_id"])
+                response.success = operation["state"] == "succeeded"
+                response.message = json.dumps(operation)
             except Exception as error:
                 response.success, response.message = False, str(error)
                 self.get_logger().error(f"{name}: {error}")
@@ -79,9 +91,9 @@ class BoatNode(Node):
         return handle
 
     def close(self):
-        if self.controller.state in ("executing", "stopping", "starting"):
-            self.controller.fail("boat application shutting down; HOLD attempted only while owning AUTO")
-        self.controller.link.close()
+        self.http.shutdown()
+        self.http.server_close()
+        self.control.close()
         self.events.close()
         self.owner_lock.close()
 
@@ -90,6 +102,8 @@ def main():
     # Keep ROS and the MAVLink connection alive for bounded shutdown cleanup.
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = BoatNode()
+    executor = MultiThreadedExecutor(num_threads=6)
+    executor.add_node(node)
     stopping = False
     def stop_signal(signum, frame):
         nonlocal stopping
@@ -98,8 +112,10 @@ def main():
     signal.signal(signal.SIGTERM, stop_signal)
     try:
         while rclpy.ok() and not stopping:
-            rclpy.spin_once(node, timeout_sec=0.1)
+            executor.spin_once(timeout_sec=0.1)
     finally:
+        node.control.close()
+        executor.shutdown()
         node.close()
         node.destroy_node()
         rclpy.shutdown()

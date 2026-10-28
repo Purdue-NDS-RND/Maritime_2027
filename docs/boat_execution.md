@@ -140,3 +140,43 @@ References: [MAVLink mission protocol](https://mavlink.io/en/services/mission.ht
 and [ArduPilot Rover mission commands](https://ardupilot.org/rover/docs/common-mavlink-mission-command-messages-mav_cmd.html).
 The exact retained firmware source was also inspected for AUTO startup, mission
 speed and end behavior.
+
+## Milestone 1 HTTP and command ownership
+
+The boat also serves loopback HTTP on `127.0.0.1:8091` (ROS parameter
+`http_port`). HTTP and the retained local-file ROS services submit to one
+boat-owned queue. Only its worker receives/sends MAVLink, runs execution ticks,
+or changes execution state; status readers consume snapshots. ROS uses
+reentrant service callbacks so STOP can interrupt another pending service.
+
+- `PUT /missions/{id}` accepts exactly `approval_id`, `revision_sha256`,
+  `navigation_profile_id`, and the existing `mission` object.
+- `POST /missions/{id}/start` starts that verified current mission explicitly.
+- `POST /stop`, `POST /disarm` retain the existing HOLD/disarm checks.
+- `GET /operations/{id}` returns pending/running/succeeded/failed/unknown.
+- `GET /status` returns the vehicle/mission snapshot, heading and telemetry ages.
+
+Long commands return HTTP 202 and an operation ID. Receipt is distinct from
+confirmed ArduPilot acceptance. Repeating identical upload/start identity
+returns the recorded operation, including after process restart; a conflicting
+ID/envelope is rejected. A restart marks unfinished operations unknown and
+never restores start authorization or automatically resumes a mission. A failed
+mission needs a new explicit revision/ID. Inspect status after ambiguous
+outcomes rather than automatically retrying start with a new ID.
+
+STOP raises cancellation checked inside MAVLink waits and before commands,
+invalidates older queued commands and runs before ordinary work. Its confirmed
+result is separate from receipt. Cancelled work cannot later proceed to arm.
+Historical operations and mission envelopes are saved under the boat log
+root in `operations.json`; mission/event evidence retains individual sessions.
+
+GCS profiles are read-only files under `/profiles`. The boat checks active
+firmware version and source hash, configured geometry identity
+(`BOAT_GEOMETRY_SHA256`) and readbacks of the five measured waypoint parameters
+both at upload and at start. It never silently changes those parameters. Local
+file/ROS tests retain the explicit `local-file-unvalidated` profile and remain
+independent of the map/GCS. This development test path does not establish
+clearance approval. No buoy map/truth is sent in the boat mission.
+
+All 23 current boat tests pass. Live gate and calibration evidence and the
+remaining GCS/slalom acceptance limits are in [the handoff](milestone1_handoff.md).

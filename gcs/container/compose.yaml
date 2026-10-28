@@ -1,0 +1,16 @@
+name: maritime-course-gcs
+services:
+  gcs:
+    image: maritime-course-gcs:milestone1
+    build:
+      context: ../..
+      dockerfile: gcs/container/Dockerfile
+    network_mode: host
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      GCS_DATA: /data
+      GCS_PROFILES: /profiles
+    volumes:
+      - ../../simulation/logs/gcs:/data
+      - ../../simulation/logs/profiles:/profiles:ro
+    restart: "no"

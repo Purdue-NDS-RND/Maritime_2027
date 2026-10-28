@@ -1,7 +1,7 @@
 name: maritime-boat
 services:
   boat:
-    image: maritime-boat:jazzy
+    image: ${BOAT_IMAGE:-maritime-boat:jazzy}
     build:
       context: ..
       dockerfile: container/Dockerfile
@@ -9,10 +9,13 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       HOME: /tmp
+      BOAT_PROFILES: /profiles
+      BOAT_GEOMETRY_SHA256: ${BOAT_GEOMETRY_SHA256:-}
       ROS_LOG_DIR: /logs/ros
       ROS_DOMAIN_ID: ${BOAT_ROS_DOMAIN_ID:-27}
       ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
     volumes:
+      - ../../simulation/logs/profiles:/profiles:ro
       - ${MISSION_DIR:-../examples}:/mission:ro
       - ../../simulation/logs/boat:/logs
     command: ["python3", "-m", "boat_app.node", "--ros-args", "-p", "connection:=${BOAT_CONNECTION:-udpin:127.0.0.1:14551}"]

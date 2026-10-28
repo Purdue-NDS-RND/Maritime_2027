@@ -1,0 +1,9 @@
+.git
+simulation/logs
+boat/build
+boat/install
+boat/log
+gcs/frontend/node_modules
+gcs/frontend/dist
+**/__pycache__
+**/*.pyc

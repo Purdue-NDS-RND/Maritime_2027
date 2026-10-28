@@ -1,12 +1,19 @@
 .DEFAULT_GOAL := run
 
-.PHONY: run build rebuild validate smoke teleop sensor-smoke buoy-tracking-smoke down logs
+.PHONY: run build build-cached rebuild validate smoke teleop sensor-smoke buoy-tracking-smoke down logs
 
 run:
 	@./scripts/run.sh
 
 build:
 	./scripts/run.sh --build-only
+
+# Rebuild application/plugin sources over verified immutable source checkouts.
+# Keep the original simulator image tag available for rollback.
+build-cached:
+	docker build -f container/Dockerfile.cached \
+		--build-arg BASE_IMAGE="$${BASE_IMAGE:-ardupilot-blueboat:4.7.0}" \
+		-t "$${SIM_IMAGE:-maritime-milestone1-sim:current}" .
 
 rebuild:
 	./scripts/run.sh --rebuild-only

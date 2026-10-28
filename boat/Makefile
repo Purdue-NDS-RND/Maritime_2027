@@ -11,10 +11,10 @@ build:
 	docker compose -f container/compose.yaml build
 
 test:
-	docker run --rm --network none maritime-boat:jazzy python3 -m unittest discover -s /ws/src/boat_app/tests -v
+	docker run --rm --network none "$${BOAT_IMAGE:-maritime-boat:jazzy}" python3 -m unittest discover -s /ws/src/boat_app/tests -v
 
 run:
-	mkdir -p ../simulation/logs/boat
+	mkdir -p ../simulation/logs/boat ../simulation/logs/profiles
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose -f container/compose.yaml up --no-build
 
 down:

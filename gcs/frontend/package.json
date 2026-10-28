@@ -1,0 +1,1 @@
+{"name":"maritime-course-gcs","version":"1.0.0","private":true,"type":"module","scripts":{"build":"vite build","test":"node --test"},"dependencies":{"leaflet":"1.9.4","react":"19.1.0","react-dom":"19.1.0"},"devDependencies":{"vite":"6.4.5"}}

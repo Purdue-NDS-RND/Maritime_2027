@@ -168,6 +168,18 @@ class ExecutorTests(unittest.TestCase):
         self.assertFalse(self.executor.armed)
         self.assertEqual(self.executor.state, "failed")
 
+    def test_cancellation_during_speed_ack_prevents_arming(self):
+        self.executor.upload(self.mission)
+        def cancelled():
+            if any(command == mavutil.mavlink.MAV_CMD_DO_CHANGE_SPEED for command, _ in self.link.commands):
+                raise MissionError("operation cancelled by STOP")
+        self.executor.cancel_check = cancelled
+        with self.assertRaisesRegex(MissionError, "cancelled"):
+            self.executor.start()
+        self.assertFalse(any(command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
+                             for command, _ in self.link.commands))
+        self.assertEqual(self.executor.state, "failed")
+
     def test_speed_rejection_prevents_arming(self):
         self.executor.upload(self.mission)
         self.link.reject_speed = True

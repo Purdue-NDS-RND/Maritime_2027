@@ -30,6 +30,7 @@ Environment:
   BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat
   WATER=calm|normal|harsh  Override water independently of the world/scenario
   SIM_GPU=auto|nvidia|mesa Prefer working NVIDIA graphics, or select a renderer
+  CAMERAS=on|off         Explicitly enable/disable scenario cameras (default on)
   CAMERA_FPS=15           RGB-D capture rate in simulation Hz (8..60; 30 supported)
   STACK_STARTUP_TIMEOUT=180 Bounded readiness timeout per service (seconds)
 EOF
@@ -135,6 +136,14 @@ try:
 except (ValueError, AssertionError):
     raise SystemExit('ERROR: CAMERA_FPS must be finite and between 8 and 60.')
 PY
+case "${CAMERAS:-on}" in
+    on|off) ;;
+    *) echo 'ERROR: CAMERAS must be on or off.' >&2; exit 2 ;;
+esac
+if [[ ${CAMERAS:-on} == off && -n ${BOAT_MODEL:-} ]]; then
+    echo 'ERROR: CAMERAS=off cannot select a camera BOAT_MODEL.' >&2
+    exit 2
+fi
 scenario=${SCENARIO:-}
 case "${WATER:-}" in
     ''|calm|normal|harsh) ;;
@@ -165,12 +174,14 @@ if [[ -n $scenario ]]; then
         --output-world logs/generated-worlds/active.sdf
         --manifest logs/generated-worlds/active.manifest.json
         --boat-model "${BOAT_MODEL:-single}"
+        --cameras "${CAMERAS:-on}"
     )
     if [[ -n ${BUOY_SEED:-} ]]; then
         render_args+=(--seed "$BUOY_SEED")
     fi
     python3 scripts/render_scenario.py "${render_args[@]}"
     export WORLD=active.sdf CAMERA_ENABLED=1
+    [[ ${CAMERAS:-on} != off ]] || export CAMERA_ENABLED=0
 else
     mkdir -p logs/generated-worlds
     selected_world=${WORLD:-blueboat_waves.sdf}
@@ -335,6 +346,11 @@ fi
 if [[ -n ${WATER:-} ]]; then
     cp logs/generated-worlds/water.json "$run_dir/water.json"
 fi
+git rev-parse HEAD > "$run_dir/source-commit.txt"
+git diff --binary HEAD > "$run_dir/source.patch"
+git status --porcelain=v1 > "$run_dir/source-status.txt"
+git -C .. ls-files -z --cached --others --exclude-standard | tar -C .. --null -T - -czf "$PROJECT_DIR/$run_dir/source.tar.gz"
+docker image inspect "$SIM_IMAGE" > "$run_dir/image.json"
 printf 'run_id=%s\nconfiguration_sha256=%s\napplication_state=not_started\n' \
     "$RUN_ID" "$RUN_CONFIG_SHA256" > "$run_dir/identity.txt"
 

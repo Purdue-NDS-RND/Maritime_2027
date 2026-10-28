@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-world", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--seed", type=int)
+    parser.add_argument("--cameras", choices=("on", "off"), default="on")
     parser.add_argument("--boat-model", choices=("single", "dual"), default="single")
     return parser.parse_args()
 
@@ -149,6 +150,12 @@ def main() -> int:
 
     if args.boat_model == "dual":
         world.find("include/uri").text = "model://blueboat_dual_rgbd"
+
+    if args.cameras == "off":
+        world.find("include/uri").text = "model://blueboat"
+        for plugin in list(world.findall("plugin")):
+            if 'sensors-system' in plugin.get('filename', ''):
+                world.remove(plugin)
 
     manifest_buoys = []
     panel_offset = 0.311

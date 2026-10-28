@@ -85,6 +85,17 @@ ardurover_log=$(basename "$ARDUROVER_LOG")
 mavlink_log=$(basename "$MAVLINK_LOG")
 EOF
 
+# Resolve once, snapshot all model/mesh inputs, then launch only the snapshot.
+scene_dir="$LOG_DIR/runs/$RUN_ID/scene"
+world_source="$WORLD"
+if [[ ! -f $world_source ]]; then
+    for root in ${GZ_SIM_RESOURCE_PATH//:/ }; do
+        if [[ -f $root/$WORLD ]]; then world_source="$root/$WORLD"; break; fi
+    done
+fi
+python3 /opt/boat_sim/scripts/scene_snapshot.py "$scene_dir" --world "$world_source"
+export GZ_SIM_RESOURCE_PATH="$scene_dir/models:$GZ_SIM_RESOURCE_PATH"
+WORLD="$scene_dir/world.sdf"
 echo "Starting Gazebo Harmonic world: $WORLD"
 setsid gz sim -v4 -r "$WORLD" > >(tee -a "$GAZEBO_LOG") 2>&1 &
 gazebo_pid=$!

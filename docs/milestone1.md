@@ -1,6 +1,9 @@
 # Milestone 1: camera-free slalom through the web GCS
 
-Status: in progress. The first boat-only execution slice is implemented; see
+Status: in progress. Map export, a minimal GCS and boat HTTP command ownership
+are implemented. Boat-only gate passage passed at 0.5 m/s; the full browser
+workflow and 2 m/s repeatability are not accepted. See the
+[implementation handoff](milestone1_handoff.md) and
 [boat execution](boat_execution.md) for behavior and actual validation limits.
 
 Read this alongside the [system design](design.md). This document defines the
@@ -35,8 +38,9 @@ places and edits waypoints in the GCS.
 - Simulation, boat and GCS remain separate application runtimes. Use ROS 2
   within the boat application. Do not restore the removed adapter or make
   cameras, MAVROS, Nav2, onboard mapping or continuous replanning prerequisites.
-- Boat-GCS transport, mission formats and integration libraries remain open.
-  This document does not prescribe ROS packages, message schemas or APIs.
+- Development transport is loopback HTTP from GCS to the boat (8091), with
+  ROS 2 retained inside the boat app. The GCS serves React/Leaflet and FastAPI
+  together on desktop localhost:8080. Physical vehicle networking remains open.
 
 ## End-to-end flow
 
@@ -75,7 +79,8 @@ places and edits waypoints in the GCS.
   including upload acceptance, start, progress and completion. Keep this path
   usable independently of the web GCS. The first open-water example passed;
   this is not gate/slalom or whole-hull acceptance. See [runtime evidence](boat_execution.md#runtime-evidence).
-- [ ] Export the resolved simulator object map and verify its GPS alignment.
+- [x] Export the resolved simulator object map and verify its GPS alignment.
+  Four live positions/two headings passed; maximum error 0.015 m.
 - [ ] Build the minimal GCS map view and manual waypoint editor, configurable
   speed/clearance, and route clearance checks.
 - [ ] Connect GCS mission approval/upload/start and progress reporting through
@@ -109,9 +114,23 @@ The milestone is complete only when the end-to-end run demonstrates:
   establish acceptance of physical RC hardware.
 - The result is repeatable with the same recorded scene, mission and settings.
 
-Before declaring acceptance, agree on and record the test speed, hull/buoy
-geometry, clearance definition and margin, coordinate tolerance, finish
-tolerances, timeouts and repeat count. No numeric thresholds are selected yet.
+The approved acceptance settings are:
+
+| Criterion | Required value |
+| --- | --- |
+| Mission speed target | 2.0 m/s |
+| Minimum complete-footprint to buoy-collision clearance | 0.25 m |
+| Coordinate conversion/alignment error against truth | At most 0.10 m |
+| Finish position error from selected centre | At most 1.0 m |
+| Finish speed and settling | At most 0.2 m/s continuously for 5 s |
+| Full-course execution timeout | 300 s |
+| Repeatability | Three consecutive full passes with frozen inputs/settings |
+
+Develop at 0.5, 1.0 and 1.5 m/s before attempting 2.0 m/s. Lower-speed
+success does not complete this milestone. Report actual speed, elapsed course
+time and tracking error separately from the commanded speed. Record the
+conservative collision-mesh footprint, settings and empirical positioning/
+tracking allowance (including an additional 0.10 m reserve).
 Measure actual passage independently of ArduPilot waypoint-reached events;
 waypoint acceptance or a healthy container alone does not prove completion.
 

@@ -65,13 +65,16 @@ WGS84 degrees, speed is m/s, distances are metres and intervals are seconds.
 The finish area is centred on the final waypoint. The first waypoint must be
 within `max_start_distance_m` of the reported boat position before start.
 Input rejects extra/missing fields, non-finite numbers and local coordinates.
-No map/obstacle clearance is checked yet.
+Local file tests do not check map/obstacle clearance. GCS approval uses the
+shared conservative validator before mission transfer. Use a new mission ID for
+each deliberate new attempt; identical IDs are idempotent.
 
 `BOAT_CONNECTION` defaults to `udpin:127.0.0.1:14551`.
 `BOAT_ROS_DOMAIN_ID` defaults to 27 with local discovery. These are local
-development interfaces, not the future GCS transfer protocol.
+development interfaces. The GCS uses the boat-owned HTTP API on localhost:8091;
+physical vehicle networking remains open. See [HTTP command ownership](../docs/boat_execution.md#milestone-1-http-and-command-ownership).
 
-Mission snapshots and progress/events live under ignored
-`simulation/logs/boat/<session>/`; ROS logs under `simulation/logs/boat/ros/`.
+Mission snapshots and the operation journal live under ignored
+`simulation/logs/boat/`, with progress/events under individual session folders; ROS logs under `simulation/logs/boat/ros/`.
 Client disconnection does not affect execution. Application or MAVLink loss
 has different fault semantics, detailed in the handoff.

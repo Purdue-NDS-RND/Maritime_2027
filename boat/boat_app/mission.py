@@ -53,6 +53,10 @@ class Mission:
     @classmethod
     def load(cls, path):
         data = json.loads(Path(path).read_text())
+        return cls.parse(data)
+
+    @classmethod
+    def parse(cls, data):
         names = tuple(cls.__dataclass_fields__)
         fields(data, names, "mission")
         if not isinstance(data["mission_id"], str) or not data["mission_id"].strip():
@@ -71,7 +75,9 @@ class Mission:
         )
 
     def as_dict(self):
-        return asdict(self)
+        data = asdict(self)
+        data["waypoints"] = list(data["waypoints"])
+        return data
 
     @property
     def sha256(self):
