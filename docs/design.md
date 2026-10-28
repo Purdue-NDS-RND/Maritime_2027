@@ -1,7 +1,7 @@
 # System design — working draft
 
 Status: working design, with Milestone 1 simulator acceptance completed. See
-[the current handoff](milestone1_handoff.md) for implemented interfaces and
+[Milestone 1 results](milestone1.md#recorded-simulator-results) for implemented interfaces and
 measured acceptance limits. Choices marked provisional and open questions
 must not be treated as settled requirements.
 
@@ -52,7 +52,7 @@ desktop at localhost:8080, using React/Leaflet and FastAPI. Its live map uses
 passive MAVLink telemetry, with configurable UDP or serial connections, streamed
 from the backend to the browser. Mission delivery still uses the boat HTTP API;
 radio-only delivery to the onboard application remains undecided. See
-[live position](gcs_live_position.md) for implemented behavior and limits.
+[live position](../gcs/README.md#live-map-telemetry) for implemented behavior and limits.
 
 The initial GCS view shows labeled objects, route waypoints and clearance
 margins from above. A stitched aerial image and a custom drone survey interface

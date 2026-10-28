@@ -1,27 +1,40 @@
 # Project documentation
 
-- [Milestone 1](milestone1.md): current development scope, implementation order,
-  and acceptance criteria for camera-free slalom through the web GCS.
-- [Milestone 1 handoff](milestone1_handoff.md): implementation, exact runtime
-  evidence, failures and remaining acceptance work.
-- [Working system design](design.md): agreed workflow, provisional choices,
-  first development milestone, and remaining design questions.
-- [Boat execution](boat_execution.md): first implementation slice, local mission
-  interfaces, execution behavior and validation limits.
-- [GCS live position](gcs_live_position.md): passive MAVLink telemetry, UDP/serial
-  configuration, oriented map marker, freshness and validation limits.
-- [Live tracking test](../simulation/docs/GCS_LIVE_POSITION.md): simulator,
-  browser and keyboard-control test, telemetry-loss check and shutdown.
-- [Simulator setup](../simulation/docs/SETUP.md): prerequisites and build instructions.
-- [Hardware knowledge](hardware.md): retained configuration and prior hardware notes.
-- [Simulator documentation](../simulation/README.md): operation and verification.
+- [System design](design.md): workflow, application boundaries and open decisions.
+- [Milestone 1](milestone1.md): scope, acceptance criteria, reproduction settings,
+  measured simulator results and evidence locations. Selected simulator acceptance
+  is complete; physical-boat performance remains unverified.
+- [Boat execution](boat_execution.md): mission protocol, command ownership,
+  completion and fault behavior; [boat guide](../boat/README.md) for commands.
+- [GCS guide](../gcs/README.md): editing/approval, telemetry configuration,
+  UDP/serial setup, filtering and validation limits.
+- [Simulator guide](../simulation/README.md): setup, operation, manual GCS tracking,
+  performance, optional cameras, troubleshooting and maintenance.
+- [Hardware knowledge](hardware.md): retained configuration and hardware notes.
 - [Competition course](<competition_docs/AIMM-ICC Competition Course Details 12-13 2025.pdf>)
   and [rules](<competition_docs/Rules and Regulations _ AIMM ICC.pdf>): source documents.
 
-Boat execution, the minimal GCS and simulator export/evaluation are implemented.
-Milestone 1 passed its selected simulator acceptance; physical-boat performance
-remains unverified. Drone remains a scaffold.
+## Maintaining documentation
 
-Historical records: [repository migration](archive/migration_plan.md) and
-[migration validation](archive/validation.md). These describe the cleanup, not
-the current design or current simulator acceptance.
+Update the relevant guide when behavior changes. Keep scope and acceptance
+results in the milestone, interfaces in the component references, and commands
+in application/simulator guides. Create a new document only for a distinct topic
+that needs its own maintained reference. Do not add per-task handoff, completion,
+cleanup or validation reports. Keep detailed run artifacts under ignored
+`simulation/logs/`; link important evidence and summarize its limits in the
+existing reference. Git history preserves superseded plans and reports.
+
+## Repository history
+
+The 2026-10-27 migration retained the simulator, renamed `Simulation/` to
+`simulation/`, removed the adapter/legacy autonomy, mapping, Nav2 and monitoring
+stack, and introduced independent boat/drone/GCS/shared areas. Local data was
+retained under `simulation/logs/`, including `pre-revamp-monitor/`. The original
+baseline was `b1851a097f9715c9b0362cc2d3449f9ea681e33b`; migration documentation
+was committed in `5e2bdba`. The historical archive branch was left unchanged.
+
+Migration static validation passed (34 tests, one sandbox GPU skip; four GPU
+tests passed with host visibility); no final live rebuild/control acceptance was
+claimed at that checkpoint. Evidence: `simulation/logs/revamp-final-validate.log`
+and `revamp-verify-rgbd*.log`. Later milestone results supersede that checkpoint;
+drone remains a scaffold. Removed migration reports remain in Git history.

@@ -178,3 +178,41 @@ a client message-interval ACK alone does not prove sustained delivery at another
 rate. Boat profiles verify observed source frame spacing at upload/start. Record
 the selected rate with the run and use the profile's measured rate. Physical
 vehicle networking and bandwidth acceptance remain outside this simulation test.
+
+## Test live GCS tracking
+
+This checks simulator → MAVLink → GCS backend → browser movement/heading using
+keyboard control. It needs no measured mission profile or route approval.
+
+1. From `simulation/`, run
+   `CAMERAS=off WATER=calm SCENARIO=slalom make run` and wait for readiness.
+   Use the canonical image built from this checkout; see [setup](SETUP.md).
+   Leave the boat app stopped: teleop owns UDP 14551. Close QGC on UDP 14550
+   or give it a separate forwarded output; that port belongs to GCS telemetry.
+2. From the repository root, run `make -C gcs build` (if needed), then
+   `make -C gcs run`. Open <http://localhost:8080>. The boat marker needs no
+   imported course map, though manual panning/zooming may be necessary.
+   Expect **Live boat position**, an amber boat with bow/arrow and heading label.
+   **Boat mission API stale / unavailable** is expected with the boat stopped.
+   The symbol has fixed screen size and does not represent hull clearance.
+3. Check `curl -s http://localhost:8080/api/telemetry | python3 -m json.tool`
+   if needed. Expect `connection_state: live`, `stale: false`, current
+   coordinates and fresh heartbeat/position ages. Events stream at 5 Hz from
+   `/api/telemetry/events`.
+4. From `simulation/`, run `make teleop`. R selects ACRO and requests arming;
+   wait for confirmation, then W/S moves and A/D steers. Release for neutral.
+   H requests HOLD. Observe position and heading in Gazebo and the browser.
+   Unknown heading uses a question-mark circle. The host keyboard reader can
+   receive keys with other windows focused: exit with Q before typing elsewhere.
+5. Q exits teleop and requests HOLD/disarm; confirm disarm. Run `make down`
+   from `simulation/`. Within roughly 3 s the marker should grey at its last
+   known position. Restart with the same launch settings; fresh telemetry should
+   recover without movement commands, possibly briefly clearing cached position.
+6. Stop with confirmed disarm and `make down` in `simulation/`, then
+   `make -C gcs down` from the repository root.
+
+Autonomous Upload/Start is a separate boat-app test requiring explicit measured
+profile staging, geometry identity, telemetry rate and scene verification; see
+[milestone reproduction](../../docs/milestone1.md#implementation-and-reproduction).
+Radio setup is in the [GCS guide](../../gcs/README.md#live-map-telemetry);
+physical radio operation remains unverified.

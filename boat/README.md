@@ -5,9 +5,9 @@ One ROS 2 Jazzy node owns a direct `pymavlink` connection inside a separate
 container. ArduPilot controls motion. Cameras, simulator truth, MAVROS, Nav2,
 the drone and GCS are not dependencies.
 
-This is the first implementation slice of [Milestone 1](../docs/milestone1.md),
-not slalom or whole-hull-clearance acceptance. See the
-[implementation handoff](../docs/boat_execution.md) for behavior and limits.
+The local-file example below tests supplied-route execution; full simulator
+slalom acceptance is recorded in [Milestone 1](../docs/milestone1.md). See the
+[execution reference](../docs/boat_execution.md) for behavior and limits.
 
 ## Build and check
 
@@ -77,4 +77,4 @@ physical vehicle networking remains open. See [HTTP command ownership](../docs/b
 Mission snapshots and the operation journal live under ignored
 `simulation/logs/boat/`, with progress/events under individual session folders; ROS logs under `simulation/logs/boat/ros/`.
 Client disconnection does not affect execution. Application or MAVLink loss
-has different fault semantics, detailed in the handoff.
+has different fault semantics, detailed in the [execution reference](../docs/boat_execution.md).

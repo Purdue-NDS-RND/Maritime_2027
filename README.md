@@ -5,10 +5,10 @@ ground station reviews that object map, prepares a predefined GPS route and
 task instructions, and sends the mission to the boat. The boat executes the
 supplied route through its Pixhawk and reports status.
 
-Gate passage and slalom should initially work without camera input. This is a
-capability to validate against survey error, GPS error, path tracking, buoy
-movement, and hull clearance, not an established result. Task-specific cameras
-may later support football toss or colored buoy contact.
+Camera-free gate passage and slalom passed the selected simulator acceptance.
+Physical feasibility still needs validation against survey/GPS error, tracking,
+buoy movement and hull clearance. Task-specific cameras may later support
+football toss or colored buoy contact.
 
 | Directory | Responsibility |
 | --- | --- |
@@ -21,7 +21,7 @@ may later support football toss or colored buoy contact.
 
 The [boat application](boat/README.md) provides the first boat-only supplied GPS
 mission implementation. The minimal web GCS and scene/evaluation tools are now
-implemented; see the [handoff](docs/milestone1_handoff.md) for measured limits.
+implemented; see the [milestone results](docs/milestone1.md#recorded-simulator-results) for measured limits.
 Drone remains a scaffold. Physical vehicle-GCS networking is undecided. The [working design](docs/design.md)
 records the design discussion. Each vehicle has a Jetson for application
 processing and a Pixhawk for control. ROS 2 is used
@@ -29,8 +29,8 @@ within vehicle applications. The development GCS uses boat-owned loopback HTTP
 for mission commands and status, plus passive MAVLink telemetry for live map
 position. The React/Leaflet browser at localhost:8080 displays an oriented boat
 symbol and heading label. UDP and serial radio connections are configurable;
-physical radio operation remains unverified. See [live position](docs/gcs_live_position.md)
-and the [simulator tracking test](simulation/docs/GCS_LIVE_POSITION.md).
+physical radio operation remains unverified. See [live position](gcs/README.md#live-map-telemetry)
+and the [simulator tracking test](simulation/docs/USING_THE_SIM.md#test-live-gcs-tracking).
 
 Start with [the working design](docs/design.md) and
 [Milestone 1](docs/milestone1.md) for current development scope, then

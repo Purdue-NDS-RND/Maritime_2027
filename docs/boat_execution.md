@@ -1,9 +1,9 @@
 # Boat-only supplied-mission execution
 
-This first implementation slice supports local GPS mission input, upload,
-explicit start, telemetry progress and measured finish checks. GCS integration,
-object-map export, clearance checks and independent passage evaluation remain
-subsequent work.
+The boat supports supplied GPS mission input, upload, explicit start, telemetry
+progress and measured finish checks through local ROS services and loopback HTTP.
+The GCS adds approval/clearance checks; simulator tools independently evaluate
+passage. The local-file path remains independently testable.
 
 ## Interfaces and ownership
 
@@ -33,7 +33,7 @@ The local JSON file contains a mission identifier, GPS waypoints, speed, finish
 radius/speed/settle interval, execution timeout, and maximum start-to-first-point
 distance. A canonical SHA-256 identifies the normalized input. Snapshots are
 saved before upload. Operator approval currently consists of explicit upload
-and start calls on that file; future GCS approval is separate work.
+and start calls on that file; GCS approval uses the HTTP interface below.
 
 ArduPilot item zero is home and items one onward are supplied waypoints, at
 zero relative altitude. Speed is a separately acknowledged start command,
@@ -131,10 +131,10 @@ are alongside it. Earlier diagnostic sessions remain preserved. One early
 attempt was refused by the firmware's gyro consistency pre-arm check; no
 checks were disabled and no force-arm was used.
 
-Only the supplied-mission execution step is established here. Repeated slalom,
-multi-leg runtime passage, contacts, stern clearance, physical RC takeover,
-network faults, Jetson deployment and real-boat behavior remain unverified.
-Next is resolved simulator object-map export with measured GPS-frame alignment.
+This initial open-water run established supplied-mission execution only. Later
+simulator slalom, clearance and fault results are recorded in
+[Milestone 1](milestone1.md#recorded-simulator-results) and below. Physical RC,
+radio networking, Jetson deployment and real-boat behavior remain unverified.
 
 References: [MAVLink mission protocol](https://mavlink.io/en/services/mission.html)
 and [ArduPilot Rover mission commands](https://ardupilot.org/rover/docs/common-mavlink-mission-command-messages-mav_cmd.html).
@@ -186,4 +186,37 @@ clearance approval. No buoy map/truth is sent in the boat mission.
 
 All 26 current boat tests pass. Three consecutive browser-started full slaloms
 passed the selected simulator acceptance at a commanded 2.0 m/s target. Measured
-speeds, independent hull/finish checks, GCS-loss evidence and physical limits are in [the handoff](milestone1_handoff.md).
+speeds, independent hull/finish checks, GCS-loss evidence and physical limits are in [Milestone 1 results](milestone1.md#recorded-simulator-results).
+
+## Recorded control and telemetry fault checks
+
+These used the existing boat image in run `20261028T023002-442841`, away from
+course obstacles. A simulation-only relay bound the unchanged simulator API port
+14551, with the boat temporarily configured to receive at 14651. No committed
+port/default configuration changed. The separately supplied GPS missions used
+the retained `local-file-unvalidated` boat-only path; these tests do not claim
+GCS clearance approval or slalom passage.
+
+- Dropping only GLOBAL_POSITION_INT while retaining heartbeat/GPS caused failure
+  after position age exceeded 3 s. ArduPilot HOLD was confirmed with fresh
+  heartbeat, and restoring position telemetry did not resume execution.
+- Operator STOP during a live mission confirmed HOLD; explicit disarm succeeded
+  after speed fell below 0.2 m/s.
+- Dropping all telemetry caused a stale-heartbeat failure after 3 s. Without a
+  fresh heartbeat, the app could not confirm stop. After link restoration,
+  ArduPilot was still AUTO while the app remained failed; an explicit STOP then
+  confirmed HOLD and disarm. This exposes the recovery-policy choice: deferred
+  HOLD once fresh AUTO is observed versus requiring an operator STOP. No claim
+  is made that total telemetry loss autonomously stops the vehicle.
+- An independent client on the retained operator port 14550 selected MANUAL.
+  The boat app reported interrupted, preserved MANUAL for the observation window,
+  and required explicit new authorization. Subsequent explicit STOP/disarm
+  succeeded. This verifies independent MAVLink takeover in simulation, not RC
+  hardware or physical radio failsafes.
+
+Scripts, receipts, per-case status samples and relay transitions are retained as
+`fault_cases.py`, `fault_relay.py`, `manual_mode.py`, `fault-cases.jsonl`,
+`fault-relay-events.jsonl` and `fault-cases-retry.log` under `simulation/logs/milestone1-followup/`.
+The first harness launch preceded HTTP readiness and was refused before any
+mission action; its error log is preserved separately. The retried harness
+completed all four checks and left the boat disarmed in HOLD.

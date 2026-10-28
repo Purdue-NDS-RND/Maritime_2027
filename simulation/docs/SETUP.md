@@ -39,7 +39,7 @@ No host ROS or Gazebo installation is required.
 ## 3. Choose a ground station
 
 The project web GCS uses the simulator's UDP `14550` output for live position.
-See the [live tracking test](GCS_LIVE_POSITION.md). It does not require
+See the [live tracking test](USING_THE_SIM.md#test-live-gcs-tracking). It does not require
 QGroundControl. If using QGroundControl instead, make its AppImage executable:
 
 ```bash

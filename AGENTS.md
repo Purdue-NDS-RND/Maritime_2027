@@ -50,3 +50,10 @@ create an old implementation directory or modify `archive/pre-revamp`. Work on
 `revamp`; do not force push, delete remote branches or merge this migration into
 main. Use focused changes, four-space Python indentation, snake_case and strict
 Bash entrypoints. PRs should explain runtime impact and actual validation limits.
+
+Update existing documentation for the affected component or milestone. Do not
+create per-task handoff, completion, cleanup or validation Markdown files.
+Keep concise acceptance results and limitations in `docs/milestone1.md`, commands
+in application/simulator guides, and raw runtime evidence in ignored
+`simulation/logs/`. Add a document only for a distinct maintained topic; use Git
+history for superseded plans and reports.
