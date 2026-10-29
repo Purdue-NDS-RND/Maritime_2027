@@ -46,10 +46,12 @@ recordings, generated SDF/manifests, EEPROM and caches out of Git under
 `simulation/docs/`.
 
 Preserve uncommitted work and local data. Git history is the archive; do not
-create an old implementation directory or modify `archive/pre-revamp`. Work on
-`revamp`; do not force push, delete remote branches or merge this migration into
-main. Use focused changes, four-space Python indentation, snake_case and strict
-Bash entrypoints. PRs should explain runtime impact and actual validation limits.
+create an old implementation directory. The archive exists only on origin as
+`origin/archive/pre-revamp`; consult it only when essential for historical
+reference, and do not modify it. Do not force push or delete remote branches
+unless explicitly requested. Use focused changes, four-space Python indentation,
+snake_case and strict Bash entrypoints. PRs should explain runtime impact and
+actual validation limits.
 
 Update existing documentation for the affected component or milestone. Do not
 create per-task handoff, completion, cleanup or validation Markdown files.
