@@ -286,6 +286,39 @@ Full-course navigation, Identify contact, deployment, detection avoidance, launc
 recovery, docking actions, Receive communication and scoring remain unverified
 or deferred. Physical boat/radio performance remains unverified.
 
+Verification on 2026-10-28 (UTC evidence dated 2026-10-29): simulator static,
+Compose and Gazebo SDF checks passed, along with 72 simulator container tests
+(one automatic-NVIDIA-host test skipped without GPU device passthrough) and
+28 GCS container tests. React and GCS builds passed; simulator rebuilds used the
+verified pinned dependency cache rather than a clean network dependency build.
+Tests cover feet conversion, station/color completeness, deterministic output,
+legacy rendering/imports, invalid footprints, version 2 persistence, immutable
+export identity and segment/finish rejection at all 29 physical objects.
+
+Runtime `20261029T004128-174602` passed the normal movement/HOLD/RTL/disarm
+smoke. A separate browser-approved custom route to world (-5, 0), commanded at
+0.5 m/s with a 1.8 m total buffer, uploaded/read back, started and completed with
+finish settling and HOLD confirmed; explicit disarm then succeeded. The saved
+map/draft survived reload. Full-course GCS orientation, colors, station labels,
+Zebra pattern, docks and deployment overlay were visually checked against the
+reference. Native Gazebo-window visual comparison was unavailable through the
+session's UI tools; its live scene description, complete fixed-object roster,
+poses and SDF were checked instead. This is short-route integration evidence,
+not independent whole-hull/full-course or competition-task acceptance.
+
+Fresh run `20261029T004835-203334` retained the same physical scene identity.
+Its first physics pose was within 0.000001 m of (0, 0), facing west; the spawn
+probe measured SITL heading 269.9999975 degrees. Multi-position/two-heading
+alignment passed at 0.01585 m maximum position error and below 0.000001 rad
+heading error. Active-scene exports included all 23 buoys and six props. Final committed-source
+run `20261029T005141-211122` also passed alignment at 0.01572 m, retaining the
+same physical scene and exactly matching exported objects, stations and start pose.
+Raw evidence is ignored under `simulation/logs/competition-*`, including
+`competition-custom-result.json`, alignment reports, live scene description,
+container/static/build logs and `competition-gcs-overview.png`; immutable scenes
+and per-step truth remain under their run directories. The existing `output/`
+and prior GCS/boat data were preserved. Test runtimes were stopped after capture.
+
 ## Recorded simulator results
 
 These are historical measurements from 2026-10-28, not a fresh validation run.
