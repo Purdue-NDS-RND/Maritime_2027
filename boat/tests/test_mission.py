@@ -25,6 +25,9 @@ class MissionTests(unittest.TestCase):
         changed = self.load_changed(lambda data: data.update(speed_m_s=0.5))
         self.assertNotEqual(mission.sha256, changed.sha256)
 
+    def test_speed_is_not_limited_to_a_calibrated_range(self):
+        self.assertEqual(self.load_changed(lambda data: data.update(speed_m_s=7.5)).speed_m_s, 7.5)
+
     def test_rejects_unsafe_or_ambiguous_values(self):
         for key, value in (("speed_m_s", 0), ("speed_m_s", True),
                            ("finish_radius_m", float("nan")),

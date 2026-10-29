@@ -41,7 +41,7 @@ class ControlTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.fake=FakeController()
         self.control=Control(self.fake,self.temp.name)
         self.mission=Mission.load(Path(__file__).resolve().parents[1]/'examples/mission.json')
-        self.envelope={'approval_id':'approval','revision_sha256':'revision','navigation_profile_id':'local-file-unvalidated',
+        self.envelope={'approval_id':'approval','revision_sha256':'revision',
                        'mission':self.mission.as_dict()}
     def tearDown(self):
         self.fake.release.set();self.control.close();self.temp.cleanup()

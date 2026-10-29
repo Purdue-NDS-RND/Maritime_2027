@@ -34,13 +34,23 @@ def validate_map(data):
 
 
 class Workspace:
-    def __init__(self, directory, profiles):
+    def __init__(self, directory):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self.profiles = Path(profiles)
         self.lock = threading.RLock()
         self.path = self.directory / 'workspace.json'
         self.state = json.loads(self.path.read_text()) if self.path.exists() else {'map': None, 'draft': None, 'approval': None}
+        # Old clearance values excluded the hull and tracking allowance. Never
+        # reinterpret them as a total buffer or retain the old authorization.
+        if self.state.get('draft') and 'navigation_profile_id' in self.state['draft']:
+            backup = self.directory / ('workspace-before-point-buffer-' + str(uuid.uuid4()) + '.json')
+            backup.write_bytes(self.path.read_bytes())
+            self.state['draft'].pop('navigation_profile_id')
+            self.state['draft'].pop('start_heading_deg', None)
+            self.state['draft']['clearance_m'] = None
+            self.state['approval'] = None
+            self.state['migration_notice'] = 'Route retained. Set a total clearance buffer, then validate and approve again.'
+            self.save()
 
     def save(self):
         temp = self.path.with_suffix('.tmp')
@@ -61,42 +71,36 @@ class Workspace:
             if 'draft' in data:
                 if not isinstance(data['draft'], dict):
                     raise ValueError('draft must be an object')
+                if 'navigation_profile_id' in data['draft']:
+                    raise ValueError('legacy profile-based draft: reload and choose a total clearance buffer')
                 # Validate JSON finiteness before persistence.
                 json.dumps(data['draft'], allow_nan=False)
                 updated['draft'] = data['draft']
+            updated.pop('migration_notice', None)
             self.state = updated
             self.save()
             return self.read()
-
-    def profile(self):
-        name = self.state['draft']['navigation_profile_id']
-        if not isinstance(name, str) or Path(name).name != name or not name:
-            raise ValueError('select a measured navigation profile')
-        profile = json.loads((self.profiles / (name + '.json')).read_text())
-        if profile['id'] != name:
-            raise ValueError('profile identity mismatch')
-        return profile
 
     def validate(self):
         with self.lock:
             if not self.state['map'] or not self.state['draft']:
                 raise ValueError('import map and create route first')
-            return validate_route(self.state['map'], self.state['draft'], self.profile())
+            return validate_route(self.state['map'], self.state['draft'])
 
     def approve(self):
         with self.lock:
             result = self.validate()
             if not result['valid']:
                 raise ValueError(json.dumps(result))
-            inputs = {'map': self.state['map'], 'draft': self.state['draft'], 'profile': self.profile()}
+            inputs = {'map': self.state['map'], 'draft': self.state['draft']}
             revision = sha(inputs)
             approval_id = str(uuid.uuid4())
             draft = inputs['draft']
             mission = {'mission_id': approval_id, 'waypoints': draft['waypoints'], 'speed_m_s': draft['speed_m_s'],
                        'finish_radius_m': draft['finish_radius_m'], 'finish_speed_m_s': 0.2, 'finish_settle_s': 5,
-                       'timeout_s': 300, 'max_start_distance_m': inputs['profile']['maximum_leg_m'] + 0.10}
+                       'timeout_s': 300, 'max_start_distance_m': 100}
             envelope = {'approval_id': approval_id, 'revision_sha256': revision,
-                        'navigation_profile_id': draft['navigation_profile_id'], 'mission': mission}
+                        'mission': mission}
             approval = {'approved_at': datetime.now(timezone.utc).isoformat(), 'inputs': inputs,
                         'validation': result, 'envelope': envelope}
             with (self.directory / (approval_id + '.json')).open('x') as stream:
@@ -110,6 +114,6 @@ class Workspace:
             approval = self.state['approval']
             if approval is None:
                 raise ValueError('current draft has no approval')
-            if sha({'map': self.state['map'], 'draft': self.state['draft'], 'profile': self.profile()}) != approval['envelope']['revision_sha256']:
-                raise ValueError('approved inputs/profile changed; approve again')
+            if sha({'map': self.state['map'], 'draft': self.state['draft']}) != approval['envelope']['revision_sha256']:
+                raise ValueError('approved inputs changed; approve again')
             return deepcopy(approval)

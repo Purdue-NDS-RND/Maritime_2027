@@ -44,7 +44,7 @@ declare -A immutable_hashes=(
     [worlds/blueboat_calm.sdf]=aab2ac1d4b3d1515c288deb7c1431fa53f95ae9f972a7b5d52575517cf871ea1
     [worlds/blueboat_waves.sdf]=d9cf5589f6b314044a7feb0922d24b0bce3444951cbec8b9c17cb5db8b816c82
     [worlds/blueboat_harbor.sdf]=25392e067da365abe53a60547981559ad2eb8d9815b26b3f6cf3a054e50ba65f
-    [config/blueboat.parm]=4ea8ca5d7198ac0338bc0e163075ae3997d13beb3e97488b1b449139ae741991
+    [config/blueboat.parm]=297c8740e0bcd72ae0db98275e5b0871cea8198357dfaf1ad804dd16fead658c
 )
 for path in "${!immutable_hashes[@]}"; do
     actual=$(sha256sum "$path" | cut -d' ' -f1)

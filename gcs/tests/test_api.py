@@ -38,6 +38,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(result.json()['state'],'pending')
         self.assertEqual(self.calls[-1][1],'PUT')
         self.assertNotIn('buoys',self.calls[-1][2]['mission'])
+        self.assertNotIn('navigation_profile_id',self.calls[-1][2])
         self.assertEqual(self.client.post('/api/start').status_code,200)
         self.assertTrue(self.calls[-1][0].endswith('/start'))
     def test_edit_revokes_backend_start_authority(self):

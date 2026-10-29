@@ -3,7 +3,7 @@
 build:
 	docker compose -f container/compose.yaml build
 run:
-	mkdir -p ../simulation/logs/gcs ../simulation/logs/profiles
+	mkdir -p ../simulation/logs/gcs
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose -f container/compose.yaml up --no-build
 down:
 	docker compose -f container/compose.yaml down

@@ -6,11 +6,12 @@ matches ArduPilot's mean-latitude longitude scaling; it is intentionally
 restricted to local courses away from the poles.
 
 `clearance.py` checks finite route segments (including the start connection),
-waypoint transitions, ordered fixed-course passages and finish regions using
-an enclosing boat circle. The profile supplies measured speed/turn/spacing
-limits and position/tracking error. Validation adds 0.10 m reserve and the
-operator's clearance without silently altering the route.
+ordered fixed-course passages and finish regions using a point route and an
+operator-selected total clearance buffer. The buffer is the distance from the
+boat reference point to a buoy surface. There are no hull identities, measured
+navigation profiles, gain requirements or hidden margins. Speed must be finite
+and positive; validation does not predict speed-dependent tracking or turns.
 
 This directory is a library, not a service. It has no ROS, MAVLink or vehicle
 control dependencies. Independent runtime acceptance uses the simulator's
-oriented footprint recorder/evaluator rather than this preflight circle.
+oriented footprint recorder/evaluator rather than this static buffer check.

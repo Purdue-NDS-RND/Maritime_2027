@@ -1,5 +1,16 @@
-# Official BlueBoat baseline from ArduPilot/SITL_Models.
+# Shared simulator boat parameters for every world/scenario.
+# Retains the upstream BlueBoat setup with project-tested controller tuning.
 FRAME_CLASS       2
 CRUISE_SPEED      2.0
 CRUISE_THROTTLE   50.0
 WP_SPEED          2.0
+
+# Steering, speed and waypoint behavior; pivot turns enabled.
+ATC_STR_RAT_FF     0.8
+ATC_SPEED_P        1.6
+ATC_SPEED_I        0.05
+WP_RADIUS          0.2
+WP_ACCEL           0.5
+WP_JERK            1.0
+WP_PIVOT_ANGLE     30
+WP_PIVOT_RATE      60

@@ -1,10 +1,9 @@
-"""Verify selected measured settings; never infer or silently change parameters."""
+"""Simulation experiment checks, independent of boat/GCS mission authorization."""
 import json
 import math
-import os
 from pathlib import Path
 from pymavlink import mavutil
-from .executor import MissionError
+from boat_app.executor import MissionError
 
 WAYPOINT_PARAMETERS = {'WP_RADIUS','WP_PIVOT_ANGLE','WP_PIVOT_RATE','WP_ACCEL','WP_JERK'}
 CONTROL_DEFAULTS = {'ATC_STR_RAT_FF':0.2, 'ATC_SPEED_P':0.1, 'ATC_SPEED_I':0.2}

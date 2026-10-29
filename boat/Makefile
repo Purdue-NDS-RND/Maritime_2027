@@ -14,7 +14,7 @@ test:
 	docker run --rm --network none "$${BOAT_IMAGE:-maritime-boat:latest}" python3 -m unittest discover -s /ws/src/boat_app/tests -v
 
 run:
-	mkdir -p ../simulation/logs/boat ../simulation/logs/profiles
+	mkdir -p ../simulation/logs/boat
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose -f container/compose.yaml up --no-build
 
 down:

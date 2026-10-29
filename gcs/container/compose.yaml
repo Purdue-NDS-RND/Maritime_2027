@@ -9,12 +9,10 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       GCS_DATA: /data
-      GCS_PROFILES: /profiles
       GCS_MAVLINK_CONNECTION: ${GCS_MAVLINK_CONNECTION:-udpin:127.0.0.1:14550}
       GCS_MAVLINK_BAUD: ${GCS_MAVLINK_BAUD:-57600}
       GCS_MAVLINK_SYSTEM_ID: ${GCS_MAVLINK_SYSTEM_ID:-1}
       GCS_MAVLINK_COMPONENT_ID: ${GCS_MAVLINK_COMPONENT_ID:-1}
     volumes:
       - ../../simulation/logs/gcs:/data
-      - ../../simulation/logs/profiles:/profiles:ro
     restart: "no"

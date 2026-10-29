@@ -12,10 +12,9 @@ make run
 make down
 ```
 
-Runtime data lives under ignored `simulation/logs/gcs/`. Mount measured profile
-JSON files read-only from `simulation/logs/profiles/`. No production profile is
-shipped: a synthetic test fixture must never be installed as a live profile.
-See [milestone reproduction and results](../docs/milestone1.md#implementation-and-reproduction).
+Runtime data lives under ignored `simulation/logs/gcs/`. Boat/GCS startup and
+mission execution require no navigation profiles, geometry hashes or controller
+gain staging. ArduPilot tuning belongs to the simulator/vehicle setup.
 
 Import the JSON produced by `simulation/scripts/export_active.py`. Click to add
 GPS waypoints, drag them, edit coordinates, reorder or delete them. Explicitly
@@ -26,15 +25,26 @@ orientation; it rejects other gate orientations.
 
 Save the draft, then use **Validate**, **Approve**, **Upload**, and **Start** as
 separate actions. Every edit revokes approval. Immutable approved JSON files
-include the imported map, settings, profile, validation and transfer envelope.
-A changed profile invalidates approval even without browser edits. Reload
-restores saved drafts and approvals. Unsaved edits are identified in the UI.
+include the imported map, mission settings, validation and transfer envelope.
+Reload restores saved drafts and approvals. Unsaved edits are identified in the UI.
 
-The backend validates both the planned start connection and the actual boat
-position at upload and start. Clearance uses an enclosing boat circle plus the
-selected clearance, measured position/tracking allowance and 0.10 m reserve.
-Finish-region validation also includes its radius. No route is generated,
-waypoint changed or clearance reduced by validation.
+Set **Target speed** and **Total clearance buffer** in the GCS. Speed must be
+finite and positive; there is no calibrated-speed list or application speed cap.
+ArduPilot still accepts/rejects the speed command and controls actual motion.
+The default buffer for new routes is 1.8 m, an editable starting value rather
+than a measured guarantee. It is the total distance from the reported boat
+reference point to each buoy's surface: include hull size, positioning error,
+tracking error and desired extra room yourself. No hull model or hidden margin
+is added. The buffer must be finite and nonnegative. Validation checks straight
+route segments, ordered passages and the entire finish region; it does not
+predict actual turns or establish tracking performance at the chosen speed.
+
+The backend checks both the planned start connection and the actual boat position
+at upload and start. The boat also requires the first waypoint to be within
+100 m. Existing profile-based workspaces are backed up automatically, retain
+their map/waypoints, and lose approval. Their old hull-only clearance is cleared:
+choose a total buffer, then Validate and Approve again. Saved historical approval
+files and operation journals are retained.
 
 The browser talks only to the GCS backend. Mission commands use the boat's
 loopback HTTP API on port 8091. A 202 response means
@@ -165,7 +175,7 @@ automated full-course or clearance evaluation. Physical RFD900 operation and RF
 coverage/latency remain unverified. Before hardware use, measure actual message
 arrivals and visible lag; the 5 Hz backend stream cannot create source updates that the radio
 does not deliver. Configure one owner for any future message-rate requests so
-stations do not compete with boat profile settings.
+stations do not compete with simulator/vehicle telemetry configuration.
 
 ### References
 

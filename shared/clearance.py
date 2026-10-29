@@ -1,9 +1,9 @@
-"""Conservative static route validation against a measured simulator profile."""
+"""Static point-route validation with an operator-selected total buffer."""
 import math
 from .geometry import finite, segment_distance, to_local
 
 
-def validate_route(object_map, draft, profile):
+def validate_route(object_map, draft):
     errors = []
     def reject(reason, location=None):
         errors.append({'reason': reason, 'location': location})
@@ -11,48 +11,24 @@ def validate_route(object_map, draft, profile):
         reject('unsupported object map version')
     if not isinstance(object_map.get('alignment'), dict) or object_map['alignment'].get('outcome') != 'passed':
         reject('scene geographic alignment is unverified')
-    if profile.get('status') != 'calibrated' or not profile.get('evidence_sha256'):
-        reject('profile has no measured calibration evidence')
-    for key in ('measured_error_bound_m', 'enclosing_radius_m', 'minimum_leg_m', 'maximum_leg_m', 'maximum_turn_deg'):
-        if finite(profile[key]) < 0:
-            raise ValueError('profile bounds must be nonnegative')
     reference = object_map['geographic_reference']
     points = [to_local(point, reference) for point in draft['waypoints']]
     if not 1 <= len(points) <= 500:
         reject('route requires 1..500 waypoints')
     speed, clearance = finite(draft['speed_m_s']), finite(draft['clearance_m'])
-    if speed not in profile['speeds_m_s']:
-        reject('speed is outside the measured profile')
-    if clearance < 0.25:
-        reject('clearance must be at least 0.25 m')
-    allowance = finite(profile['measured_error_bound_m']) + 0.10
-    radius = finite(profile['enclosing_radius_m']) + allowance + clearance
-    if min(allowance, radius) <= 0:
-        raise ValueError('invalid profile geometry/allowance')
+    if speed <= 0:
+        reject('target speed must be positive')
+    if clearance < 0:
+        reject('total clearance buffer must be nonnegative')
+    radius = clearance
     start = to_local(draft['start'], reference)
     route = [start, *points]
-    if points and 'maximum_initial_heading_error_deg' in profile:
-        heading = finite(draft.get('start_heading_deg'))
-        delta = (points[0][0]-start[0], points[0][1]-start[1])
-        desired = math.degrees(math.atan2(delta[0], delta[1])) % 360
-        error = abs((heading-desired+180) % 360-180)
-        if error > profile['maximum_initial_heading_error_deg']:
-            reject('initial heading is outside measured profile envelope', list(start))
     for index, (a,b) in enumerate(zip(route, route[1:])):
-        spacing = math.dist(a,b)
-        if not profile['minimum_leg_m'] <= spacing <= profile['maximum_leg_m']:
-            reject(f'leg {index} spacing is outside measured envelope', list(a))
         for buoy in object_map['buoys']:
             centre = to_local(buoy['centre'], reference)
             gap = segment_distance(centre, a, b) - buoy['radius_m'] - radius
             if gap < 0:
-                reject(f'leg {index} violates swept-circle clearance at {buoy["id"]} by {-gap:.3f} m', list(centre))
-    for index, (a,b,c) in enumerate(zip(route, route[1:], route[2:])):
-        u, v = (b[0]-a[0],b[1]-a[1]), (c[0]-b[0],c[1]-b[1])
-        lengths = math.hypot(*u)*math.hypot(*v)
-        angle = math.degrees(math.acos(max(-1,min(1,(u[0]*v[0]+u[1]*v[1])/lengths)))) if lengths else 180
-        if angle > profile['maximum_turn_deg']:
-            reject(f'turn {index+1} exceeds measured angle envelope', list(b))
+                reject(f'leg {index} violates clearance buffer at {buoy["id"]} by {-gap:.3f} m', list(centre))
     finish = to_local(draft['finish'], reference)
     if not points or math.dist(points[-1], finish) > 0.001:
         reject('final waypoint must equal the selected finish centre', list(finish))
@@ -123,5 +99,4 @@ def validate_route(object_map, draft, profile):
     elif task != 'custom':
         reject('unsupported course task')
     return {'valid': not errors, 'errors': errors, 'swept_radius_m': radius,
-            'position_tracking_allowance_m': allowance,
-            'bound_scope': 'empirical simulator bound plus 0.10 m reserve; physical boat unvalidated'}
+            'bound_scope': 'operator-selected total buffer; hull size and tracking error are not inferred'}

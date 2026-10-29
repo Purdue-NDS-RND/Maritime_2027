@@ -369,7 +369,13 @@ fi
 git rev-parse HEAD > "$run_dir/source-commit.txt"
 git diff --binary HEAD > "$run_dir/source.patch"
 git status --porcelain=v1 > "$run_dir/source-status.txt"
-git -C .. ls-files -z --cached --others --exclude-standard | tar -C .. --null -T - -czf "$PROJECT_DIR/$run_dir/source.tar.gz"
+git -C .. ls-files -z --cached --others --exclude-standard |
+    while IFS= read -r -d '' source_path; do
+        # Tracked files can be deleted in an uncommitted working tree.
+        if [[ -e ../$source_path || -L ../$source_path ]]; then
+            printf '%s\0' "$source_path"
+        fi
+    done | tar -C .. --null -T - -czf "$PROJECT_DIR/$run_dir/source.tar.gz"
 docker image inspect "$SIM_IMAGE" > "$run_dir/image.json"
 printf 'run_id=%s\nconfiguration_sha256=%s\napplication_state=not_started\n' \
     "$RUN_ID" "$RUN_CONFIG_SHA256" > "$run_dir/identity.txt"

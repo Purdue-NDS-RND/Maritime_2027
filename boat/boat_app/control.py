@@ -2,7 +2,6 @@
 from copy import deepcopy
 import hashlib
 import json
-import os
 from pathlib import Path
 import queue
 import threading
@@ -11,7 +10,6 @@ import uuid
 
 from .executor import MissionError
 from .mission import Mission, fields
-from .profiles import verify_profile
 
 
 class Control:
@@ -71,8 +69,8 @@ class Control:
                 raise ValueError('boat shutting down')
             mission = None
             if command == 'upload':
-                fields(envelope, ('approval_id', 'revision_sha256', 'navigation_profile_id', 'mission'), 'transfer envelope')
-                for key in ('approval_id', 'revision_sha256', 'navigation_profile_id'):
+                fields(envelope, ('approval_id', 'revision_sha256', 'mission'), 'transfer envelope')
+                for key in ('approval_id', 'revision_sha256'):
                     if not isinstance(envelope[key], str) or not envelope[key].strip():
                         raise ValueError(f'{key} required')
                 mission = Mission.parse(envelope['mission'])
@@ -141,16 +139,10 @@ class Control:
                         raise MissionError('stop active mission before replacement')
                     snapshot = self.directory / f'mission-{mission.sha256}.json'
                     snapshot.write_text(json.dumps(mission.as_dict(), indent=2) + '\n')
-                    envelope=self.registry['missions'][mission.mission_id]['envelope']
-                    verify_profile(self.controller,envelope['navigation_profile_id'],
-                                   os.getenv('BOAT_PROFILES','/profiles'),os.getenv('BOAT_GEOMETRY_SHA256',''))
                     self.controller.upload(mission)
                 elif command == 'start':
                     if self.controller.mission is None or self.controller.mission.mission_id != operation['mission_id']:
                         raise MissionError('mission is no longer current')
-                    envelope=self.registry['missions'][operation['mission_id']]['envelope']
-                    verify_profile(self.controller,envelope['navigation_profile_id'],
-                                   os.getenv('BOAT_PROFILES','/profiles'),os.getenv('BOAT_GEOMETRY_SHA256',''))
                     self.controller.start()
                 else:
                     getattr(self.controller, command)()

@@ -15,7 +15,7 @@ import time
 from pymavlink import mavutil
 from boat_app.executor import Executor
 from boat_app.mission import Mission
-from boat_app.profiles import request_position_rate
+from measured_profiles import request_position_rate
 from calibration_result import successful
 
 ALLOWED = {'WP_RADIUS':(.05,10), 'WP_PIVOT_ANGLE':(0,180), 'WP_PIVOT_RATE':(1,180),

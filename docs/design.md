@@ -90,24 +90,27 @@ The playing area is initially assumed clear except for mapped buoys/task
 objects and defined boundaries. Automatic handling of unexpected obstacles is
 outside the initial scope; a manual operator remains available.
 
-Clearance must account for survey/geolocation error, boat positioning error,
-path tracking and turns, buoy movement, and the entire hull footprint. RTK
-availability is unconfirmed. Neither numeric margins nor a method for combining
-errors has been selected. Minimum clearance is configurable; the GCS must reject
-routes that cannot satisfy the selected margin. Configure it using measured
-errors and hull size rather than assume a chosen buffer proves safe passage.
-Gate, slalom and channel geometry must leave enough
-space for the required margin; editing a route must not bypass that check.
+The current GCS treats the boat route as a point with one configurable total
+clearance buffer to buoy surfaces. The operator includes hull size, survey/GPS
+error, tracking/turn error, buoy movement and extra room in that value. The GCS
+checks the planned segments and finish region without adding hidden hull or
+tracking allowances. It does not establish that the chosen buffer is sufficient
+for the actual boat or speed. Whole-hull evaluation remains a simulator test tool.
 
 If no acceptable passage can be established before execution, do not start the
 mission. Another survey is a possible future recovery option; automatic
 resurvey is not required initially. Responses to faults encountered during
 execution are still open.
 
-Mission speed is configurable. Milestone 1 now selects a 2.0 m/s target,
-0.25 m whole-footprint clearance, and staged development starting at 0.5 m/s;
-see its acceptance table. These settings do not establish real-boat limits. Clearance validation
-must account for the intended speed's effect on path tracking and turns.
+Mission target speed is directly configurable in the GCS as a finite positive
+value. Mission authorization has no navigation-profile, geometry-hash, measured
+speed/turn envelope or tuning-gain dependency. ArduPilot tuning is separate from
+boat/GCS mission operation; simulation tuning/calibration tools live under
+`simulation/`. Physical firmware tuning remains part of vehicle setup.
+
+The historical Milestone 1 acceptance used a 2.0 m/s target and frozen measured
+settings; see its acceptance table. It is evidence for that configuration, not
+a restriction on new mission speeds or proof for arbitrary buffers/settings.
 
 For Evade, the proposed strategy is to identify detector towers and plan a
 route away from them within the permitted channel. Whether this actually avoids

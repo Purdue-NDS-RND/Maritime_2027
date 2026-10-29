@@ -20,6 +20,13 @@ def fields(value, names, label):
         raise ValueError(f"{label} requires exactly: {', '.join(names)}")
 
 
+def positive_speed(value):
+    speed = number(value, "speed_m_s", 0, float("inf"))
+    if speed <= 0:
+        raise ValueError("speed_m_s must be positive")
+    return speed
+
+
 @dataclass(frozen=True)
 class Point:
     latitude: float
@@ -65,7 +72,7 @@ class Mission:
         if not isinstance(points, list) or not 1 <= len(points) <= 500:
             raise ValueError("waypoints must contain 1..500 GPS positions")
         return cls(
-            data["mission_id"], number(data["speed_m_s"], "speed_m_s", 0.1, 5),
+            data["mission_id"], positive_speed(data["speed_m_s"]),
             tuple(Point.parse(point) for point in points),
             number(data["finish_radius_m"], "finish_radius_m", 0.1, 100),
             number(data["finish_speed_m_s"], "finish_speed_m_s", 0.01, 1),

@@ -163,6 +163,19 @@ Every run writes:
 `logs/state/eeprom.bin` preserves parameters between containers. Reset it on a
 single start with `WIPE_PARAMS=1 make run`.
 
+All worlds/scenarios share `config/blueboat.parm`; there is no slalom-specific
+parameter selection. It retains boat frame class, 2.0 m/s cruise/default waypoint
+speed and 50% cruise throttle, with steering FF=0.8, speed P=1.6 / I=0.05,
+WP_RADIUS=0.2 m, WP_ACCEL=0.5, WP_JERK=1, WP_PIVOT_ANGLE=30 degrees and
+WP_PIVOT_RATE=60 degrees/s. Sharp heading changes can trigger a pivot turn in
+place. Mission target speed remains a separate GCS setting.
+
+The file supplies simulator defaults; previously saved EEPROM settings can
+override defaults. Rebuild after editing the file and explicitly apply/read back
+changes to an existing simulator, or reset EEPROM only when intending to discard
+its saved settings. Controller tuning is simulation-only and does not qualify
+the physical boat. Historical logs retain the configuration used by each run.
+
 ### Development telemetry rate
 
 The retained MAVProxy default is 4 Hz. For the measured higher-speed milestone
@@ -175,9 +188,20 @@ MAVLINK_STREAMRATE=20 CAMERAS=off WATER=calm SCENARIO=slalom make run
 Allowed values are 4, 10 and 20 Hz. This changes telemetry delivery, not model
 dynamics or controller gains. MAVProxy periodically enforces its launcher rate;
 a client message-interval ACK alone does not prove sustained delivery at another
-rate. Boat profiles verify observed source frame spacing at upload/start. Record
+rate. Simulation calibration tools can verify observed source frame spacing. Record
 the selected rate with the run and use the profile's measured rate. Physical
 vehicle networking and bandwidth acceptance remain outside this simulation test.
+
+Simulation experiment helpers `scripts/calibrate.py` and
+`scripts/measured_profiles.py` own tuning measurements and gain/firmware checks.
+`scripts/profile_settings.py apply|restore <profile.json> --state <state.json>`
+saves/readbacks originals and explicitly applies/restores measured settings;
+`apply` also requires `--baseline-position-hz 4|10|20`. Store state under `logs/`.
+Run these tools in the boat image with boat source on `PYTHONPATH` and the
+simulator scripts/logs mounted; they reuse the executor solely as a MAVLink
+test client.
+They require exclusive MAVLink ownership with the boat service stopped. They are
+not part of mission upload/start. Existing controller defaults are unchanged.
 
 ## Test live GCS tracking
 
@@ -211,8 +235,10 @@ keyboard control. It needs no measured mission profile or route approval.
 6. Stop with confirmed disarm and `make down` in `simulation/`, then
    `make -C gcs down` from the repository root.
 
-Autonomous Upload/Start is a separate boat-app test requiring explicit measured
-profile staging, geometry identity, telemetry rate and scene verification; see
+Autonomous Upload/Start uses the boat app and explicit GCS route approval.
+Target speed and total clearance buffer are GCS settings; no profile staging or
+geometry identity is required. ArduPilot tuning remains simulator configuration.
+Historical measured-profile acceptance used explicit tuning and telemetry; see
 [milestone reproduction](../../docs/milestone1.md#implementation-and-reproduction).
 Radio setup is in the [GCS guide](../../gcs/README.md#live-map-telemetry);
 physical radio operation remains unverified.

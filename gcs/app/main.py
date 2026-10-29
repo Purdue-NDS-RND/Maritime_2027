@@ -14,7 +14,7 @@ from .workspace import Workspace
 from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
 
-workspace = Workspace(os.getenv('GCS_DATA', '/data'), os.getenv('GCS_PROFILES', '/profiles'))
+workspace = Workspace(os.getenv('GCS_DATA', '/data'))
 
 
 @asynccontextmanager
@@ -70,11 +70,6 @@ def edit(data: dict):
     return checked(workspace.edit, data)
 
 
-@app.get('/api/profiles')
-def profiles():
-    return [json.loads(path.read_text()) for path in workspace.profiles.glob('*.json')]
-
-
 @app.post('/api/validate')
 def validate():
     return checked(workspace.validate)
@@ -91,7 +86,7 @@ def validate_actual_start(approval):
         raise HTTPException(409, 'fresh vehicle position/heartbeat required')
     # Validate the actual start connection as well as the frozen planned start.
     draft = {**approval['inputs']['draft'], 'start': status['position'], 'start_heading_deg': status.get('heading_deg')}
-    result = checked(validate_route, approval['inputs']['map'], draft, approval['inputs']['profile'])
+    result = checked(validate_route, approval['inputs']['map'], draft)
     if not result['valid']:
         raise HTTPException(409, result)
 

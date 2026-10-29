@@ -70,7 +70,6 @@ class BoatNode(Node):
                     mission = Mission.load(self.get_parameter("mission_file").value)
                     envelope = {"approval_id": "local-file-" + mission.sha256,
                                 "revision_sha256": mission.sha256,
-                                "navigation_profile_id": "local-file-unvalidated",
                                 "mission": mission.as_dict()}
                     operation = self.control.submit(name, envelope, mission.mission_id)
                 else:

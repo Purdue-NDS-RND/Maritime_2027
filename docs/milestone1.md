@@ -163,14 +163,53 @@ The retained BlueBoat dynamics are not calibrated competition-boat dynamics.
 
 ## Implementation and reproduction
 
+### Current mission workflow
+
+Boat/GCS mission authorization no longer requires navigation profiles, geometry
+hashes, calibrated speed/turn envelopes or active gain readback. GCS speed and
+total point-to-buoy-surface clearance buffer are operator settings. No hidden hull
+or tracking allowance is added. ArduPilot tuning is separate simulator/vehicle
+configuration; simulation experiment tools live under `simulation/scripts/`.
+Fresh telemetry, explicit approval, upload/readback, speed acknowledgement before
+arming, STOP/takeover and finish checks remain. Existing profile-based drafts
+retain their route with a backup, but require a new total buffer and reapproval.
+
+The results below predate this simplification and remain historical evidence for
+the recorded frozen settings. They do not validate arbitrary speeds/buffers or
+establish a new full-course acceptance for the changed application workflow.
+See the [GCS guide](../gcs/README.md) for current operation.
+
+Simplification validation: 23 boat, 27 GCS and 4 relocated simulation-profile
+tests passed; boat/GCS images and React built; simulator static/Compose/SDF checks
+passed. Live Chrome confirmed the profile selector was removed and the retained
+seven-waypoint draft requires a new total buffer and reapproval. Rebuilt boat/GCS
+services started; the simulator was stopped, so no new motion/slalom run was
+performed. Runtime build/test logs are `simulation/logs/point-buffer-*.log`.
+
+The shared simulator defaults now include the previously measured controller
+settings in `simulation/config/blueboat.parm`, used by every world/scenario.
+Pivot turns are enabled at 30 degrees with a 60 degrees/s limit. This changes the
+simulator's starting configuration; it does not add any boat/GCS tuning dependency
+or establish a new full-course run. See the simulator guide for EEPROM precedence.
+
+Shared-default verification: cached rebuild and simulator static/Compose/SDF
+checks passed. All 12 configured parameters matched independent readback after
+restart in run `20261028T235904-95001`, disarmed at 0.0 m/s. Existing EEPROM was
+backed up before startup and the eight tuning settings explicitly saved/read
+back; evidence is under `simulation/logs/slalom-defaults-20261028T235627Z/`.
+No mission or new movement test was run. The verification simulator was stopped
+and the previously running boat service restored. Normal source snapshot creation
+also now handles tracked files deleted in an uncommitted working tree.
+
+### Historical acceptance setup
+
 The boat owns serialized HTTP/ROS mission commands and a single MAVLink worker;
 see [boat execution](boat_execution.md). The [GCS guide](../gcs/README.md)
 documents manual editing, immutable approval, separate Upload/Start and passive
-map telemetry. No production profile is shipped; measured profiles and their
-source evidence are local files under `simulation/logs/profiles/`. The staging
-helper is also local evidence at
-`simulation/logs/milestone1-followup/profile_settings.py`, not a shipped script;
-a fresh checkout needs its own measured profile and verified staging workflow.
+map telemetry. Measured profiles and their source evidence are local files under
+`simulation/logs/profiles/`. The maintained simulator-only tuning helper is
+`simulation/scripts/profile_settings.py`; a fresh checkout still needs its own
+measured settings/evidence to reproduce a characterized controller configuration.
 
 Simulator runs retain immutable resolved worlds, models/meshes, source and image
 identities, baseline parameters and per-step physics/contact streams. The map
@@ -204,9 +243,9 @@ To reproduce the accepted profile:
 3. With the boat service stopped and disarmed, use simulation-only
    `profile_settings.py apply <profile> --state <new-state-file> --baseline-position-hz 20`
    from the boat image with `simulation/` mounted at `/simulation`. Save original
-   parameters before mutation. Use `sim-slalom-2_0-p16-20hz-v2` and pass its exact
-   `BOAT_GEOMETRY_SHA256` to boat Compose. The boat verifies gains; it never
-   silently applies them.
+   parameters before mutation. Use `sim-slalom-2_0-p16-20hz-v2` for the
+   recorded tuning configuration. The simulator-only helper verifies gains;
+   current boat/GCS operation does not check them.
 4. Verify the active scene/image/buoy coordinates and fresh stationary alignment.
    Keep the original multi-position/two-heading conversion proof with the map.
    Import the manually prepared workspace, then explicitly Validate, Approve,
