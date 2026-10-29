@@ -1,13 +1,15 @@
 """Static point-route validation with an operator-selected total buffer."""
 import math
-from .geometry import finite, segment_distance, to_local
+from .geometry import finite, segment_distance, to_local, polygon_clearance
+from .object_map import validate_map
 
 
 def validate_route(object_map, draft):
+    validate_map(object_map)
     errors = []
     def reject(reason, location=None):
         errors.append({'reason': reason, 'location': location})
-    if object_map.get('schema_version') != 1:
+    if object_map.get('schema_version') not in (1,2):
         reject('unsupported object map version')
     if not isinstance(object_map.get('alignment'), dict) or object_map['alignment'].get('outcome') != 'passed':
         reject('scene geographic alignment is unverified')
@@ -23,22 +25,36 @@ def validate_route(object_map, draft):
     radius = clearance
     start = to_local(draft['start'], reference)
     route = [start, *points]
+    obstacles = [*object_map['buoys'], *object_map.get('obstacles', [])]
+    def gap_to_object(obj, a, b):
+        if obj['type'] == 'cylinder':
+            return segment_distance(to_local(obj['centre'],reference),a,b)-obj['radius_m']
+        polygon = [to_local(p,reference) for p in obj['footprint']]
+        distance = min(polygon_clearance(polygon,a,0),polygon_clearance(polygon,b,0))
+        for c,d in zip(polygon,polygon[1:]+polygon[:1]):
+            # Segment intersection, including touching or collinear overlap.
+            def cross(p,q,r):
+                return (q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0])
+            if (max(min(a[0],b[0]),min(c[0],d[0])) <= min(max(a[0],b[0]),max(c[0],d[0]))
+                    and max(min(a[1],b[1]),min(c[1],d[1])) <= min(max(a[1],b[1]),max(c[1],d[1]))
+                    and cross(a,b,c)*cross(a,b,d) <= 0 and cross(c,d,a)*cross(c,d,b) <= 0):
+                return -1e-9
+            distance = min(distance,segment_distance(c,a,b),segment_distance(d,a,b))
+        return distance
     for index, (a,b) in enumerate(zip(route, route[1:])):
-        for buoy in object_map['buoys']:
-            centre = to_local(buoy['centre'], reference)
-            gap = segment_distance(centre, a, b) - buoy['radius_m'] - radius
+        for obj in obstacles:
+            gap = gap_to_object(obj,a,b)-radius
             if gap < 0:
-                reject(f'leg {index} violates clearance buffer at {buoy["id"]} by {-gap:.3f} m', list(centre))
+                reject(f'leg {index} violates clearance buffer at {obj["id"]} by {-gap:.3f} m', list(to_local(obj['centre'],reference)))
     finish = to_local(draft['finish'], reference)
     if not points or math.dist(points[-1], finish) > 0.001:
         reject('final waypoint must equal the selected finish centre', list(finish))
     finish_radius = finite(draft['finish_radius_m'])
     if not 0 < finish_radius <= 1:
         reject('finish radius must be in (0, 1] m')
-    for buoy in object_map['buoys']:
-        centre = to_local(buoy['centre'], reference)
-        if math.dist(finish,centre) < radius + buoy['radius_m'] + finish_radius:
-            reject('finish area violates clearance at ' + buoy['id'], list(centre))
+    for obj in obstacles:
+        if gap_to_object(obj,finish,finish) < radius + finish_radius:
+            reject('finish area violates clearance at ' + obj['id'], list(to_local(obj['centre'],reference)))
     buoy_ids = {b['id']: b for b in object_map['buoys']}
     seen = set()
     passages = draft.get('passages', [])

@@ -22,6 +22,20 @@ class WorkspaceTests(unittest.TestCase):
         self.workspace=Workspace(root/'data')
         self.workspace.edit({'map':self.map,'draft':self.draft})
     def tearDown(self):self.temp.cleanup()
+    def test_version_two_persistence_and_obstacle_clearance(self):
+        self.map.update(schema_version=2,start_pose={'position':self.draft['start'],'heading_deg':270},
+                        stations=[{'id':'deploy','label':'Deploy','position':to_gps(4,4,self.reference)}],
+                        obstacles=[{'id':'dock','type':'polygon','height_m':.5,'centre':to_gps(5,0,self.reference),
+                                    'footprint':[to_gps(x,y,self.reference) for x,y in [(4,-1),(6,-1),(6,1),(4,1)]]}])
+        self.map['buoys'][0]['height_m']=.76
+        self.workspace.edit({'map':self.map,'draft':self.draft})
+        restored=Workspace(self.workspace.directory)
+        self.assertEqual(restored.read()['map'],self.map)
+        self.assertTrue(any('dock' in e['reason'] for e in restored.validate()['errors']))
+        with self.assertRaises(ValueError):restored.approve()
+        self.map['obstacles'][0]['footprint']=[to_gps(0,0,self.reference)]*3
+        with self.assertRaises(ValueError):self.workspace.edit({'map':self.map})
+
     def test_approval_is_immutable_and_edits_revoke(self):
         approval=self.workspace.approve()
         path=self.workspace.directory/(approval['envelope']['approval_id']+'.json');original=path.read_bytes()

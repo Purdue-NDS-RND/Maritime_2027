@@ -3,34 +3,17 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
-import re
 from pathlib import Path
 import threading
 import uuid
 from shared.clearance import validate_route
-from shared.geometry import finite, to_local
+from shared.object_map import validate_map
 
 
 def sha(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
-def validate_map(data):
-    if data['schema_version'] != 1 or not data['scene_id'] or not data['run_id']:
-        raise ValueError('unsupported or unidentified map')
-    if not isinstance(data['buoys'], list) or not data['buoys']:
-        raise ValueError('map must contain buoys')
-    names = set()
-    for buoy in data['buoys']:
-        if not isinstance(buoy['id'], str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', buoy['id']):
-            raise ValueError('unsupported buoy ID')
-        if buoy['id'] in names:
-            raise ValueError('duplicate buoy identity')
-        names.add(buoy['id'])
-        to_local(buoy['centre'], data['geographic_reference'])
-        if buoy['type'] != 'cylinder' or not 0 < finite(buoy['radius_m']) < 10:
-            raise ValueError('unsupported buoy geometry')
-    return data
 
 
 class Workspace:

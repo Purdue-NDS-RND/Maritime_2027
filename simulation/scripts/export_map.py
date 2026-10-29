@@ -35,6 +35,18 @@ def export(directory, expected_scene_id, active_run_id, alignment=None):
         if (alignment['scene_id'] != expected_scene_id or alignment['run_id'] != active_run_id
                 or alignment['outcome'] != 'passed' or alignment['maximum_position_error_m'] >= 0.10):
             raise ValueError('alignment evidence does not match scene or tolerance')
+    if manifest['scenario'] == 'competition':
+        from export_competition import export_objects
+        if set(includes) != {'blueboat'}:
+            raise ValueError('unexpected includes')
+        data = export_objects(world, manifest, identity['geographic_reference'])
+        return {**data, 'scene_id':identity['scene_id'], 'run_id':identity['run_id'],
+                'snapshot_sha256':identity.get('snapshot_sha256',identity['scene_id']),
+                'captured_at':datetime.now(timezone.utc).isoformat(),
+                'geographic_reference':identity['geographic_reference'],
+                'alignment':alignment or {'outcome':'unverified'}}
+    if any(m.findall('.//collision') for m in world.findall('./world/model')):
+        raise ValueError('unexpected physical models')
     buoys = []
     for item in manifest['buoys']:
         include = includes.pop(item['name'])

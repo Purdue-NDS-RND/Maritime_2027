@@ -36,13 +36,14 @@ def active_scene(root):
         sample=json.loads(stream.read().split(b'\n')[-2])
     poses={p['name']:p['pose'] for p in sample['poses'] if '/' not in p['name']}
     manifest=json.loads((directory/'scene/manifest.json').read_text())
-    expected={'blueboat', *(b['name'] for b in manifest['buoys'])}
+    expected={'blueboat', *(b['name'] for b in [*manifest['buoys'], *manifest.get('props', [])])}
     if set(poses)!=expected:
         raise ValueError('active scene has missing or unexpected models')
-    for buoy in manifest['buoys']:
+    for buoy in [*manifest['buoys'], *manifest.get('props', [])]:
         xyz=[buoy['model_pose'][key] for key in ('x','y','z')]
-        if math.dist(poses[buoy['name']][:3],xyz)>.01:
-            raise ValueError('active buoy moved from immutable snapshot: '+buoy['name'])
+        if (math.dist(poses[buoy['name']][:3],xyz)>.01
+                or (manifest['scenario']=='competition' and abs(math.remainder(poses[buoy['name']][5]-buoy['model_pose']['yaw_rad'], 2*math.pi))>.01)):
+            raise ValueError('active object moved from immutable snapshot: '+buoy['name'])
     return directory,identity
 
 

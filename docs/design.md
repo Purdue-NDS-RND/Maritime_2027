@@ -93,7 +93,7 @@ outside the initial scope; a manual operator remains available.
 The current GCS treats the boat route as a point with one configurable total
 clearance buffer to buoy surfaces. The operator includes hull size, survey/GPS
 error, tracking/turn error, buoy movement and extra room in that value. The GCS
-checks the planned segments and finish region without adding hidden hull or
+checks the planned segments and finish region against all physical obstacles without adding hidden hull or
 tracking allowances. It does not establish that the chosen buffer is sufficient
 for the actual boat or speed. Whole-hull evaluation remains a simulator test tool.
 
@@ -135,6 +135,17 @@ pending confirmation. Camera model, lens, altitude range, geolocation method
 and timing/calibration approach remain open. A homemade gimbal is not assumed
 to improve geolocation accuracy. Survey altitude should be configurable and
 its usable range established through testing.
+
+## Competition scene extension
+
+The default simulator scene now represents the full reference competition course.
+This is a fixed scene/map extension: manual custom routes use obstacle clearance
+checks without gate/slalom passage requirements. Version 2 simulator object maps
+add physical circle/polygon obstacles, station annotations and start-pose metadata;
+version 1 buoy maps remain supported. The boat mission interface is unchanged.
+See [scenario geometry and estimates](../simulation/scenarios/README.md).
+Challenge mechanisms, scoring and automatic route generation remain deferred.
+The historical accepted slalom scene remains available as `SCENARIO=slalom`.
 
 ## Development and acceptance
 

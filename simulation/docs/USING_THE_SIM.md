@@ -10,7 +10,7 @@ make run
 
 The terminal menu first asks for water: **calm** (default), **normal waves**, or
 **harsh waves**. Then choose the scene: open water, harbor/dock, single
-buoy, red/green gate, multiple buoys, repeated red buoys, slalom (default), or camera only. Type
+buoy, red/green gate, multiple buoys, repeated red buoys, slalom regression, competition (default), or camera only. Type
 `q` at any prompt to cancel before startup. Invalid answers are re-prompted.
 The water choice applies independently to every scene, including buoy scenes.
 Presets reuse the existing regular-wave settings: calm amplitude 0 m / period
@@ -18,8 +18,8 @@ Presets reuse the existing regular-wave settings: calm amplitude 0 m / period
 not calibrated sea-state classifications. Both physics and surface rendering
 use the selected parameters. Source world files are never overwritten.
 
-For buoy scenarios, enter an optional integer seed to randomize buoy poses
-reproducibly, or leave it blank for the fixed layout. Cameras default to off;
+For legacy buoy scenarios, enter an optional integer seed to randomize buoy poses
+reproducibly, or leave it blank for the fixed layout. Competition has no jitter; a seed leaves it unchanged. Cameras default to off;
 choose on to select single or dual camera layout. The menu also selects telemetry
 at 4 (default), 10 or 20 Hz. Environment values skip their corresponding prompts.
 The launcher prints all resolved settings before Docker startup. `SIM_GPU` and
@@ -28,7 +28,7 @@ An explicit `BOAT_MODEL=single|dual` enables cameras unless `CAMERAS` is supplie
 See [camera boat selection](DUAL_CAMERA.md).
 
 Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
-launches (redirected input or output) use calm water, cameras off and slalom and never
+launches (redirected input or output) use calm water, cameras off and competition and never
 prompt. Use `./scripts/run.sh --non-interactive` for default startup without a
 menu in a terminal. Builds and `make down` also never prompt.
 

@@ -1,4 +1,4 @@
-# RGB-D buoy scenarios
+# Simulator scenarios
 
 `one.json`, `gate.json`, `multi.json`, `repeated_red.json`, and `slalom.json` are the editable
 source of truth for the RGB-D test worlds. Each buoy has a unique, stable entity
@@ -10,6 +10,42 @@ entities that both use marker ID 1. Launch the nominal layout with
 Add `WATER=calm`, `WATER=normal`, or `WATER=harsh` to choose water independently
 of the buoy layout, for example `WATER=harsh SCENARIO=gate make run`. Explicit
 scenario commands without `WATER` retain their original calm-water default.
+
+## Default competition course
+
+`make run` defaults to `competition.json`; `SCENARIO=competition` selects it
+explicitly. The boat starts at world (0, 0), facing west (Gazebo yaw pi,
+SITL heading 270 degrees). The upper blue marker is 3 m east of the boat.
+The geographic reference remains 51.566151, -4.034345.
+
+The local course PDF in `docs/competition_docs/` supplies labeled distances:
+1 ft = 0.3048 m. Relative to that blue marker, Dodge runs west through gates
+at -45/-195 ft with four turns spaced 30 ft apart. Evade descends a 40 ft wide,
+60 ft long channel. Identify, Deploy, Launch, Recover and Return run east on
+the lower row. Receive is a dock annotation associated with Deploy; it adds no
+offshore obstacle. The cyan marker's purpose is unspecified.
+
+The source records reference feet, metric poses, stable identities, task labels,
+and approximation notes. The 4 m Dodge gate width, 5 ft Identify spacing,
+10 ft target diameter, detector/case sizes and simplified docks are estimates.
+These are fixed scene props, including a striped Zebra buoy; they do not use
+the regression ArUco buoy tracking plugin. Cameras and boat dynamics are unchanged.
+Competition bounds are checked separately; legacy scene bounds remain unchanged.
+
+Snapshots and active-scene checks include all 23 buoys and six physical props.
+Competition exports use object-map version 2: buoy records, circle/polygon
+obstacle footprints derived from actual collision primitives, station annotations,
+nonblocking 6 ft deployment-radius overlay and recorded start pose. The physics
+recorder is enabled. Use the existing alignment probe/report and active export
+commands in the [GCS guide](../../gcs/README.md); the probe restores the original
+spawn heading. Keep the boat app stopped while probing.
+
+Routes are manually authored using the GCS **Custom route (clearance only)**
+mode, with no required passage list. Identify contact, sensor deployment,
+detector behavior, launch, retrieval, docking actions and scoring are deferred.
+Map visibility does not establish challenge compliance or full-course acceptance.
+The old **Slalom** menu selection and `SCENARIO=slalom` retain the accepted
+Milestone 1 regression layout and passage validator.
 
 ## Slalom / Dodge practice
 

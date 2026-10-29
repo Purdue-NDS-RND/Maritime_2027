@@ -7,6 +7,7 @@ then restores the original pose. Never run alongside a boat controller.
 import argparse
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -36,9 +37,14 @@ def main():
             stream.seek(max(0, runs[-1].stat().st_size - 32768))
             lines = stream.read().split(b'\n')
             return json.loads(lines[-2])
+    original = next(p["pose"] for p in latest_truth()["poses"] if p["name"] == "blueboat")
     samples = []
     try:
-        for x, y, yaw in [(0,0,0), (10,0,0), (0,10,0), (8,6,math.pi/2)]:
+        probes = [(0,0,0), (10,0,0), (0,10,0), (8,6,math.pi/2)]
+        if os.environ.get('SCENARIO') == 'competition':
+            # Sample the west-facing spawn and keep later poses clear of docks.
+            probes = [(original[0],original[1],original[5]), (0,10,0), (-10,10,0), (-8,6,math.pi/2)]
+        for x, y, yaw in probes:
             pose(x, y, yaw)
             time.sleep(2)
             while link.recv_match() is not None:
@@ -50,7 +56,7 @@ def main():
                 raise RuntimeError('SITL SIMSTATE unavailable; alignment inconclusive')
             samples.append({'requested_world_pose': [x,y,yaw], 'sitl': sample.to_dict(), 'physics': latest_truth(), 'wall_time': time.time()})
     finally:
-        pose(0,0,0)
+        pose(original[0], original[1], original[5])
         args.output.write_text(json.dumps({'samples': samples, 'reference': 'SIMSTATE truth, not estimated GPS'}, indent=2) + '\n')
         link.close()
 

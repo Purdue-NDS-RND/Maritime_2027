@@ -21,12 +21,12 @@ Internal form: scripts/run.sh [--build|--build-only|--rebuild-only|--down|--non-
   --down          Stop and remove this project's container
   --non-interactive Start with environment/defaults without the setup menu
 
-Defaults: calm water, cameras off, fixed slalom.
+Defaults: calm water, cameras off, fixed competition course.
 In a terminal, starting without WORLD or SCENARIO opens a quick setup menu.
 Explicit WORLD/SCENARIO selections and redirected input/output skip the menu.
 
 Environment:
-  SCENARIO=one|gate|multi|repeated_red|slalom  Launch a Gazebo buoy scenario (default slalom)
+  SCENARIO=one|gate|multi|repeated_red|slalom|competition  Launch a Gazebo buoy scenario (default competition)
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
   BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat
   WATER=calm|normal|harsh  Override water independently (default calm)
@@ -57,7 +57,7 @@ fi
 
 # Resolve once for both terminal and unattended launches. Explicit worlds remain supported.
 if [[ -z ${WORLD:-} && -z ${SCENARIO:-} ]]; then
-    export SCENARIO=slalom
+    export SCENARIO=competition
 fi
 export WATER=${WATER:-calm}
 export CAMERAS=${CAMERAS:-${BOAT_MODEL:+on}}
@@ -183,8 +183,8 @@ fi
 
 if [[ -n $scenario ]]; then
     case "$scenario" in
-        one|gate|multi|repeated_red|slalom) ;;
-        *) echo "ERROR: SCENARIO must be one, gate, multi, repeated_red, or slalom." >&2; exit 2 ;;
+        one|gate|multi|repeated_red|slalom|competition) ;;
+        *) echo "ERROR: SCENARIO must be one, gate, multi, repeated_red, slalom, or competition." >&2; exit 2 ;;
     esac
     mkdir -p logs/generated-worlds
     render_args=(

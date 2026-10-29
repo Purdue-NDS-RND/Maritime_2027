@@ -88,10 +88,10 @@ class RunMenuTests(unittest.TestCase):
 
     def test_defaults_match_terminal_and_unattended(self):
         values, output = self.selected("\n\n\n\n")
-        for key, expected in {"WATER": "calm", "SCENARIO": "slalom", "CAMERAS": "off", "MAVLINK_STREAMRATE": "4"}.items():
+        for key, expected in {"WATER": "calm", "SCENARIO": "competition", "CAMERAS": "off", "MAVLINK_STREAMRATE": "4"}.items():
             self.assertEqual(values[key], expected)
         code, output = self.launch(terminal=False)
-        self.assertIn('water=calm cameras=off scenario=slalom', output)
+        self.assertIn('water=calm cameras=off scenario=competition', output)
 
     def test_direct_worlds_and_enter_defaults(self):
         for water_answer, water in (("", "calm"), ("1", "calm"),
@@ -106,7 +106,7 @@ class RunMenuTests(unittest.TestCase):
 
     def test_buoy_scenarios_and_seed(self):
         for answer, scenario in ((3, "one"), (4, "gate"),
-                                 (5, "multi"), (6, "repeated_red"), (8, "slalom")):
+                                 (5, "multi"), (6, "repeated_red"), (8, "slalom"), (9, "competition")):
             for seed in ("", "42", "-7", "0"):
                 with self.subTest(scenario=scenario, seed=seed):
                     values, output = self.selected(f"3\n{answer}\n{seed}\n")
@@ -129,7 +129,7 @@ class RunMenuTests(unittest.TestCase):
         self.assertEqual(values["WORLD"], "blueboat_rgbd_base.sdf")
 
     def test_invalid_answers_retry(self):
-        values, output = self.selected("bad\n2\n9\n4\n1.5\n42\n")
+        values, output = self.selected("bad\n2\n10\n4\n1.5\n42\n")
         self.assertEqual(values["SCENARIO"], "gate")
         self.assertEqual(values["BUOY_SEED"], "42")
         self.assertIn("Please enter a number", output)
