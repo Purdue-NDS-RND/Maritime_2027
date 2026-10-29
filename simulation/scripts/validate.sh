@@ -14,15 +14,15 @@ for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
     [[ -x $script ]] || { echo "ERROR: $script is not executable" >&2; exit 1; }
 done
 python_sources=(
-    scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/gazebo_sensor_smoke.py
+    scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/competition_scene.py scripts/gazebo_sensor_smoke.py
     scripts/render_boat.py tests/test_boat_models.py
     scripts/configure_camera_rate.py tests/test_camera_rate.py tests/test_gpu_selection.py
     scripts/render_water.py tests/test_water_rendering.py tests/test_run_menu.py
-    scripts/scene_snapshot.py scripts/export_map.py scripts/export_active.py scripts/alignment_probe.py
+    scripts/scene_snapshot.py scripts/export_map.py scripts/export_competition.py scripts/export_active.py scripts/alignment_probe.py
     scripts/alignment_report.py scripts/footprint.py scripts/evaluate_run.py scripts/calibrate.py
     scripts/calibration_report.py scripts/make_course.py tests/test_scene_export.py tests/test_evaluator.py
     scripts/calibration_result.py tests/test_calibration.py
-    tests/test_scenario_rendering.py
+    tests/test_scenario_rendering.py tests/test_competition.py
 )
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" python3 -m py_compile "${python_sources[@]}"
 
@@ -31,7 +31,7 @@ required=(
     container/compose.yaml container/compose.gpu.yaml Makefile
     config/blueboat.parm worlds/blueboat_waves.sdf worlds/blueboat_calm.sdf
     worlds/blueboat_harbor.sdf worlds/blueboat_rgbd_base.sdf
-    scenarios/one.json scenarios/gate.json scenarios/multi.json scenarios/repeated_red.json scenarios/slalom.json
+    scenarios/one.json scenarios/gate.json scenarios/multi.json scenarios/repeated_red.json scenarios/slalom.json scenarios/competition.json
     models/blueboat_rgbd/model.config models/blueboat_rgbd/camera_payload.sdf
     plugins/CMakeLists.txt plugins/BuoyFaceBoat.cc
     README.md docs/SETUP.md docs/USING_THE_SIM.md docs/TROUBLESHOOTING.md docs/DEVELOPMENT.md
@@ -77,7 +77,7 @@ grep -q '<width>1280</width>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<height>720</height>' models/blueboat_rgbd/camera_payload.sdf
 grep -q '<near>0.30</near><far>20.0</far>' models/blueboat_rgbd/camera_payload.sdf
 
-for scenario in one gate multi repeated_red slalom; do
+for scenario in one gate multi repeated_red slalom competition; do
     python3 scripts/render_scenario.py \
         --scenario "scenarios/$scenario.json" \
         --base-world worlds/blueboat_rgbd_base.sdf \
@@ -117,7 +117,7 @@ for marker_id in range(4):
     png = (root / 'materials/textures' / f'aruco_4x4_50_id{marker_id}.png').read_bytes()
     assert png[:8] == b'\x89PNG\r\n\x1a\n'
     assert struct.unpack('>II', png[16:24]) == (512, 512)
-for scenario in ('one', 'gate', 'multi', 'repeated_red', 'slalom'):
+for scenario in ('one', 'gate', 'multi', 'repeated_red', 'slalom', 'competition'):
     data = json.loads(Path(f'scenarios/{scenario}.json').read_text())
     assert data['name'] == scenario and data['buoys']
 print('Camera, buoy, texture, and scenario structure passed.')
@@ -127,7 +127,7 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
         docker compose -f container/compose.yaml config --quiet
     if docker image inspect "${SIM_IMAGE:-maritime-sim:latest}" >/dev/null 2>&1; then
-        for scenario in one gate multi repeated_red slalom gate-calm gate-normal gate-harsh; do
+        for scenario in one gate multi repeated_red slalom competition gate-calm gate-normal gate-harsh; do
             cp "$tmp_dir/$scenario.sdf" "$tmp_dir/$scenario-resolved.sdf"
             sed -i \
                 -e 's#model://blueboat_rgbd#file:///opt/boat_sim/models/blueboat_rgbd#g' \
@@ -165,3 +165,8 @@ python3 -m unittest discover -s tests -p test_camera_rate.py -q
 python3 -m unittest discover -s tests -p test_scene_export.py -q
 python3 -m unittest discover -s tests -p test_evaluator.py -q
 python3 -m unittest discover -s tests -p test_calibration.py -q
+
+python3 -m unittest discover -s tests -p test_competition.py -q
+
+python3 -m unittest discover -s tests -p test_scenario_rendering.py -q
+python3 -m unittest discover -s tests -p test_run_menu.py -q

@@ -137,6 +137,8 @@ if [[ $ready -ne 1 ]]; then
 fi
 echo "Gazebo time is advancing and BlueBoat is present."
 
+spawn_heading=0
+[[ ${SCENARIO:-none} != competition ]] || spawn_heading=270
 sitl_args=(
     -v Rover
     -f rover-skid
@@ -145,7 +147,7 @@ sitl_args=(
     --no-extra-ports
     --use-dir "$STATE_DIR"
     --add-param-file=/opt/boat_sim/config/blueboat.parm
-    --custom-location=51.566151,-4.034345,0.0,0
+    --custom-location=51.566151,-4.034345,0.0,$spawn_heading
     --out "$MAVLINK_QGC"
     --out "$MAVLINK_API"
     --mavproxy-args "--non-interactive --streamrate=$MAVLINK_STREAMRATE --logfile=$MAVLINK_LOG"

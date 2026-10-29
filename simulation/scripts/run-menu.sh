@@ -46,12 +46,14 @@ EOF
   5) Multiple buoys  - four buoys
   6) Repeated red    - two red buoys
   7) Camera only    - RGB-D camera, no buoys
-  8) Slalom         - default; entry/exit gates and alternating red/green turns
+  8) Slalom         - regression; entry/exit gates and alternating red/green turns
+
+  9) Competition    - default; complete challenge course
 
 EOF
     while true; do
-        menu_read 'Choose a scene [8]: '
-        selection=${menu_answer:-8}
+        menu_read 'Choose a scene [9]: '
+        selection=${menu_answer:-9}
         case "$selection" in
             1) export WORLD=blueboat_waves.sdf; break ;;
             2) export WORLD=blueboat_harbor.sdf; break ;;
@@ -61,7 +63,8 @@ EOF
             6) export SCENARIO=repeated_red; break ;;
             7) export WORLD=blueboat_rgbd_base.sdf CAMERAS=on; break ;;
             8) export SCENARIO=slalom; break ;;
-            *) printf 'Please enter a number from 1 to 8, or q.\n' ;;
+            9) export SCENARIO=competition; break ;;
+            *) printf 'Please enter a number from 1 to 9, or q.\n' ;;
         esac
     done
 

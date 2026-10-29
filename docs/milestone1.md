@@ -271,6 +271,21 @@ Tool ownership and precautions:
   rejected by default; `--diagnostic` keeps measurements with
   `calibration_usable: false`. Pre-arm failures must not be bypassed.
 
+## Default competition scene extension
+
+The default simulator course is now `competition`; explicitly select
+`SCENARIO=slalom` to reproduce the historical acceptance layout below.
+The larger scene adds all reference stations and fixed physical props, exports
+version 2 obstacle maps and supports manually authored custom GCS routes.
+The GCS validates segments and finish areas against every collision footprint
+using the operator's total buffer. Geometry estimates are recorded in
+`simulation/scenarios/competition.json` and the scenario guide.
+
+This extension does not transfer the old slalom acceptance to the new course.
+Full-course navigation, Identify contact, deployment, detection avoidance, launch,
+recovery, docking actions, Receive communication and scoring remain unverified
+or deferred. Physical boat/radio performance remains unverified.
+
 ## Recorded simulator results
 
 These are historical measurements from 2026-10-28, not a fresh validation run.

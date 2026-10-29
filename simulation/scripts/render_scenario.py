@@ -64,7 +64,7 @@ def validate_scenario_source(config: object) -> dict:
         if not isinstance(name, str):
             raise SystemExit(f"Buoy at index {index} name must be a string")
         marker_id = source.get("marker_id")
-        if type(marker_id) is not int:
+        if scenario_name != "competition" and type(marker_id) is not int:
             raise SystemExit(f"Buoy {name} marker_id must be an integer")
         pose = source.get("pose")
         if not isinstance(pose, dict):
@@ -104,7 +104,7 @@ def resolved_pose(spec: dict, rng: random.Random | None) -> dict:
     return pose
 
 
-def validate_buoys(buoys: list[dict]) -> None:
+def validate_buoys(buoys: list[dict], competition=False) -> None:
     seen_names = set()
     for item in buoys:
         name = item["name"]
@@ -116,9 +116,9 @@ def validate_buoys(buoys: list[dict]) -> None:
             raise SystemExit(f"Duplicate buoy entity name: {name}")
         seen_names.add(name)
         pose = item["resolved_pose"]
-        if item["marker_id"] not in CATEGORY_BY_MARKER_ID:
+        if not competition and item["marker_id"] not in CATEGORY_BY_MARKER_ID:
             raise SystemExit("Only marker IDs 0 through 3 are available")
-        if pose["x"] < 4.0 or abs(pose["x"]) > 40.0 or abs(pose["y"]) > 20.0:
+        if not competition and (pose["x"] < 4.0 or abs(pose["x"]) > 40.0 or abs(pose["y"]) > 20.0):
             raise SystemExit(f"Buoy {item['name']} is outside the approved test area")
     for index, first in enumerate(buoys):
         for second in buoys[index + 1 :]:
@@ -141,7 +141,7 @@ def main() -> int:
         item = dict(source)
         item["resolved_pose"] = resolved_pose(item, rng)
         buoys.append(item)
-    validate_buoys(buoys)
+    validate_buoys(buoys, config["name"] == "competition")
 
     tree = ET.parse(args.base_world)
     world = tree.find("./world")
@@ -157,9 +157,15 @@ def main() -> int:
             if 'sensors-system' in plugin.get('filename', ''):
                 world.remove(plugin)
 
+    competition_objects = None
+    if config["name"] == "competition":
+        from competition_scene import render_objects
+        competition_objects = render_objects(world, config, buoys)
+        world.find("include/pose").text = "0 0 0 0 0 3.141592653589793"
+
     manifest_buoys = []
     panel_offset = 0.311
-    for item in buoys:
+    for item in ([] if competition_objects is not None else buoys):
         pose = item["resolved_pose"]
         yaw = math.radians(pose["yaw_deg"])
         model_uri = f"model://aruco_buoy_id{item['marker_id']}"
@@ -198,6 +204,10 @@ def main() -> int:
         "camera_mount": {"x": 0.35, "y": 0.0, "z": 0.40},
         "buoys": manifest_buoys,
     }
+    if competition_objects is not None:
+        manifest.update(boat_pose=config["boat_pose"], buoys=[o for o in competition_objects if o.get("kind", "buoy") == "buoy"],
+                        props=[o for o in competition_objects if o.get("kind", "buoy") != "buoy"],
+                        stations=config["stations"], source=config["source"], approximation_notes=config["approximation_notes"])
     if args.boat_model == "dual":
         manifest["boat_model"] = "dual"
     try:

@@ -17,3 +17,7 @@
 .boat-question{font:700 18px system-ui;fill:#102238;text-anchor:middle}
 .boat-tooltip{background:#102238f2;color:#fff;border:1px solid #7389a2;border-radius:5px;padding:4px 8px;font:600 11px/1.4 system-ui;box-shadow:0 2px 6px #0005}
 .leaflet-tooltip-bottom.boat-tooltip:before{border-bottom-color:#7389a2}
+
+.zebra-marker { background: repeating-linear-gradient(135deg,#111 0px,#111 3px,#fff 3px,#fff 6px); border: 1px solid #111; border-radius: 50%; }
+.station-tooltip { color: #fff; background: #25384ddd; border: 0; box-shadow: none; font-weight: 600; font-size: 12px; }
+.station-anchor { background: transparent; border: 0; }

@@ -18,8 +18,16 @@ gain staging. ArduPilot tuning belongs to the simulator/vehicle setup.
 
 Import the JSON produced by `simulation/scripts/export_active.py`. Click to add
 GPS waypoints, drag them, edit coordinates, reorder or delete them. Explicitly
-select the finish centre using the last waypoint and choose ordered gate/turn
-roles. `left`/`right` mean the boat passes on that side of the buoy when travelling
+select the finish centre using the last waypoint. Competition maps initialize
+from their recorded west-facing start and select **Custom route (clearance only)**,
+which needs no passage list. Version 1 buoy-only imports remain supported.
+Version 2 adds physical props, conservative circle/convex-polygon footprints,
+station labels, distinctive task buoy colors/Zebra pattern and a nonblocking
+6 ft deployment-radius overlay. The view fits the full course and saved drafts
+persist across reloads. All physical obstacles participate in segment and
+finish-area clearance checks; station annotations do not block routes.
+
+For the legacy gate/slalom scene, choose ordered gate/turn roles. `left`/`right` mean the boat passes on that side of the buoy when travelling
 along the fixed course's +X direction. This validator supports that course
 orientation; it rejects other gate orientations.
 
@@ -33,7 +41,7 @@ finite and positive; there is no calibrated-speed list or application speed cap.
 ArduPilot still accepts/rejects the speed command and controls actual motion.
 The default buffer for new routes is 1.8 m, an editable starting value rather
 than a measured guarantee. It is the total distance from the reported boat
-reference point to each buoy's surface: include hull size, positioning error,
+reference point to each physical obstacle's surface: include hull size, positioning error,
 tracking error and desired extra room yourself. No hull model or hidden margin
 is added. The buffer must be finite and nonnegative. Validation checks straight
 route segments, ordered passages and the entire finish region; it does not

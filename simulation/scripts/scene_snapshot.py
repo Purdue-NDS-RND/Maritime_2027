@@ -86,7 +86,7 @@ def capture(world_path, directory):
         if not uri.startswith('model://'):
             raise ValueError(f'unsupported include: {uri}')
         copy_model(uri[8:])
-    if os.environ.get('SCENARIO') == 'slalom':
+    if os.environ.get('SCENARIO') in ('slalom', 'competition'):
         plugin = ET.SubElement(tree.find('world'), 'plugin',
                                filename='libRunEvidence.so', name='maritime::RunEvidence')
         ET.SubElement(plugin, 'path').text = str(directory.parent / 'truth.jsonl')

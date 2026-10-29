@@ -1,0 +1,585 @@
+{
+  "name": "competition",
+  "source": {
+    "documents": [
+      "AIMM-ICC Competition Course Details 12-13 2025.pdf",
+      "Rules and Regulations _ AIMM ICC.pdf"
+    ],
+    "units": "feet",
+    "metres_per_foot": 0.3048,
+    "origin": "upper blue start marker; east/right X, north/up Y",
+    "world_offset_m": [
+      3,
+      0
+    ]
+  },
+  "approximation_notes": [
+    "Labeled distances govern placement; diagram pixels are not survey data.",
+    "Dodge gate width 4 m is provisional; buoy radius 0.24 m and height 0.76 m reuse simulator dimensions.",
+    "Identify cluster spacing 5 ft, detector 0.6 x 0.6 x 1.5 m, recovery case 0.6 x 0.4 x 0.25 m and dock dimensions/placement are simulator estimates.",
+    "Launch target diameter 10 ft is provisional. All props are fixed, without challenge mechanisms or scoring.",
+    "Cyan reference marker purpose is unspecified. Receive is a dock annotation associated with Deploy."
+  ],
+  "boat_pose": {
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "yaw_rad": 3.141592653589793
+  },
+  "buoys": [
+    {
+      "name": "start_marker",
+      "reference_ft": [
+        0,
+        0
+      ],
+      "pose": {
+        "x": 3.0,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "blue",
+      "task": "start"
+    },
+    {
+      "name": "dodge_gate_a_red",
+      "reference_ft": [
+        -45,
+        6.561679790026246
+      ],
+      "pose": {
+        "x": -10.716,
+        "y": 2.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_gate_a_green",
+      "reference_ft": [
+        -45,
+        -6.561679790026246
+      ],
+      "pose": {
+        "x": -10.716,
+        "y": -2.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_gate_b_red",
+      "reference_ft": [
+        -195,
+        6.561679790026246
+      ],
+      "pose": {
+        "x": -56.436,
+        "y": 2.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_gate_b_green",
+      "reference_ft": [
+        -195,
+        -6.561679790026246
+      ],
+      "pose": {
+        "x": -56.436,
+        "y": -2.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_turn_1",
+      "reference_ft": [
+        -75,
+        0
+      ],
+      "pose": {
+        "x": -19.86,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_turn_2",
+      "reference_ft": [
+        -105,
+        0
+      ],
+      "pose": {
+        "x": -29.004,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_turn_3",
+      "reference_ft": [
+        -135,
+        0
+      ],
+      "pose": {
+        "x": -38.148,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "dodge"
+    },
+    {
+      "name": "dodge_turn_4",
+      "reference_ft": [
+        -165,
+        0
+      ],
+      "pose": {
+        "x": -47.292,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "dodge"
+    },
+    {
+      "name": "evade_left_0",
+      "reference_ft": [
+        -250,
+        0
+      ],
+      "pose": {
+        "x": -73.2,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "evade"
+    },
+    {
+      "name": "evade_left_1",
+      "reference_ft": [
+        -250,
+        -30
+      ],
+      "pose": {
+        "x": -73.2,
+        "y": -9.144,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "evade"
+    },
+    {
+      "name": "evade_left_2",
+      "reference_ft": [
+        -250,
+        -60
+      ],
+      "pose": {
+        "x": -73.2,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "red",
+      "task": "evade"
+    },
+    {
+      "name": "evade_right_0",
+      "reference_ft": [
+        -210,
+        0
+      ],
+      "pose": {
+        "x": -61.008,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "evade"
+    },
+    {
+      "name": "evade_right_1",
+      "reference_ft": [
+        -210,
+        -30
+      ],
+      "pose": {
+        "x": -61.008,
+        "y": -9.144,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "evade"
+    },
+    {
+      "name": "evade_right_2",
+      "reference_ft": [
+        -210,
+        -60
+      ],
+      "pose": {
+        "x": -61.008,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "green",
+      "task": "evade"
+    },
+    {
+      "name": "identify_blue",
+      "reference_ft": [
+        -200,
+        -60
+      ],
+      "pose": {
+        "x": -57.96,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "blue",
+      "task": "identify"
+    },
+    {
+      "name": "identify_orange",
+      "reference_ft": [
+        -195,
+        -60
+      ],
+      "pose": {
+        "x": -56.436,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "orange",
+      "task": "identify"
+    },
+    {
+      "name": "identify_purple",
+      "reference_ft": [
+        -190,
+        -60
+      ],
+      "pose": {
+        "x": -54.912,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "purple",
+      "task": "identify"
+    },
+    {
+      "name": "identify_yellow",
+      "reference_ft": [
+        -195,
+        -55
+      ],
+      "pose": {
+        "x": -56.436,
+        "y": -16.764,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "yellow",
+      "task": "identify"
+    },
+    {
+      "name": "reference_cyan",
+      "reference_ft": [
+        -195,
+        -65
+      ],
+      "pose": {
+        "x": -56.436,
+        "y": -19.812,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "cyan",
+      "task": "reference"
+    },
+    {
+      "name": "deploy_zebra",
+      "reference_ft": [
+        -145,
+        -60
+      ],
+      "pose": {
+        "x": -41.196,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "zebra",
+      "task": "deploy"
+    },
+    {
+      "name": "launch_black",
+      "reference_ft": [
+        -95,
+        -60
+      ],
+      "pose": {
+        "x": -25.956,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "black",
+      "task": "launch"
+    },
+    {
+      "name": "return_marker",
+      "reference_ft": [
+        -15,
+        -60
+      ],
+      "pose": {
+        "x": -1.572,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "blue",
+      "task": "return"
+    }
+  ],
+  "props": [
+    {
+      "name": "evade_detector_left",
+      "reference_ft": [
+        -250,
+        -45
+      ],
+      "pose": {
+        "x": -73.2,
+        "y": -13.716,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "purple",
+      "task": "evade",
+      "size_m": [
+        0.6,
+        0.6,
+        1.5
+      ],
+      "kind": "detector"
+    },
+    {
+      "name": "evade_detector_right",
+      "reference_ft": [
+        -210,
+        -15
+      ],
+      "pose": {
+        "x": -61.008,
+        "y": -4.572,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "purple",
+      "task": "evade",
+      "size_m": [
+        0.6,
+        0.6,
+        1.5
+      ],
+      "kind": "detector"
+    },
+    {
+      "name": "launch_target",
+      "reference_ft": [
+        -95,
+        -45
+      ],
+      "pose": {
+        "x": -25.956,
+        "y": -13.716,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "black",
+      "task": "launch",
+      "radius_m": 1.524,
+      "height_m": 0.15,
+      "kind": "target"
+    },
+    {
+      "name": "recovery_case",
+      "reference_ft": [
+        -45,
+        -60
+      ],
+      "pose": {
+        "x": -10.716,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "yellow",
+      "task": "recover",
+      "size_m": [
+        0.6,
+        0.4,
+        0.25
+      ],
+      "kind": "case"
+    },
+    {
+      "name": "start_dock",
+      "reference_ft": [
+        15,
+        0
+      ],
+      "pose": {
+        "x": 7.572,
+        "y": 0.0,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "brown",
+      "task": "start",
+      "size_m": [
+        4,
+        6,
+        0.5
+      ],
+      "kind": "dock"
+    },
+    {
+      "name": "finish_dock",
+      "reference_ft": [
+        5,
+        -60
+      ],
+      "pose": {
+        "x": 4.524,
+        "y": -18.288,
+        "z": 0,
+        "yaw_deg": 0
+      },
+      "category": "brown",
+      "task": "return",
+      "size_m": [
+        4,
+        6,
+        0.5
+      ],
+      "kind": "dock"
+    }
+  ],
+  "stations": [
+    {
+      "id": "start",
+      "label": "Start / Gate navigation",
+      "world_position": [
+        3.0,
+        3.6576000000000004
+      ]
+    },
+    {
+      "id": "dodge",
+      "label": "Dodge",
+      "world_position": [
+        -33.576,
+        4.572
+      ]
+    },
+    {
+      "id": "evade",
+      "label": "Evade",
+      "world_position": [
+        -67.104,
+        -9.144
+      ]
+    },
+    {
+      "id": "identify",
+      "label": "Identify",
+      "world_position": [
+        -56.436,
+        -23.7744
+      ]
+    },
+    {
+      "id": "deploy",
+      "label": "Deploy",
+      "world_position": [
+        -41.196000000000005,
+        -21.945600000000002
+      ]
+    },
+    {
+      "id": "launch",
+      "label": "Launch",
+      "world_position": [
+        -25.956000000000003,
+        -22.86
+      ]
+    },
+    {
+      "id": "recover",
+      "label": "Recover",
+      "world_position": [
+        -10.716000000000001,
+        -21.945600000000002
+      ]
+    },
+    {
+      "id": "receive",
+      "label": "Receive (dock / Deploy sensor)",
+      "world_position": [
+        4.524,
+        -12.8016
+      ]
+    },
+    {
+      "id": "return",
+      "label": "Return / Finish",
+      "world_position": [
+        -1.572,
+        -25.6032
+      ]
+    },
+    {
+      "id": "deployment_radius",
+      "label": "Deployment radius (6 ft)",
+      "world_position": [
+        -41.196000000000005,
+        -18.288
+      ],
+      "radius_m": 1.8288000000000002,
+      "blocking": false
+    }
+  ]
+}
