@@ -16,6 +16,7 @@ Then read only the maintained topic needed:
 | Responsibilities, CV, runtime, boat perception | [Sensing and perception](../docs/sensing_perception.md) |
 | Frames, raycasting, calibration, error budget, experiments | [Geolocation](../docs/geolocation.md) |
 | Existing ROS 2 projection packages and reuse decision | [Package research](../docs/ros2_geolocation_packages.md) |
+| Live covariance/ellipses, motion models and cross-pass association | [Uncertainty and tracking](../docs/uncertainty_tracking.md) |
 | JSON semantics and existing GCS compatibility | [Perception contract](../docs/perception_contract.md) |
 | Reusable CUASC code and concrete problems | [Legacy vision review](../docs/legacy_vision_review.md) |
 | Missions, document versions, rules questions | [Competition sensing](../docs/competition_sensing.md) |
@@ -48,6 +49,32 @@ Markdown pack is a historical starting point; use current repository files for f
    separate later workstream for local identification, ranging and mission alignment.
 10. Reuse useful CUASC code, but establish the measurement error sources and correct
     geometry/timing instead of assuming the previous implementation is accurate.
+
+## Targets added by the forwarded research brief
+
+The user's Gemini brief adds real-time location/uncertainty reports, dynamically
+computed Gaussian position ellipses, persistent identities across passes and prediction
+through observation gaps. Treat these as development targets, not implemented features.
+Clarify report cadence/latency/maximum age and whether updates are only during a survey
+or must continue while the boat navigates. The existing survey-then-land workflow and
+operator route approval remain until explicitly changed.
+
+Keep fixed Arducam and YOLO26n choices. Generic gimbal encoders and alternate detectors
+in the brief are not confirmed hardware/model changes. Confirm whether buoys are moored;
+a floating case may need a different motion model. A bottom-centre pixel is not a
+universal water-contact reference for an overhead image.
+
+Use a linear KF as the first projected-ENU constant-velocity tracker; nonlinear
+projection upstream does not alone justify EKF/UKF downstream. Evaluate static/random-walk
+and moored-motion alternatives. Preserve shared camera/clock/RTK biases rather than
+letting repeated frames produce falsely tiny covariances. Association must allow
+unmatched and ambiguous cases. Output state epoch, last-observation time, prediction
+status, EN covariance and explicitly defined ellipse orientation/coverage.
+
+Gemini's planar projection, CWNA covariance, 99% 2D gate and 95% ellipse scale are
+mathematically sound under their assumptions. Its covariance budget is incomplete
+and its package conclusion misses IPM. See the maintained tracking topic for the
+checked equations, implementation candidates, new tasks and unresolved scope.
 
 ## Existing repository reality
 
@@ -138,4 +165,5 @@ Read the current branch head on future visits; that baseline is not a permanent 
 | AIMM-ICC Competition Course Details 12-13 2025.pdf | efccf4994c05e544821c49a0288197ca40276fcd3d9cc8be39e17d676baa401a |
 | Challenge Competition Scoresheet_4-3-2025.pdf | 0e4b0d62d4296319feae5d590dc7427af706e298a97d5fccf38c82ff45dc0ca1 |
 | Buoy Images _ AIMM ICC.pdf | 3060ee39f5f4f0b9a01aec57784de07c5ed27b1f5b9ae4c0ad61d8784c769145 |
+
 

@@ -164,6 +164,12 @@ does not disappear by averaging many frames. Track scatter is not absolute accur
 YOLO confidence is not a position covariance. Report unmodeled/systematic components
 separately and calibrate confidence regions against held-out ground truth.
 
+[Uncertainty and tracking](uncertainty_tracking.md) expands this into per-observation
+Jacobians, shared bias/correlations, a linear-KF baseline, cross-pass association and
+timestamped 95% ellipse reporting. It also reviews the forwarded research brief:
+its angular range scaling is a useful first-order contribution, not a complete noise
+model, and overhead bottom-centre projection is not accepted as a universal reference.
+
 ## Geodetic export and existing GCS compatibility
 
 Use WGS84 geodetic -> ECEF -> local ENU for consistent position input; inverse ENU -> ECEF
@@ -201,4 +207,5 @@ Agree numeric pass thresholds using boat hull/turn/tracking and buoy-motion marg
 - [MAVROS overview: FCU/ROS frame conversion](https://index.ros.org/p/mavros/)
 - [OpenCV calibration and inverse distortion](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)
 - [GeographicLib local Cartesian conversion and ellipsoidal height](https://geographiclib.sourceforge.io/html/CartConvert.1.html)
+
 

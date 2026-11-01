@@ -35,6 +35,12 @@ then boat execution. Initial tests can use local map-file import. Radio transpor
 continuous updates and automatic resurvey are not prerequisites for the first slice.
 No direct boat-drone perception link is currently required.
 
+The forwarded research brief adds live track/uncertainty reports and cross-pass
+identities as development targets. Reports during the survey fit the existing plan;
+continuous drone operation during boat navigation and automatic route changes remain
+open decisions. See [uncertainty and tracking](uncertainty_tracking.md) for covariance,
+motion/association choices, ellipse semantics and the required timing/status fields.
+
 ## Proposed internal modules
 
 | Module | Inputs | Outputs | Key requirement |
@@ -53,6 +59,9 @@ Before implementing geometry/history arithmetic, read
 [ROS 2 package research](ros2_geolocation_packages.md). Evaluate IPM for batched
 pixel-to-plane projection and use tf2 for time-indexed transforms/interpolation.
 Keep image/time/pose quality gates and map semantics in the Maritime adapter.
+Use a linear KF as the first projected-ENU linear-motion tracker, with per-observation
+covariance and shared-bias handling. Validate buoy attachment/motion before choosing
+constant-velocity extrapolation. EKF/UKF is conditional on a nonlinear filter model.
 Do not port the entire CUASC mission framework, MAVROS dependency or launcher scripts
 unless needed by the confirmed drone integration. Boat direct-pymavlink use does not
 automatically choose the drone telemetry adapter.
@@ -136,4 +145,5 @@ marker buoy. Color/striped-target classification is more important in these clos
 - [Perception contract](perception_contract.md)
 - [Task backlog](../drone/TASKS.md)
 - [NVIDIA CUDA for Tegra: shared CPU/GPU DRAM](https://docs.nvidia.com/cuda/cuda-for-tegra-appnote/index.html)
+
 

@@ -13,8 +13,10 @@ This is documentation, not an implemented JSON Schema, ROS message or network en
    Existing boat mission semantics remain unchanged.
 
 Use a named schema namespace and version rather than overloading existing object-map
-version 1 or 2. Prefer a complete immutable survey snapshot first. Observation streaming,
-transport framing and live map deltas may be added only when needed.
+version 1 or 2. A complete immutable survey snapshot remains the first integration slice.
+The forwarded research brief additionally targets real-time track estimates and
+uncertainty ellipses. Their transport/envelope and operational scope remain to be agreed;
+they do not silently replace approved maps/routes or authorize continuous airborne operation.
 
 ## Required map semantics
 
@@ -22,13 +24,13 @@ transport framing and live map deltas may be added only when needed.
 | --- | --- |
 | Schema | Name + version; unsupported versions rejected explicitly |
 | Survey/map identity | survey_id, map_id, monotonic revision, source vehicle |
-| Time | UTC capture start/end and generation time; each object first/last observed |
+| Time | UTC capture start/end, generation and per-track state epoch; first/last observed |
 | Frames | origin_id, ENU axes/units, WGS84 origin lat/lon/ellipsoidal height |
 | Water surface | Plane model/elevation and uncertainty/method |
 | Processing provenance | Code/model/calibration IDs and configuration identity |
 | Objects | Stable instance ID, class/type estimate, ENU horizontal reference and geometry |
 | Geodetic export | Derived lat/lon, optional explicitly named ellipsoid height; conversion ID |
-| Uncertainty/quality | Covariance or explicit unknown, RTK/timing/geometric quality, usable/degraded status |
+| Uncertainty/quality | EN covariance/defined ellipse or explicit unknown, shared-bias/coverage metadata, RTK/timing/geometric and association/estimate status |
 | Evidence | Observation count and references to preview/crop/frame/time for review |
 | Survey completeness | Complete/partial/failed status, coverage evidence and unresolved regions |
 | Semantics | Predicted appearance separate from operator color/role and edits |
@@ -37,6 +39,35 @@ Objects of the same class have unique IDs. Track IDs are stable within a survey,
 guaranteed identities across new flights. Preserve merge/split lineage where IDs change.
 Color `unknown` is valid. Null means unavailable, not zero uncertainty or zero range.
 Detector confidence describes class detection confidence; it is not location accuracy.
+
+Persistent identity across passes is a target with an explicit ambiguity policy, not a
+guarantee from spatial gating. Cross-flight identity remains unresolved unless confirmed.
+
+## Live track and ellipse semantics
+
+See [uncertainty and tracking](uncertainty_tracking.md) for the mathematical contract.
+The live product needs the following semantics in addition to survey/map provenance:
+
+| Field group | Proposed meaning |
+| --- | --- |
+| state_at | Epoch of the reported mean and covariance, not merely packet creation time |
+| last_observed_at / published_at | Last supporting measurement time and publication time; age is explicit |
+| estimate_kind | Filtered/observed estimate versus a prediction/coasting estimate |
+| association_status | Tentative, confirmed, ambiguous or stale; separate from detector confidence |
+| covariance_en_m2 | 2x2 position covariance at state_at, axes ordered East/North |
+| ellipse_en | Probability level, semi-major/minor in meters and major-axis angle CCW from East modulo pi; isotropic orientation may be null |
+| uncertainty_model / coverage_validated | Identifies modeled error sources and whether empirical probability coverage has been established |
+| bias_components | Separately documents common/random bias treatment and unresolved systematic errors |
+
+Generate a model-based 95% ellipse using sqrt(chi-square(2,0.95)) times covariance
+standard axes, approximately 2.44774683. A 95% region is not a guaranteed maximum error.
+Report position covariance P, not measurement covariance R or innovation covariance S.
+Covariance may also be conditional on the selected association; expose ambiguity separately.
+Keep the ellipse in ENU meters and convert its centre/boundary for geographic display.
+
+When publishing a prediction at current time, propagate both mean and covariance from
+the measurement-time state. Do not relabel an old filtered state as a current observation.
+The original synthetic snapshot below is not a complete live-update envelope.
 
 ## Illustrative draft map
 
@@ -183,4 +214,5 @@ payload or the boat HTTP API. Measure actual link throughput and interruptions.
 
 Preview images may transfer separately by evidence ID and checksum; the map must state
 when an image is unavailable. No transport library, port or endpoint is selected here.
+
 

@@ -1,6 +1,6 @@
 # Sensing and perception tasks
 
-Last updated: 2026-11-01. Status: planned except the completed initial review.
+Last updated: 2026-11-01. Status: planned except the completed reviews and context publication.
 Owners below identify responsibility areas, not assigned teammates. Numerical acceptance
 limits must be set with boat/GCS owners before declaring deployment readiness.
 
@@ -14,6 +14,8 @@ limits must be set with boat/GCS owners before declaring deployment readiness.
 - [x] Establish these maintained context and task references.
 - [x] Research ROS 2 IPM, image_geometry, tf2, timing/geodesy tools and YOLO26 wrapper
   options; inspect upstream source and record compatibility limits.
+- [x] Review the forwarded Gemini proposal, distinguish new targets from assumptions,
+  check the mathematics and document uncertainty/tracking corrections.
 
 ## P0: establish frames, measurements and reproducible inputs
 
@@ -48,6 +50,7 @@ to test geolocation: measured pixels or manual annotations isolate geometry firs
   attitude, mount, time and water-height errors.
   Acceptance: report random uncertainty and possible common bias separately; compare
   predicted uncertainty coverage with held-out reference measurements.
+  Include the covariance/bias treatment in [uncertainty and tracking](../docs/uncertainty_tracking.md).
 - [ ] SP-12: Build deterministic replay comparison against the retained CUASC baseline.
   Acceptance: same observations generate per-target residuals and rejection counts;
   held-out data, calibration IDs and the baseline version are recorded.
@@ -91,6 +94,8 @@ SP-18 uses SP-06/SP-09 and can initially replay images rather than fly.
   Use spatial/time/uncertainty gates; distinguish two nearby buoys of the same class.
   Acceptance: measured merge/split/false-track rates, stable IDs within a survey,
   retained outliers/rejection reasons and no artificial confidence from correlated frames.
+  Evaluate linear-KF baselines and gated assignment with explicit unmatched/ambiguous
+  alternatives; a class ID or overlapping gate does not establish physical identity.
 - [ ] SP-21: Add survey coverage, observation-age and motion/drift evaluation.
   Acceptance: missed regions, insufficient views and stale tracks are visible;
   map freshness is tied to observed movement and course margin.
@@ -112,6 +117,37 @@ SP-18 uses SP-06/SP-09 and can initially replay images rather than fly.
 
 Dependencies: SP-20 uses SP-08/SP-09 and detections; SP-22 can start during P0;
 SP-23 requires SP-22; SP-25 requires measured boat navigation limits too.
+
+## Uncertainty and live-tracking extension
+
+The forwarded research brief adds the following targets. They do not implement a live
+transport or change the approved boat workflow. See [the design](../docs/uncertainty_tracking.md).
+
+- [ ] SP-35: Agree live report rate, latency, state epoch, maximum age, required probability
+  level and whether operation is survey-only or concurrent with boat execution.
+  Acceptance: documented target and scope; continuous flights/replanning are not assumed.
+- [ ] SP-36: Implement per-observation covariance with position/attitude, pixel/reference,
+  water-height, timing and calibration terms, plus a defensible shared-bias treatment.
+  Acceptance: analytic/numerical Jacobian and Monte Carlo comparisons; correlated
+  repeated observations do not create unsupported absolute precision.
+- [ ] SP-37: Compare static/random-walk, constant-velocity KF and appropriate constrained
+  motion models against measured buoy attachment/motion and floating-object data.
+  Acceptance: correct state/Q ordering and units, irregular time steps, initialized velocity
+  uncertainty, long-gap predictions and delayed-measurement handling.
+- [ ] SP-38: Evaluate gated global assignment, initiation/confirmation/coasting/staleness
+  and cross-pass identity. Acceptance: false/duplicate/missed measurements and overlapping
+  gates allow unmatched/ambiguous outcomes; record ID switches and label preservation.
+- [ ] SP-39: Define and implement covariance/ellipse reports with state_at, last observation,
+  publication time, estimate/association status, frame/units and bias/coverage metadata.
+  Acceptance: sorted eigenvalues, correct 95% scale, isotropic/invalid covariance handling,
+  prediction at the stated epoch and independently checked GCS display orientation.
+- [ ] SP-40: Validate uncertainty and identity on held-out surveyed water trials.
+  Acceptance: empirical coverage and ellipse area/sharpness, position error, bias, ID
+  switches, freshness and latency meet agreed criteria; synthetic Gaussian tests alone
+  do not establish 95% real-world coverage.
+
+SP-35 can proceed immediately; SP-36 follows valid geometry/timing; SP-37/SP-38 require
+representative recordings; SP-39 depends on agreed semantics; SP-40 requires independent truth.
 
 ## P4: boat perception and mission-specific extensions
 
@@ -158,4 +194,5 @@ This order isolates detector, geometry and telemetry errors instead of confoundi
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
 exists; describe important limits in its owning topic. Record unresolved numerical
 thresholds explicitly rather than inventing successful accuracy or performance figures.
+
 

@@ -4,6 +4,10 @@ Researched: 2026-11-01. Scope: fixed monocular Arducam IMX519, YOLO26n detection
 IMU/flight-estimator attitude and RTK position, with ENU processing and WGS84 export.
 This is a source-backed recommendation and evaluation plan, not an installed stack.
 
+For live uncertainty and cross-pass identity targets added by the forwarded research
+brief, read [uncertainty and tracking](uncertainty_tracking.md). Its voxel/mesh-package
+discussion does not invalidate the IPM candidate: IPM is specifically a plane projector.
+
 ## Recommendation
 
 Evaluate ROS Sports `ipm_library` first for pixel-to-water-plane projection. Pair it
@@ -36,6 +40,9 @@ Neither approach obtains unknown depth from monocular pixels alone.
 | [mgonzs13/yolo_ros](https://github.com/mgonzs13/yolo_ros) | ROS 2 detection/tracking integration, currently listing YOLO26 | Optional detector wrapper; compare Jetson deployment with a thin Ultralytics/TensorRT adapter |
 | [OctoMap castRay](https://octomap.github.io/octomap/doc/classoctomap_1_1OcTree.html) | Ray queries through an occupied/free 3D voxel map | Not needed for the initial flat-water assumption |
 | [GISNav](https://www.gisnav.org/introduction) | Camera-to-geographic-map matching to localize the drone | Adjacent problem; not our known-pose water-object projection |
+| [FilterPy](https://filterpy.readthedocs.io/en/latest/kalman/KalmanFilter.html) | Reusable linear Kalman filter, per-update R and process-noise helpers | Candidate for projected-ENU tracking; not a ROS node or a substitute for calibrated uncertainty |
+| [Stone Soup](https://stonesoup.readthedocs.io/en/latest/auto_tutorials/06_DataAssociation-MultiTargetTutorial.html) | Tracking models, association hypotheses and evaluation examples | Candidate offline comparison framework; not automatically an onboard dependency |
+| [SciPy linear_sum_assignment](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html) | Minimum-cost assignment solver | Candidate for gated matching with explicit missed/clutter alternatives |
 
 Package descriptions above describe upstream functionality. Fit/selection is our engineering
 judgment. No package currently establishes Maritime's physical accuracy or competition readiness.
@@ -222,4 +229,5 @@ or runtime code is introduced by this documentation update.
 - [YOLO26 official documentation](https://docs.ultralytics.com/models/yolo26/)
 - [yolo_ros inspected README](https://github.com/mgonzs13/yolo_ros/blob/7ee20a9f5ec8d8223715f0240cabb9287746238e/README.md)
 - [GeographicLib conversion](https://geographiclib.sourceforge.io/html/CartConvert.1.html)
+
 
