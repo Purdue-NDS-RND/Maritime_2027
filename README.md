@@ -22,7 +22,11 @@ football toss or colored buoy contact.
 The [boat application](boat/README.md) provides the first boat-only supplied GPS
 mission implementation. The minimal web GCS and scene/evaluation tools are now
 implemented; see the [milestone results](docs/milestone1.md#recorded-simulator-results) for measured limits.
-Drone remains a scaffold. Physical vehicle-GCS networking is undecided. The [working design](docs/design.md)
+Drone implementation remains a scaffold; the sensing/perception plan and source review
+start at [drone/LLM.md](drone/LLM.md) and [drone/TASKS.md](drone/TASKS.md).
+The [ROS 2 package review](docs/ros2_geolocation_packages.md) records the proposed
+IPM/tf2 reuse and YOLO26n integration options.
+Physical vehicle-GCS networking is undecided. The [working design](docs/design.md)
 records the design discussion. Each vehicle has a Jetson for application
 processing and a Pixhawk for control. ROS 2 is used
 within vehicle applications. The development GCS uses boat-owned loopback HTTP

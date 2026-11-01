@@ -1,10 +1,13 @@
 # Repository guidelines
 
 Read `docs/design.md` and `docs/milestone1.md` before planning or implementing
-new application work. The milestone defines the current scope: simulator object
+new application work. The milestone defines its completed scope: simulator object
 map export, minimal web GCS with manual route editing, and boat/ArduPilot slalom
-execution. Automatic route generation and drone mapping are deferred. Keep the
-boat independently testable with manually supplied routes. Implementation is
+execution. Automatic route generation and drone mapping were deferred from that
+milestone. The 2026-11-01 sensing/perception planning workstream is documented in
+`drone/LLM.md` and `drone/TASKS.md`; read both for drone/perception requests.
+The current additions are design/backlog documentation, not implemented mapping.
+Keep the boat independently testable with manually supplied routes. Implementation is
 complete for the selected Milestone 1 simulator acceptance; physical-boat
 performance remains unverified. Documentation alone is not an instruction to
 implement deferred features.
@@ -59,3 +62,11 @@ Keep concise acceptance results and limitations in `docs/milestone1.md`, command
 in application/simulator guides, and raw runtime evidence in ignored
 `simulation/logs/`. Add a document only for a distinct maintained topic; use Git
 history for superseded plans and reports.
+
+For the sensing/perception workstream, the user authorizes writes only to
+`feature/cv-raycast` in `Purdue-NDS-RND/Maritime_2027`. Verify the branch before
+editing or pushing; do not modify other branches or repository permissions.
+Read `drone/AGENTS.md` for component instructions and
+`docs/ros2_geolocation_packages.md` before selecting or rewriting projection,
+TF/interpolation or geodesy code. The package recommendation is an evaluation
+plan; it adds no runtime dependency or implementation.

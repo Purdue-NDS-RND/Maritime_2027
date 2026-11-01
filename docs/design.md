@@ -130,11 +130,18 @@ command. Detailed takeover mechanics are a small integration requirement,
 not the focus of initial development. Positioning/vehicle faults are separate
 from GCS link loss; their responses remain to be decided.
 
-For drone mapping, a fixed downward-facing camera is the working assumption,
-pending confirmation. Camera model, lens, altitude range, geolocation method
-and timing/calibration approach remain open. A homemade gimbal is not assumed
-to improve geolocation accuracy. Survey altitude should be configurable and
-its usable range established through testing.
+For drone mapping, the user's 2026-11-01 direction is a fixed Arducam IMX519,
+planned RTK and YOLO water-object detection on an Orin Nano 8GB, ideally below
+5 m above water. Downward orientation is the working assumption; actual mount,
+lens/focus, usable altitude range, timing and water/position datums need measurement.
+Keep geolocation and instance fusion in a fixed ENU frame and derive WGS84
+coordinates at export. Aerial color classification is optional; the operator
+assigns colors/course roles at the GCS. See [sensing context](../drone/LLM.md),
+[architecture](sensing_perception.md) and [geolocation](geolocation.md).
+These additions define a planning workstream, not implemented drone mapping or
+an accepted physical accuracy claim. Boat camera support for later missions
+remains separate; exact ZED model and two-camera compatibility are unresolved.
+A homemade gimbal is not assumed to improve geolocation accuracy.
 
 ## Competition scene extension
 
