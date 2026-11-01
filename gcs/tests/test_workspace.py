@@ -10,6 +10,24 @@ from shared.clearance import validate_route
 
 
 class WorkspaceTests(unittest.TestCase):
+    def test_manual_route_survives_task_switches_without_replacing_task_draft(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            workspace=Workspace(directory)
+            channel={'task':'custom','planner_task':'channel','waypoints':[], 'start':{'latitude':40,'longitude':-86}}
+            manual={'task':'custom','waypoints':[{'latitude':40.001,'longitude':-86}], 'start':{'latitude':40,'longitude':-86}}
+            workspace.edit({'draft':channel})
+            workspace.edit({'selected_task':'manual'})
+            workspace.edit({'draft':manual})
+            self.assertIsNone(workspace.read()['approval'])
+            workspace.edit({'selected_task':'channel'})
+            self.assertEqual(workspace.read()['draft'],channel)
+            workspace.edit({'selected_task':'manual'})
+            self.assertEqual(workspace.read()['draft'],manual)
+            restored=Workspace(directory)
+            self.assertEqual(restored.read()['tasks']['channel'],channel)
+            self.assertEqual(restored.read()['draft'],manual)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();root=Path(self.temp.name)
         self.reference={'latitude':51.566151,'longitude':-4.034345}
@@ -106,3 +124,12 @@ class WorkspaceTests(unittest.TestCase):
         self.draft['waypoints']=[to_gps(10,0,self.reference),to_gps(0,0,self.reference)]
         self.draft['finish']=to_gps(0,0,self.reference)
         self.assertTrue(validate_route(self.map,self.draft)['valid'])
+
+    def test_legacy_original_map_is_preserved_before_first_correction(self):
+        state=self.workspace.read();state.pop('original_map',None)
+        self.workspace.path.write_text(json.dumps(state))
+        loaded=Workspace(self.workspace.directory)
+        original=json.loads(json.dumps(self.map))
+        self.map['buoys'][0]['radius_m']=.5
+        loaded.edit({'map':self.map})
+        self.assertEqual(loaded.read()['original_map'],original)

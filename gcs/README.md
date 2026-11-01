@@ -1,5 +1,34 @@
 # Course GCS
 
+## Boat controls
+
+The **Boat controls** panel above the map is available in every planning step.
+It shows confirmed armed/disarmed state, vehicle mode, speed and GPS fix, with
+**Hold / Stop** and **Disarm** actions. Offline state is shown as unavailable.
+To upload another route after finishing, select Hold / Stop if needed, wait for
+reported speed ≤ 0.20 m/s, then Disarm. Upload stays disabled while armed or in
+Auto; Go / Start arms automatically after verifying the uploaded mission.
+Command progress/errors appear in the panel and do not replace confirmed live
+status. The header Stop boat action stays available during route planning.
+
+## Manual move
+
+In **Task setup**, select **Manual move**, set speed/buffer and click **Draw
+waypoints**. Click the map in travel order; drag numbered points to adjust them.
+The last point automatically becomes the stopped finish. Review the direct
+segments, then **Validate route → Approve route → Upload to boat → Go**.
+**Stop boat** remains available. Drawing never commands movement.
+
+Selecting Manual move captures the fresh live boat position as the start;
+offline planning can use a chosen start. Use **Use live boat position** again
+if the boat moves before review. Every segment and the finish retain obstacle
+clearance checks; manual routes have no gate/slalom/channel passage constraints.
+Manual and task drafts are saved separately. **New empty manual route** clears
+only the manual waypoint queue. The ordinary boat mission interface executes
+the route and stops in HOLD at the finish; this adds no joystick/GUIDED control.
+
+## Startup and map editing
+
 React + Leaflet and FastAPI, served together at <http://localhost:8080>.
 Course editing works without internet tiles. Optional OpenStreetMap tiles
 include attribution; tile failure leaves the route workspace available.
@@ -18,7 +47,8 @@ gain staging. ArduPilot tuning belongs to the simulator/vehicle setup.
 
 Import the JSON produced by `simulation/scripts/export_active.py`. Click to add
 GPS waypoints, drag them, edit coordinates, reorder or delete them. Explicitly
-select the finish centre using the last waypoint. Competition maps initialize
+select the finish centre using the last waypoint for task routes; manual routes
+update it automatically as waypoints are added. Competition maps initialize
 from their recorded west-facing start and select **Custom route (clearance only)**,
 which needs no passage list. Version 1 buoy-only imports remain supported.
 Version 2 adds physical props, conservative circle/convex-polygon footprints,
@@ -28,8 +58,8 @@ persist across reloads. All physical obstacles participate in segment and
 finish-area clearance checks; station annotations do not block routes.
 
 For the legacy gate/slalom scene, choose ordered gate/turn roles. `left`/`right` mean the boat passes on that side of the buoy when travelling
-along the fixed course's +X direction. This validator supports that course
-orientation; it rejects other gate orientations.
+along the course direction (+X when omitted for legacy drafts). The generalized
+validator also supports rotated gates and explicit travel directions.
 
 Save the draft, then use **Validate**, **Approve**, **Upload**, and **Start** as
 separate actions. Every edit revokes approval. Immutable approved JSON files
@@ -195,3 +225,121 @@ stations do not compete with simulator/vehicle telemetry configuration.
   documents serial input and multiple local/network UDP outputs.
 - [Requesting MAVLink message streams](https://mavlink.io/en/mavgen_python/howto_requestmessages.html)
   documents rate requests, which this passive reader does not issue.
+
+## GPS assisted planner
+
+The full competition map is the primary test course. The small slalom example is
+retained only for focused regressions. Start the normal workspace from the repo:
+
+```bash
+make -C gcs build
+make -C gcs run
+```
+
+Open <http://localhost:8080>. The redesigned workspace has three steps:
+
+1. **Map:** use **Load full competition map**, or import a survey. Click an object
+   to inspect/correct it, apply corrections, and confirm reviewed dimensions.
+2. **Task setup:** choose **Gate**, **Slalom / Dodge** or **Channel / Evade**.
+   Labeled-map suggestions select the relevant station, direction, entry/exit,
+   clear finish and planning bounds. Review the highlighted setup and confirm it.
+   Use a manual planning start or fresh boat position. Generate the route.
+3. **Route review:** review/edit the blue route, then **Validate → Approve →
+   Upload → Start**. Start stays disabled until the selected approval's upload
+   is confirmed. Planning works with the boat offline; Upload/Start need a fresh
+   connection. **Stop boat** stays visible independently of the current step.
+
+Map clicks normally inspect objects. A point/drawing tool displays instructions
+and a **Done / cancel tool** button. **Edit on map** explicitly enables waypoint
+placement/dragging; dragging the final waypoint also moves the finish centre.
+**Full course** and **Selected task** change only the view. Labels, station
+annotations, planning overlays and optional street tiles are under **Map layers**.
+Object corrections, passage assignment/order, boundaries, preferred buffer,
+heading, finish size, coordinates and command details are disclosed only where
+needed. Raw passage JSON is no longer part of the normal operator workflow.
+
+The normal saved workspace is `simulation/logs/gcs/workspace.json`. Reload keeps
+it. Each task retains its own draft/settings; switching revokes approval and
+never commands the boat. Retry a task from a new start and generate/review a new
+route without repeating previous tasks. Importing a different map archives the
+complete previous workspace in `workspace-before-map-import-*.json`; old task IDs
+are not applied to the unrelated new map. Map corrections preserve the original
+observations and invalidate affected reviews/approvals.
+
+The practice map is [`examples/competition-gps-map.json`](examples/competition-gps-map.json):
+23 buoys, six physical props, GPS footprints and available labels. It is a
+simulator-derived **unverified GPS practice map**, not a new live survey or
+simulator-alignment qualification. It contains no simulator run/start metadata.
+The same map is bundled with the GCS image and available from the load button.
+[`examples/slalom-gps-points.json`](examples/slalom-gps-points.json) remains a small
+unlabeled regression fixture. Defaults are still 0.5 m/s and a 1.8 m required
+buffer; preferred starts equal to required. The competition Dodge gate has a
+3.52 m surface opening: a 1.8 m required buffer needs 3.60 m and is correctly
+rejected. The setup explains this before generation. Choose a smaller buffer
+only when its hull/navigation allowance is justified; no value is reduced by
+suggestion, search or task selection. Simulator integration tests explicitly
+use 1.5 m for gate/slalom; this is not physical-boat qualification.
+
+Unknown objects are obstacles. JSON point lists (or `{"points": [...]}`) and CSV
+accept `latitude,longitude`, optional `id,color,object_type,radius_m,height_m`.
+Visible radius defaults are buoy 0.25 m and unknown/detector 0.50 m. Confirm every
+size assumption before approval. Polygon props retain editable GPS vertices;
+moving their centre translates the footprint. Original observations are retained
+separately from corrected objects. Existing simulator-map versions 1/2 still
+require their alignment evidence; live version 3 never claims simulator verification.
+
+Suggestions use imported labels and geometry, never `world_centre`, simulator
+station annotations or truth to steer. Unlabeled/ambiguous maps still require
+operator assignments. On the labeled competition map, Dodge is westbound and
+Evade is southbound. Entry/exit are finite crossing windows. The approach may
+start outside the channel and crosses no task passage until it enters the
+confirmed entry window. Physical obstacles and the planning boundary constrain
+that whole approach. The channel additionally constrains the route after entry,
+and its entire finish disk must be clear. Correct entry/exit/finish or draw
+boundaries using the task setup's review panel when suggestions do not fit.
+After finishing a task, click **Use live boat position** to update the next
+attempt's start. **Move on map** beside Entry changes the crossing window,
+not the start. For a convex channel, an entry window that cannot fit within
+the required inset is rejected immediately with an explanation. Restore
+suggested task geometry with **Refresh suggestions from map**, then review it.
+
+A* remains deterministic, metric and 8-connected, carrying passage progress and
+incoming direction. It tries 0.25, 0.10 and 0.05 m, with at most 250,000 expansions
+per resolution, with a shared 60-second search/simplification time budget.
+Time exhaustion returns an error without a generated draft or a blockage claim.
+An admissible next-opening distance guides approach search;
+precomputed local obstacle geometry and conservative distance bounds avoid
+repeated geographic/polygon work without dropping obstacles. Each edge enforces
+required clearance, active task direction/order/sides and boundaries. Final GPS
+segments receive a separate complete validation after simplification. Gate
+opening proofs, blocked entry windows, unsafe finishes and search exhaustion
+remain distinct. Exhaustion does not prove continuous-space impossibility.
+
+Required buffer includes the operator's hull and navigation allowances. Preferred
+shortfalls appear as orange sections with achieved clearance. Detector proximity
+is bounded/count-normalized preference only and cannot override required
+clearance or channel containment. No detection-avoidance, controller-tracking or
+physical-radio qualification is implied.
+
+Backend operations: `GET /api/examples/competition` supplies the practice map;
+`POST /api/course/prepare` takes `task` and optional existing `settings`, returning
+an **unconfirmed** proposed draft plus setup diagnostics. Generic geometry
+suggestions remain at `POST /api/course/suggest`. `POST /api/generate` returns a
+proposed GPS draft, final validation and resolution/search diagnostics. Workspace,
+Validate/Approve and boat command interfaces remain unchanged.
+
+### Buffer preview before validation
+
+Use **Show buffers** above the map immediately after loading a course, before
+confirming sizes/setup or validating. Amber outlines show required clearance
+around all circular and polygon objects, convex planning/channel boundary insets,
+the saved start, and the finish radius plus clearance. A larger preferred buffer
+is blue. The preview updates with edited dimensions and buffer settings and is
+independent of Planning overlays. Concave/unfinished boundary insets are explicitly
+unavailable; a collapsed inset reports no remaining room. Polygon outlines use a
+slightly conservative sampled visual approximation; backend validation is authoritative.
+
+**S** is the saved attempt start. **Use live boat position** updates S, without
+moving Entry. Entry is a finite crossing window perpendicular to travel where
+task rules begin; the approach runs from S to that window. It stays attached to
+the reviewed course setup rather than following the live boat.

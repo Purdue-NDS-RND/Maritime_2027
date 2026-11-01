@@ -79,6 +79,26 @@ class EvaluationTests(unittest.TestCase):
         del self.footprint['max_abs_z_m']
         self.assertEqual(self.result()['outcome'], 'inconclusive')
 
+    def test_rotated_passage_and_whole_hull_channel(self):
+        angle=.7; c,s=math.cos(angle),math.sin(angle)
+        for sample in self.samples:
+            for obj in sample['poses']:
+                x,y=obj['pose'][:2]
+                obj['pose'][:2]=[c*x-s*y,s*x+c*y]
+                obj['pose'][5]+=angle
+        self.course['passages'][0].update(direction=[c,s],origin=[2*c,2*s])
+        self.course['finish'].update(x=4*c,y=4*s)
+        self.assertEqual(self.result()['outcome'],'passed')
+        self.course['boundary_polygons']=[[(-1,-.1),(6,-.1),(6,.1),(-1,.1)]]
+        self.assertIn('whole hull escaped channel/planning boundary',self.result()['failures'])
+
+    def test_channel_contains_task_after_entry_but_allows_external_approach(self):
+        self.course['task_entry']={'origin':[1,0],'direction':[1,0],'half_width_m':1}
+        self.course['task_channel']=[(.2,-1),(6,-1),(6,1),(.2,1)]
+        self.assertEqual(self.result()['outcome'],'passed')
+        self.course['task_channel']=[(.2,-.1),(6,-.1),(6,.1),(.2,.1)]
+        self.assertIn('whole hull escaped channel/planning boundary',self.result()['failures'])
+
 
 class ProjectionTests(unittest.TestCase):
     def test_ninety_degree_pitch_projects_collision_height(self):

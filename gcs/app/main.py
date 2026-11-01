@@ -10,7 +10,10 @@ from urllib.request import Request, urlopen
 from fastapi import FastAPI, HTTPException, Request as IncomingRequest
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
-from .workspace import Workspace
+from .workspace import Workspace, sha
+from .imports import import_points
+from .planner import suggest, generate
+from .course_setup import prepare_task
 from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
 
@@ -68,6 +71,44 @@ def read():
 @app.put('/api/workspace')
 def edit(data: dict):
     return checked(workspace.edit, data)
+
+
+@app.post('/api/import')
+def import_map(data: dict):
+    object_map = checked(import_points, data['content'], data.get('format', 'json'))
+    return checked(workspace.edit, {'map': object_map, 'new_import': True, 'course': {}})
+
+
+@app.get('/api/examples/competition')
+def competition_example():
+    path=Path(os.getenv('GCS_EXAMPLES',str(Path(__file__).resolve().parents[1]/'examples')))/'competition-gps-map.json'
+    return checked(lambda: json.loads(path.read_text()))
+
+
+@app.post('/api/course/prepare')
+def prepare(data: dict):
+    state=workspace.read()
+    if not state.get('map'):
+        raise HTTPException(422,'Load a map first')
+    return checked(prepare_task,state['map'],data['task'],data.get('settings') or state.get('draft'))
+
+
+@app.post('/api/course/suggest')
+def suggestions(data: dict):
+    return checked(suggest, workspace.read()['map'], data['direction'])
+
+
+@app.post('/api/generate')
+def generate_route():
+    with workspace.lock:
+        state = workspace.read()
+        if not state.get('map') or not state.get('draft'):
+            raise HTTPException(422, 'import map and select a task first')
+        checked(workspace.edit, {'draft': state['draft']})
+        result = checked(generate, state['map'], state['draft'])
+        if result['success']:
+            result['workspace'] = checked(workspace.edit, {'draft': result['draft']})
+        return result
 
 
 @app.post('/api/validate')

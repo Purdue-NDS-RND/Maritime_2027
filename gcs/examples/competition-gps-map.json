@@ -1,0 +1,565 @@
+{
+  "geographic_reference": {
+    "latitude": 51.566151,
+    "longitude": -4.034345
+  },
+  "buoys": [
+    {
+      "id": "start_marker",
+      "category": "blue",
+      "task": "start",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.034301645758707
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_gate_a_red",
+      "category": "red",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.56616896630568,
+        "longitude": -4.034499861380495
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_gate_a_green",
+      "category": "green",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.566133033694314,
+        "longitude": -4.0344998613193015
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_gate_b_red",
+      "category": "red",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.56616896630568,
+        "longitude": -4.0351605801483394
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_gate_b_green",
+      "category": "green",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.566133033694314,
+        "longitude": -4.035160579826064
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_turn_1",
+      "category": "red",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.034632005077359
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_turn_2",
+      "category": "green",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.034764148804819
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_turn_3",
+      "category": "red",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.03489629253228
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "dodge_turn_4",
+      "category": "green",
+      "task": "dodge",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.035028436259741
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "evade_left_0",
+      "category": "red",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.035402843487546
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "evade_left_1",
+      "category": "red",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.56606885805042,
+        "longitude": -4.035402842531987
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "evade_left_2",
+      "category": "red",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.03540284157643
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "evade_right_0",
+      "category": "green",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.035226651850932
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "evade_right_1",
+      "category": "green",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.56606885805042,
+        "longitude": -4.035226651054528
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "evade_right_2",
+      "category": "green",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.035226650258126
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "identify_blue",
+      "category": "blue",
+      "task": "identify",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.03518260242855
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "identify_orange",
+      "category": "orange",
+      "task": "identify",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.0351605785137625
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "identify_purple",
+      "category": "purple",
+      "task": "identify",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.035138554598975
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "identify_yellow",
+      "category": "yellow",
+      "task": "identify",
+      "centre": {
+        "latitude": 51.566000406425765,
+        "longitude": -4.035160578636549
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "reference_cyan",
+      "category": "cyan",
+      "task": "reference",
+      "centre": {
+        "latitude": 51.56597302577591,
+        "longitude": -4.035160578390976
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "deploy_zebra",
+      "category": "zebra",
+      "task": "deploy",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.034940339365883
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "launch_black",
+      "category": "black",
+      "task": "launch",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.034720100218003
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    },
+    {
+      "id": "return_marker",
+      "category": "blue",
+      "task": "return",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.034367717581396
+      },
+      "type": "cylinder",
+      "radius_m": 0.24,
+      "height_m": 0.76,
+      "object_type": "buoy"
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "evade_detector_left",
+      "category": "purple",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.566027787075626,
+        "longitude": -4.035402842054208
+      },
+      "type": "polygon",
+      "footprint": [
+        {
+          "latitude": 51.56602509212978,
+          "longitude": -4.035407177440984
+        },
+        {
+          "latitude": 51.56602509212978,
+          "longitude": -4.035398506604731
+        },
+        {
+          "latitude": 51.56603048202148,
+          "longitude": -4.035398506667175
+        },
+        {
+          "latitude": 51.56603048202148,
+          "longitude": -4.0354071775039415
+        }
+      ],
+      "height_m": 1.5,
+      "object_type": "detector"
+    },
+    {
+      "id": "evade_detector_right",
+      "category": "purple",
+      "task": "evade",
+      "centre": {
+        "latitude": 51.56610992902521,
+        "longitude": -4.03522665145273
+      },
+      "type": "polygon",
+      "footprint": [
+        {
+          "latitude": 51.566107234079354,
+          "longitude": -4.035230986848643
+        },
+        {
+          "latitude": 51.566107234079354,
+          "longitude": -4.035222316004559
+        },
+        {
+          "latitude": 51.56611262397106,
+          "longitude": -4.035222316056559
+        },
+        {
+          "latitude": 51.56611262397106,
+          "longitude": -4.035230986901158
+        }
+      ],
+      "height_m": 1.5,
+      "object_type": "detector"
+    },
+    {
+      "id": "launch_target",
+      "category": "black",
+      "task": "launch",
+      "centre": {
+        "latitude": 51.566027787075626,
+        "longitude": -4.0347201003874185
+      },
+      "type": "cylinder",
+      "radius_m": 1.524,
+      "height_m": 0.15,
+      "object_type": "obstacle"
+    },
+    {
+      "id": "recovery_case",
+      "category": "yellow",
+      "task": "recover",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.034499861070123
+      },
+      "type": "polygon",
+      "footprint": [
+        {
+          "latitude": 51.56598491947027,
+          "longitude": -4.034504196483275
+        },
+        {
+          "latitude": 51.56598491947027,
+          "longitude": -4.034495525650852
+        },
+        {
+          "latitude": 51.56598851273141,
+          "longitude": -4.0344955256568005
+        },
+        {
+          "latitude": 51.56598851273141,
+          "longitude": -4.034504196489565
+        }
+      ],
+      "height_m": 0.25,
+      "object_type": "obstacle"
+    },
+    {
+      "id": "start_dock",
+      "category": "brown",
+      "task": "start",
+      "centre": {
+        "latitude": 51.566151,
+        "longitude": -4.034235573894977
+      },
+      "type": "polygon",
+      "footprint": [
+        {
+          "latitude": 51.566124050541475,
+          "longitude": -4.03426447674637
+        },
+        {
+          "latitude": 51.566124050541475,
+          "longitude": -4.034206671108444
+        },
+        {
+          "latitude": 51.56617794945852,
+          "longitude": -4.034206671026453
+        },
+        {
+          "latitude": 51.56617794945852,
+          "longitude": -4.034264476698642
+        }
+      ],
+      "height_m": 0.5,
+      "object_type": "obstacle"
+    },
+    {
+      "id": "finish_dock",
+      "category": "brown",
+      "task": "return",
+      "centre": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.034279621922244
+      },
+      "type": "polygon",
+      "footprint": [
+        {
+          "latitude": 51.565959766642315,
+          "longitude": -4.034308524708366
+        },
+        {
+          "latitude": 51.565959766642315,
+          "longitude": -4.034250719174873
+        },
+        {
+          "latitude": 51.56601366555936,
+          "longitude": -4.03425071911899
+        },
+        {
+          "latitude": 51.56601366555936,
+          "longitude": -4.034308524686746
+        }
+      ],
+      "height_m": 0.5,
+      "object_type": "obstacle"
+    }
+  ],
+  "stations": [
+    {
+      "id": "start",
+      "label": "Start / Gate navigation",
+      "position": {
+        "latitude": 51.56618385677983,
+        "longitude": -4.034301645743042
+      }
+    },
+    {
+      "id": "dodge",
+      "label": "Dodge",
+      "position": {
+        "latitude": 51.566192070974786,
+        "longitude": -4.034830220887702
+      }
+    },
+    {
+      "id": "evade",
+      "label": "Evade",
+      "position": {
+        "latitude": 51.56606885805042,
+        "longitude": -4.035314746793257
+      }
+    },
+    {
+      "id": "identify",
+      "label": "Identify",
+      "position": {
+        "latitude": 51.56593743093109,
+        "longitude": -4.035160578071732
+      }
+    },
+    {
+      "id": "deploy",
+      "label": "Deploy",
+      "position": {
+        "latitude": 51.565953859321006,
+        "longitude": -4.034940339150773
+      }
+    },
+    {
+      "id": "launch",
+      "label": "Launch",
+      "position": {
+        "latitude": 51.56594564512605,
+        "longitude": -4.034720100048588
+      }
+    },
+    {
+      "id": "recover",
+      "label": "Recover",
+      "position": {
+        "latitude": 51.565953859321006,
+        "longitude": -4.034499861014169
+      }
+    },
+    {
+      "id": "receive",
+      "label": "Receive (dock / Deploy sensor)",
+      "position": {
+        "latitude": 51.56603600127059,
+        "longitude": -4.034279621886809
+      }
+    },
+    {
+      "id": "return",
+      "label": "Return / Finish",
+      "position": {
+        "latitude": 51.565921002541174,
+        "longitude": -4.034367717564979
+      }
+    },
+    {
+      "id": "deployment_radius",
+      "label": "Deployment radius (6 ft)",
+      "radius_m": 1.8288000000000002,
+      "blocking": false,
+      "position": {
+        "latitude": 51.56598671610084,
+        "longitude": -4.034940339365883
+      }
+    }
+  ],
+  "schema_version": 3,
+  "source": "live",
+  "name": "Full competition practice map",
+  "captured_at": "2026-10-29T00:52:36.977275+00:00",
+  "size_defaults_m": {
+    "buoy": 0.25,
+    "unknown": 0.5,
+    "detector": 0.5
+  }
+}

@@ -1,10 +1,15 @@
 # Repository guidelines
 
+Use the full competition map as the primary development and operator-testing
+scene. The small historical slalom map is for focused regression tests only;
+it does not substitute for checking the normal GCS workflow on the full course.
+
 Read `docs/design.md` and `docs/milestone1.md` before planning or implementing
 new application work. The milestone defines the current scope: simulator object
 map export, minimal web GCS with manual route editing, and boat/ArduPilot slalom
-execution. Automatic route generation and drone mapping are deferred. Keep the
-boat independently testable with manually supplied routes. Implementation is
+execution. This feature adds operator-reviewed GPS planning for separate gate,
+slalom and channel missions; drone mapping remains deferred. Keep the boat
+independently testable with manually supplied routes. Implementation is
 complete for the selected Milestone 1 simulator acceptance; physical-boat
 performance remains unverified. Documentation alone is not an instruction to
 implement deferred features.

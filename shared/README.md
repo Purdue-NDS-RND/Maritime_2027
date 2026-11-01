@@ -6,7 +6,7 @@ matches ArduPilot's mean-latitude longitude scaling; it is intentionally
 restricted to local courses away from the poles.
 
 `clearance.py` checks finite route segments (including the start connection),
-ordered fixed-course passages and finish regions using a point route and an
+ordered orientation-independent passages and finish regions using a point route and an
 operator-selected total clearance buffer. The buffer is the distance from the
 boat reference point to each physical obstacle surface. There are no hull identities, measured
 navigation profiles, gain requirements or hidden margins. Speed must be finite
@@ -20,3 +20,8 @@ oriented footprint recorder/evaluator rather than this static buffer check.
 circle/convex-polygon obstacles, nonblocking station annotations and start poses.
 Route segments and the whole finish region are checked against every physical
 object; deployment overlays do not add obstacles.
+
+`course.py` provides finite directed gate/turn progress and planning/channel
+containment. Live version 3 maps need no simulator identity and are never
+simulator verified. GCS backend planning lives in `gcs/app/planner.py`; shared
+code contains geometry and final validation, not a planning/control service.

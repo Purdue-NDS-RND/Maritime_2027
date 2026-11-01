@@ -475,3 +475,199 @@ inventory, exact removed tags and output remain in `canonical-runtime/`
 `legacy-gcs-container.tar.gz`. Measured net host space recovered was 7.98 GB,
 subject to unrelated host activity. Historical tags/containers are not runtime
 dependencies. Physical boat/radio behavior remains unverified.
+
+## GPS assisted planner extension (browser acceptance pending)
+
+This subsequent scope adds separate gate/slalom/channel planning, independent
+retries and persistent reviewed course roles. It does not change the historical
+Milestone 1 acceptance above. Live GPS JSON/CSV imports preserve original values
+and corrections separately, use explicit editable size assumptions and never
+inherit simulator verification. See the GCS guide for setup and operations.
+
+A* uses required clearance as a hard constraint and preferred clearance as a
+reported, locally yielding preference. Each task has confirmed direction,
+entry/exit, finish, bounds and ordered roles or channel containment; searches
+refine 0.25/0.10/0.05 m and distinguish blocked gate proofs from exhaustion.
+Simplified GPS drafts receive full segment/course/finish validation. Manual and
+boat-only route interfaces remain available. Map/setup/settings changes and task
+switching revoke approval. Upload/start retain actual-position checks.
+
+Automated planner, workspace and API checks and simulator evidence are recorded
+under ignored `simulation/logs/gps-planner/`. Browser acceptance is currently
+blocked: the computer-use service reports no available browsers/apps. This must
+be completed before claiming the requested full setup/edit/retry workflow.
+Physical boat/radio, detection avoidance and controller tracking at arbitrary
+settings remain unqualified. Final measured task results are recorded below.
+
+### GPS planner simulator results (2026-10-29)
+
+Base run `20261029T182329-8355` executed three consecutive separate missions for
+each task using generated drafts from `gps-only-base.json` (only GPS points,
+anonymous point IDs and physical radii; no colors, station/start metadata,
+alignment or simulator identity). Missions alternate reviewed travel directions
+and regenerate from actual stopped starts, with separate approval/upload/start
+and confirmed disarm after each. These are independently regenerated missions,
+not three repetitions of one frozen approval. Map and task drafts remain saved.
+Channel retries start at different safe ends without replaying earlier tasks.
+
+| Task | Independent outcomes | Minimum hull clearance per pass (m) |
+| --- | --- | --- |
+| Gate | 3 passed | 1.24376 / 1.04769 / 1.01178 |
+| Slalom | 3 passed | 0.93195 / 0.65918 / 0.80005 |
+| Channel | 3 passed | 0.80380 / 2.04582 / 2.33873 |
+
+All passed contiguous physics-step evidence, ordered/side/stern gate/slalom
+checks, full-attitude collision-prism clearance, no contacts, containment inside
+operator-selected planning/channel polygons, and independent finish settling
+within 1 m at <=0.2 m/s for 5 s. The channel fixture is an operator-bounded polygon
+in the slalom scene, not qualification of the competition Evade station or detector
+coverage. Contact-recorder qualification reuses the independently verified
+same-scene deliberate hull-contact proof; the source/image/scene remain recorded.
+
+Test settings explicitly select 0.5 m/s, 1.5 m required and preferred planned
+point buffers and a 0.25 m independent hull-clearance threshold. Defaults remain
+0.5 m/s and 1.8 m required; preferred initializes equal to required. The default
+1.8 m cannot fit the 3.52 m gate surface opening and is correctly rejected; it
+was not reduced by the planner. An initial gate finish disk beside the next
+slalom buoy was rejected before upload and moved to clear space without changing
+buffers. Actual tracking consumes the chosen allowance; these runs do not prove
+that physical or higher-speed error stays inside it. Preferred shortfall and
+detector constraints/preferences have automated coverage, not detector runtime
+qualification. No controller parameters, dynamics or firmware pins changed.
+
+Verification: 41 GCS/API/planner/workspace/telemetry tests and 16 independent
+evaluator tests pass; React and production image `maritime-gcs:gps-planner` build,
+Python compilation and simulator static/configuration checks pass. Saved base
+routes also pass final-source revalidation. Browser setup/edit/retry acceptance
+remains blocked by the unavailable browser surface and is not claimed.
+
+Additional run `20261029T184525-41988` used a 0.5 rad rotated slalom with
+alternating 0.05 m lateral perturbations, freshly exported and stripped to GPS
+points. The production GCS image generated ten waypoints; all six actual
+passages, full-hull clearance, contacts and stopped finish checks passed over
+124,438 contiguous physics samples. Minimum hull clearance was **0.91670 m**.
+The active recorder was qualified by deliberate disarmed contact after the
+mission window, then the original pose was restored. A first normal start was
+rejected during gyro/EKF initialization; retry after initialization used normal
+pre-arm checks. No force-arm or parameter bypass occurred. Fixture coordinates
+use the renderer's six-decimal precision to satisfy strict manifest/SDF equality.
+The tracked scene was restored byte-for-byte; temporary runtimes are stopped,
+and the original stopped main-checkout simulator container name is restored.
+
+Raw evidence includes task `*-generated.json`, `*-approval.json`,
+`*-observation.jsonl`, `*-session.json`, `*-evaluation.json`, operation results,
+contact proofs, source/image inventories, build/test logs and both immutable
+run directories. `final-source-revalidation.json` checks all ten saved generated
+routes. Existing `output/` and the main checkout remain untouched. Full browser
+setup/correction/retry acceptance remains outstanding; backend/API tests and
+HTTP-driven simulator runs do not substitute for that browser check.
+
+### Full competition map and guided GCS redesign (2026-10-29)
+
+The full competition scene is now the primary development/operator test target;
+the eight-buoy map remains regression coverage. The normal GCS uses three panels:
+Map → Task setup → Route review. Map inspection is the default click mode,
+drawing/editing tools are explicit and cancellable, and advanced controls are
+collapsed. The bundled full GPS practice map includes all 23 buoys and six props,
+without simulator run/start/alignment requirements or a simulator-verified label.
+Normal workspace replacement archives the previous map and drafts first.
+
+Full-map failures were traced to mixed-station suggestions, northbound defaults,
+return markers misidentified as slalom turns, and channel/task constraints applied
+before entry. Task suggestions now use the available imported task/object labels;
+Dodge is westbound and Evade southbound. They remain unconfirmed. Complete
+approaches enforce physical clearance and planning bounds; task passage planes
+and channel containment activate at the finite entry. Final validation checks
+the complete generated route. Precomputed metric obstacle geometry, conservative
+bounds and a next-opening heuristic reduce full-map planning work without dropping
+obstacles or reducing required clearance. The default 1.8 m gate rejection is
+shown as a 3.52 m opening versus 3.60 m needed; no allowance is silently changed.
+
+Run `20261029T225445-98188` executed **one separate generated mission per task**
+on the actual full competition scene, through normal GCS/boat APIs, at an
+explicitly selected 0.5 m/s and 1.5 m required/preferred test buffer. All three
+uploaded/read back, completed in HOLD and explicitly disarmed. Slalom started
+from the gate finish, including its return approach to entry; channel started
+from the slalom finish without rebuilding the map or replaying prior tasks.
+
+| Task | Independent result | Minimum whole-hull clearance, including props |
+| --- | --- | --- |
+| Gate | passed | 1.29242 m |
+| Slalom / Dodge | passed | 0.83310 m |
+| Channel / Evade | passed | 2.75838 m |
+
+Independent evaluation covers contiguous physics, full-attitude collision prisms,
+all circle/polygon obstacles, approach clearance, active passage order/sides/stern,
+channel containment, contacts and finish settling within 1 m at <=0.2 m/s for 5 s.
+The active contact recorder was qualified after mission windows using disarmed
+deliberate contact and pose restoration. The independent hull threshold was
+0.25 m. No tuning, dynamics, firmware pins, direct ports or boat interface changed.
+This is one-pass integration per full-map task, not three-pass full-map
+qualification, physical/radio acceptance or detector-avoidance proof.
+
+Verification: all 49 backend/planner/workspace/telemetry/API tests, 17 evaluator
+tests, four frontend workflow assertions and server rendering of all three
+panels pass. Production/React builds, Python compilation and simulator static
+checks pass. Live browser interaction/visual acceptance remains unavailable
+because the computer-use service reports no browsers/apps; server-rendered checks
+are not a substitute. Raw inputs, approvals, operations, physics evaluation,
+contact proof and build/test logs are under ignored `simulation/logs/gcs-redesign/`.
+Normal operator settings were restored with the full competition map and no
+approval. The GCS remains available for review; simulator/boat tests are stopped.
+
+### Channel planning recovery (2026-11-01)
+
+Live Chrome inspection found an edited channel entry beside the right boundary:
+its entire crossing window violated the selected 2 m channel inset. Generation
+searched for minutes without explaining the conflicting setup. Convex-channel
+entry feasibility now rejects that conflict before search; other searches share
+a 60-second time budget and return explicit exhaustion without relaxing buffers.
+The production GCS was rebuilt/restarted with saved drafts retained. Chrome
+confirmed immediate actionable rejection and an enabled Generate button for the
+same failing input. All 51 containerized GCS tests pass, including full-course
+generation, entry rejection and deadline coverage. The test image now includes
+the full-map example fixture. This is planner/UI recovery evidence, not a new
+boat execution or physical acceptance run. Raw evidence is retained under
+`simulation/logs/channel-planner-fix/`.
+
+### Manual waypoint movement (2026-11-01)
+
+Manual move is a visible task option with a separate saved waypoint queue,
+fresh-start capture, editable speed/buffer and last-waypoint finish. Gate,
+slalom and channel drafts survive switching. Existing validation, approval,
+upload and explicit Go/start remain separate; no boat interface changed.
+Chrome checks on the full competition map queued two waypoints, validated the
+direct route and verified that Upload/Go stayed disabled before approval.
+The test queue was cleared afterward, leaving an empty saved manual draft for
+the operator. No movement was commanded in this UI check. All 52 containerized
+backend tests, frontend workflow/render checks and production builds pass.
+Evidence is under `simulation/logs/channel-planner-fix/manual-*`. Actual motion
+reuses the existing supplied-route executor and was not requalified in this check.
+
+### Boat controls visibility (2026-11-01)
+
+A persistent Boat controls panel shows armed state, mode, speed and GPS fix,
+with Hold / Stop and Disarm available across planning steps. Disarm is enabled
+only with fresh armed status in Hold at reported speed ≤ 0.20 m/s. Upload is
+disabled while armed or in Auto, with recovery guidance. Arming remains part of
+the existing verified mission Start/Go path. Historical command results are
+labeled separately from live status. Frontend render checks cover offline,
+moving, wrong-mode, settled and disarmed states plus armed-upload blocking;
+frontend checks and production build pass. Chrome verified live armed/Hold/
+zero-speed presentation and availability of Disarm. No vehicle command was
+sent as part of this UI check; the approved route was retained. Evidence is
+under `simulation/logs/channel-planner-fix/controls-*`.
+
+### Buffer preview (2026-11-01)
+
+A visible Show buffers toggle works before confirmation/validation and updates
+from current draft settings. It covers circle/polygon obstacles, convex boundary
+insets, start clearance and finish allowance, plus larger preferred buffers.
+Unsupported concave boundary previews and collapsed insets are identified. Entry
+is drawn as its finite crossing window; setup copy distinguishes it from saved S
+and live boat position. Geometry/frontend render checks and production build pass.
+Chrome verified the toggle on the full competition map in Map review before
+validation, then Channel setup with the same preview enabled. Saved geometry
+and settings were retained; no vehicle commands were sent. Screenshot/build
+evidence is under `simulation/logs/channel-planner-fix/buffers-*`. This is a
+visual debugging aid, not new route or vehicle acceptance.

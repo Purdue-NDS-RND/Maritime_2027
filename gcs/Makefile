@@ -10,7 +10,7 @@ down:
 validate:
 	PYTHONPATH=.. python3 -m unittest discover -s tests -v
 	python3 -m compileall -q app
-	cd frontend && npm ci && npm run build
+	cd frontend && npm ci && npm test && npm run build
 	docker compose -f container/compose.yaml config --quiet
 
 test:

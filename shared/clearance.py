@@ -2,6 +2,7 @@
 import math
 from .geometry import finite, segment_distance, to_local, polygon_clearance
 from .object_map import validate_map
+from .course import validate_course
 
 
 def validate_route(object_map, draft):
@@ -9,10 +10,12 @@ def validate_route(object_map, draft):
     errors = []
     def reject(reason, location=None):
         errors.append({'reason': reason, 'location': location})
-    if object_map.get('schema_version') not in (1,2):
+    if object_map.get('schema_version') not in (1,2,3):
         reject('unsupported object map version')
-    if not isinstance(object_map.get('alignment'), dict) or object_map['alignment'].get('outcome') != 'passed':
+    if object_map['schema_version'] != 3 and (not isinstance(object_map.get('alignment'), dict) or object_map['alignment'].get('outcome') != 'passed'):
         reject('scene geographic alignment is unverified')
+    if object_map['schema_version']==3 and not draft.get('sizes_confirmed'):
+        reject('confirm all live-map dimensions and size assumptions')
     reference = object_map['geographic_reference']
     points = [to_local(point, reference) for point in draft['waypoints']]
     if not 1 <= len(points) <= 500:
@@ -55,64 +58,15 @@ def validate_route(object_map, draft):
     for obj in obstacles:
         if gap_to_object(obj,finish,finish) < radius + finish_radius:
             reject('finish area violates clearance at ' + obj['id'], list(to_local(obj['centre'],reference)))
-    buoy_ids = {b['id']: b for b in object_map['buoys']}
-    seen = set()
-    passages = draft.get('passages', [])
-    if not isinstance(passages, list):
-        raise ValueError('passages must be an ordered list')
-    for passage in passages:
-        if not isinstance(passage.get('id'), str) or passage['id'] in seen:
-            raise ValueError('unique passage IDs required')
-        seen.add(passage['id'])
-        if passage.get('kind') == 'gate':
-            if passage.get('red') not in buoy_ids or passage.get('green') not in buoy_ids or passage['red'] == passage['green']:
-                reject('gate must identify two distinct mapped buoys')
-        elif passage.get('kind') == 'turn':
-            if passage.get('buoy') not in buoy_ids or passage.get('side') not in ('left','right'):
-                reject('turn must identify a mapped buoy and passing side')
-        else:
-            reject('unsupported course passage kind')
-    crossing_order = []
-    for passage in passages:
-        if passage.get('kind') == 'gate' and passage.get('red') in buoy_ids and passage.get('green') in buoy_ids:
-            red = to_local(buoy_ids[passage['red']]['centre'], reference)
-            green = to_local(buoy_ids[passage['green']]['centre'], reference)
-            if abs(red[0]-green[0]) > .10:
-                reject('this fixed-course validator requires a gate perpendicular to +X')
-                continue
-            plane = (red[0]+green[0])/2
-            low = min(red[1],green[1]) + max(buoy_ids[passage['red']]['radius_m'],buoy_ids[passage['green']]['radius_m']) + radius
-            high = max(red[1],green[1]) - max(buoy_ids[passage['red']]['radius_m'],buoy_ids[passage['green']]['radius_m']) - radius
-        elif passage.get('kind') == 'turn' and passage.get('buoy') in buoy_ids:
-            centre = to_local(buoy_ids[passage['buoy']]['centre'], reference)
-            plane = centre[0]
-            offset = radius + buoy_ids[passage['buoy']]['radius_m']
-            low, high = ((centre[1]+offset, math.inf) if passage.get('side')=='left'
-                         else (-math.inf, centre[1]-offset))
-        else:
-            continue
-        crossings = []
-        for leg,(a,b) in enumerate(zip(route,route[1:])):
-            if a[0] <= plane < b[0]:
-                f = (plane-a[0])/(b[0]-a[0]); y = a[1]+f*(b[1]-a[1])
-                crossings.append(leg+f)
-                if not low <= y <= high:
-                    reject('passage violates opening/side: '+passage['id'], [plane,y])
-            if b[0] <= plane < a[0]:
-                reject('reverse passage is unsupported: '+passage['id'], [plane,a[1]])
-        if len(crossings) != 1:
-            reject('route must cross passage once: '+passage['id'], [plane,0])
-        else:
-            crossing_order.append(crossings[0])
-    if crossing_order != sorted(crossing_order):
-        reject('route crosses passages in the wrong order')
+    course_errors, sections = validate_course(object_map, draft)
+    errors.extend(course_errors)
     task = draft.get('task', 'custom')
     if task in ('gate_only','slalom'):
-        kinds = [p.get('kind') for p in passages]
+        kinds = [p.get('kind') for p in draft.get('passages', [])]
         expected = ['gate'] if task == 'gate_only' else ['gate','turn','turn','turn','turn','gate']
         if kinds != expected:
             reject('select the complete ordered '+task+' passage list')
     elif task != 'custom':
         reject('unsupported course task')
-    return {'valid': not errors, 'errors': errors, 'swept_radius_m': radius,
+    return {'preferred_shortfalls': sections, 'map_verification': 'live / unverified' if object_map['schema_version']==3 else 'simulator alignment passed', 'valid': not errors, 'errors': errors, 'swept_radius_m': radius,
             'bound_scope': 'operator-selected total buffer; hull size and tracking error are not inferred'}
