@@ -6,13 +6,13 @@ export const TASKS = [
 ];
 export function manualDraft(settings, position) {
     return {task:'custom',waypoints:[],start:position||settings.start,finish:position||settings.start,
-        speed_m_s:settings.speed_m_s,clearance_m:settings.clearance_m,
+        speed_m_s:settings.speed_m_s,clearance_m:settings.clearance_m,...(settings.tower_avoidance?{tower_avoidance:structuredClone(settings.tower_avoidance)}:{}),
         preferred_buffer_m:settings.preferred_buffer_m??settings.clearance_m,
         finish_radius_m:settings.finish_radius_m??1,sizes_confirmed:settings.sizes_confirmed,passages:[]};
 }
 export const friendly = value => (value||'Unknown object').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 export function configuration(draft) {
-    const {waypoints,start,planner_task,course_revision,attempt,derived_sections,excluded_sections,partial_attempt,route_sections,generation_errors,generation_setup_sha256,...roles}=draft;
+    const {planning_notice,waypoints,start,planner_task,course_revision,attempt,derived_sections,excluded_sections,partial_attempt,route_sections,generation_errors,generation_setup_sha256,...roles}=draft;
     return roles;
 }
 export function heading(direction) {

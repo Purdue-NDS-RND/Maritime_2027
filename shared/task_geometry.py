@@ -214,5 +214,5 @@ def remaining_suggestion(object_map, draft):
 
 
 def setup_identity(object_map,draft):
-    keys=('geometry_version','planner_task','passages','direction','planning_area','channel','channel_chains','connection_override','finish','finish_radius_m','entry_radius_m','exit_radius_m')
+    keys=('speed_m_s','clearance_m','preferred_buffer_m','tower_avoidance','geometry_version','planner_task','passages','direction','planning_area','channel','channel_chains','connection_override','finish','finish_radius_m','entry_radius_m','exit_radius_m')
     return hashlib.sha256(json.dumps({'map':object_map,'setup':{key:draft.get(key) for key in keys},'scope':{key:draft.get('attempt',{}).get(key) for key in ('mode','first_section','start_source')}},sort_keys=True).encode()).hexdigest()

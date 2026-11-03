@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import Planner from './Planner';
+import {defaultSettings,effectiveSettings,towerZones,routeIsVisible,settingsError} from './settings';
 import BoatControls from './BoatControls';
 import {configuration,heading,friendly} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
@@ -47,6 +48,8 @@ function App() {
     const [step,setStep]=useState(1), [selected,setSelected]=useState('');
     const [mode,setMode]=useState('inspect'), [labels,setLabels]=useState(false), [stations,setStations]=useState(false), [overlays,setOverlays]=useState(true);
     const [buffers,setBuffers]=useState(false);
+    const [activeTask,setActiveTask]=useState(null),[generatedTasks,setGeneratedTasks]=useState([]);
+    const settingsChanged=useRef(false),serverSession=useRef(null);
     const mapChanged=useRef(false), pendingWork=useRef(0);
     const [workspace,setWorkspace]=useState({map:null,draft:null,approval:null});
     const [status,setStatus]=useState(null), [received,setReceived]=useState(0);
@@ -58,8 +61,20 @@ function App() {
     const [results,setResults]=useState({});
     const mapRef=useRef(), layers=useRef(), tileRef=useRef(), vehicleLayer=useRef(), current=useRef(), [ready,setReady]=useState(false);
     const draft=workspace.draft||blank();
+    const routeVisible=routeIsVisible(draft.planner_task,generatedTasks,activeTask);
+    const previewSettings=step===2?effectiveSettings(workspace.game_settings||defaultSettings(draft)):draft;
+    function invalidateRoute(){setGeneratedTasks([]);}
+    function updateSettings(settings){
+        settingsChanged.current=true;invalidateRoute();
+        setWorkspace(w=>({...w,game_settings:settings,approval:null}));setDirty(true);setValidation(null);
+    }
+    async function saveSettings(){await run(async()=>{
+        const error=settingsError(workspace.game_settings||defaultSettings(draft));if(error)throw new Error(error);
+        settingsChanged.current=true;await save();setStep(3);setMode('inspect');setActiveTask(null);
+        setMessage('Configuration saved. Choose a task, review its assignments, then Generate.');
+    });}
     function changeWorkspace(w,mapEdit=false,isDirty=true){
-        if(mapEdit){mapChanged.current=true;for(const config of Object.values(w.course||{})){config.sizes_confirmed=false;config.course_confirmed=false;}if(w.draft){w.draft.sizes_confirmed=false;w.draft.course_confirmed=false;}}
+        if(mapEdit){invalidateRoute();mapChanged.current=true;for(const config of Object.values(w.course||{})){config.sizes_confirmed=false;config.course_confirmed=false;}if(w.draft){w.draft.sizes_confirmed=false;w.draft.course_confirmed=false;}}
         setWorkspace(w);setDirty(isDirty);setValidation(null);
     }
     current.current={workspace,draft,edit,mode,changeWorkspace,setMode,setSelected};
@@ -85,7 +100,7 @@ function App() {
             if(!['planning_area','channel'].includes(mode))setMode('inspect');
         });
         setReady(true);
-        api('workspace').then(w=>{setWorkspace(w);if(w.migration_notice)setMessage(w.migration_notice);if(w.map)map.fitBounds(mapBounds(w.map),{padding:[60,60],maxZoom:22});}).catch(e=>setMessage(e.message));
+        api('workspace').then(w=>{setWorkspace(w);if(w.migration_notice)setMessage(w.migration_notice);if(w.map)setMessage(w.migration_notice||'Map and settings restored. Course paths stay hidden until you generate them.');if(w.map)map.fitBounds(mapBounds(w.map),{padding:[60,60],maxZoom:22});}).catch(e=>setMessage(e.message));
         return ()=>map.remove();
     },[]);
     useEffect(()=>{
@@ -96,7 +111,13 @@ function App() {
     },[]);
     useEffect(()=>{
         const stream=new EventSource('/api/telemetry/events');
-        stream.onmessage=event=>{const value=JSON.parse(event.data);setTelemetry(value);setTelemetryReceived(Date.now());};
+        stream.onmessage=event=>{const value=JSON.parse(event.data);
+            if(serverSession.current&&value.gcs_session_id&&serverSession.current!==value.gcs_session_id){
+                setGeneratedTasks([]);setActiveTask(null);setValidation(null);setStep(1);setMode('inspect');
+                setMessage('GCS restarted. Saved work is retained; generate task routes when ready.');
+            }
+            serverSession.current=value.gcs_session_id||serverSession.current;
+            setTelemetry(value);setTelemetryReceived(Date.now());};
         stream.onerror=()=>setTelemetry(t=>t?{...t,stale:true,connection_state:'disconnected'}:null);
         const timer=setInterval(()=>setNow(Date.now()),250);
         return()=>{stream.close();clearInterval(timer);};
@@ -119,23 +140,24 @@ function App() {
         const {map}=workspace;
         if(map) for(const [i,b] of map.buoys.entries()){
             const colour={red:'#e74b50',green:'#35c78b',white:'#dfe7f2',blue:'#4e9feb',orange:'#fa8b24',purple:'#b15ce5',yellow:'#eed831',cyan:'#25d9df',black:'#151515',zebra:'#ffffff'}[b.category]||'#999';
-            L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7}).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.setSelected(b.id);setStep(1);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
+            L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7}).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.setSelected(b.id);setStep(b.object_type==='detector'?2:1);if(b.object_type==='detector')setBuffers(true);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
             if(b.category==='zebra')L.marker(latlng(b.centre),{interactive:false,icon:L.divIcon({className:'zebra-marker',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(group);
 
         }
         if(map)for(const obj of map.obstacles||[]){
             const style={color:obj.task==='launch'?'#20252b':obj.task==='recover'?'#edcc35':obj.task==='evade'?'#bd79e4':'#99724d',fillOpacity:0.65,weight:2};
             const shape=obj.type==='polygon'?L.polygon(obj.footprint.map(latlng),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m});
-            shape.addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.setSelected(obj.id);setStep(1);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
+            shape.addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.setSelected(obj.id);setStep(obj.object_type==='detector'?2:1);if(obj.object_type==='detector')setBuffers(true);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
 
         }
-        if(map&&buffers&&Number.isFinite(draft.clearance_m)&&draft.clearance_m>=0){
-            const ref=map.geographic_reference,required=draft.clearance_m,preferred=draft.preferred_buffer_m??required;
+        if(map&&(buffers||step===2)&&Number.isFinite(previewSettings.clearance_m)&&previewSettings.clearance_m>=0){
+            const ref=map.geographic_reference,required=previewSettings.clearance_m,preferred=previewSettings.preferred_buffer_m??required;
             const levels=[{radius:required,color:'#e9ac53',name:'Required'}];
             if(Number.isFinite(preferred)&&preferred>required)levels.unshift({radius:preferred,color:'#83baff',name:'Preferred'});
             for(const {radius,color,name} of levels){
                 const style={color,weight:1.5,dashArray:name==='Required'?'5 4':'2 6',fillOpacity:.035,interactive:false};
                 for(const obj of [...map.buoys,...(map.obstacles||[])]){
+                    if(obj.object_type==='detector'&&previewSettings.tower_avoidance)continue;
                     if(obj.type==='polygon')L.polygon(expandedFootprint(obj.footprint,radius,ref),style).addTo(group);
                     else L.circle(latlng(obj.centre),{...style,radius:obj.radius_m+radius}).addTo(group);
                 }
@@ -145,15 +167,24 @@ function App() {
                     const inset=insetBoundary(draft[key],radius,ref);
                     if(inset?.length)L.polygon(inset,{...style,fillOpacity:0}).addTo(group);
                 }
-                if(draft.start)L.circle(latlng(draft.start),{...style,radius}).addTo(group);
-                if(draft.finish)L.circle(latlng(draft.finish),{...style,radius:(draft.finish_radius_m||0)+radius}).addTo(group);
+                if(activeTask&&step>=3&&(routeVisible||draft.attempt?.start_source==='manual')&&draft.start)L.circle(latlng(draft.start),{...style,radius}).addTo(group);
+                if(activeTask&&step>=3&&draft.finish)L.circle(latlng(draft.finish),{...style,radius:(draft.finish_radius_m||0)+radius}).addTo(group);
+            }
+        }
+        if(map&&(buffers||step===2)&&previewSettings.tower_avoidance){
+            for(const obj of [...map.buoys,...(map.obstacles||[])].filter(o=>o.object_type==='detector')){
+                const {hard_m:hard,soft_m:soft}=towerZones(obj,previewSettings);
+                if(!Number.isFinite(hard)||!Number.isFinite(soft)||hard<0||soft<hard)continue;
+                const draw=(distance,style)=>obj.type==='polygon'?L.polygon(expandedFootprint(obj.footprint,distance,map.geographic_reference),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m+distance});
+                for(let band=6;band>=1;band--)draw(hard+(soft-hard)*band/6,{color:'#ba8aff',weight:band===6?1:0,dashArray:'3 6',fillColor:'#a77bea',fillOpacity:.025,interactive:false}).addTo(group);
+                draw(hard,{color:selected===obj.id?'#ffcf83':'#df9afc',weight:selected===obj.id?3:2,fillColor:'#b85ce0',fillOpacity:.18,interactive:false}).addTo(group);
             }
         }
         if(map&&stations)for(const station of map.stations||[]){
             if(station.radius_m)L.circle(latlng(station.position),{radius:station.radius_m,color:'#eee',weight:1,dashArray:'3 5',fillOpacity:0,interactive:false}).addTo(group);
             else L.marker(latlng(station.position),{interactive:false,icon:L.divIcon({className:'station-anchor',html:'',iconSize:[0,0]})}).addTo(group).bindTooltip(document.createTextNode(station.label),{permanent:true,direction:'center',className:'station-tooltip'});
         }
-        if(overlays&&map){
+        if(overlays&&map&&activeTask&&step>=3){
             for(const [passageIndex,p] of (draft.passages||[]).entries()){
                 const objects=[...map.buoys,...(map.obstacles||[])];
                 if(p.kind==='gate'){const a=objects.find(o=>o.id===p.red),b=objects.find(o=>o.id===p.green);if(a&&b)L.polyline([latlng(a.centre),latlng(b.centre)],{color:'#f7df78',dashArray:'3 4'}).addTo(group).bindTooltip(`Gate · ${friendly(p.red)} / ${friendly(p.green)}`);}
@@ -177,18 +208,18 @@ function App() {
             }
             for(const section of validation?.preferred_shortfalls||[]){const route=[draft.start,...draft.waypoints];L.polyline([latlng(route[section.leg]),latlng(route[section.leg+1])],{color:'#ff963f',weight:8}).addTo(group).bindTooltip(`Achieved clearance ${section.clearance_m.toFixed(3)} m`);}
         }
-        if(draft.route_sections?.length)for(const section of draft.route_sections){const route=[draft.start,...draft.waypoints];if(route[section.leg+1])L.polyline([latlng(section.start||route[section.leg]),latlng(section.end||route[section.leg+1])],{color:section.kind==='approach'?'#d9b470':'#6ea9ff',weight:5}).addTo(group).bindTooltip(section.kind==='approach'?'Approach to first included passage':'Task route');}
-        if(draft.waypoints.length&&!draft.route_sections?.length)L.polyline([latlng(draft.start),...draft.waypoints.map(latlng)],{color:'#6ea9ff',weight:3}).addTo(group);
-        for(const [i,p]of draft.waypoints.entries()){
+        if(routeVisible&&draft.route_sections?.length)for(const section of draft.route_sections){const route=[draft.start,...draft.waypoints];if(route[section.leg+1])L.polyline([latlng(section.start||route[section.leg]),latlng(section.end||route[section.leg+1])],{color:section.kind==='approach'?'#d9b470':'#6ea9ff',weight:5}).addTo(group).bindTooltip(section.kind==='approach'?'Approach to first included passage':'Task route');}
+        if(routeVisible&&draft.waypoints.length&&!draft.route_sections?.length)L.polyline([latlng(draft.start),...draft.waypoints.map(latlng)],{color:'#6ea9ff',weight:3}).addTo(group);
+        for(const [i,p]of (routeVisible?draft.waypoints:[]).entries()){
             const marker=L.marker(latlng(p),{draggable:mode==='waypoint',icon:icon(i+1,'#487dce')}).addTo(group);
             marker.on('dragend',()=>{const {draft,edit}=current.current;const moved=point(marker.getLatLng());edit({...draft,waypoints:draft.waypoints.map((v,n)=>n===i?moved:v),...(i===draft.waypoints.length-1?{finish:moved}:{})});});
             marker.bindTooltip('Waypoint '+(i+1)+(mode==='waypoint'?' · drag to move':' · enable Edit on map to move'));
         }
-        L.marker(latlng(draft.start),{icon:icon('S','#596579')}).addTo(group).bindTooltip('Planning start');
-        L.circle(latlng(draft.finish),{radius:draft.finish_radius_m,color:'#ab91f2',fillOpacity:0.1}).addTo(group).bindTooltip('Finish',{permanent:true,direction:'top',className:'setup-tooltip'});
+        if(activeTask&&step>=3&&(routeVisible||draft.attempt?.start_source==='manual'||activeTask==='manual'))L.marker(latlng(draft.start),{icon:icon('S','#596579')}).addTo(group).bindTooltip('Planning start');
+        if(activeTask&&step>=3)L.circle(latlng(draft.finish),{radius:draft.finish_radius_m,color:'#ab91f2',fillOpacity:0.1}).addTo(group).bindTooltip('Finish',{permanent:true,direction:'top',className:'setup-tooltip'});
 
         for(const failure of [...(validation?.errors||[]),...(draft.generation_errors||[])])if(failure.location&&map){const [x,y]=failure.location;const ref=map.geographic_reference;const lat=ref.latitude+y/111319.49079327357;const lon=ref.longitude+x/(111319.49079327357*Math.cos(lat*Math.PI/180));L.circleMarker([lat,lon],{radius:10,color:'#ff5d68'}).addTo(group).bindTooltip(failure.reason);}
-    },[workspace,validation,ready,labels,stations,overlays,buffers,mode]);
+    },[workspace,validation,ready,labels,stations,overlays,buffers,mode,step,activeTask,routeVisible,selected]);
     useEffect(()=>{
         if(!ready||(!telemetry?.position&&!boatMarker.current))return;
         if(!boatMarker.current)boatMarker.current=L.marker(latlng(telemetry.position),{zIndexOffset:1000,title:'Boat position and heading'})
@@ -202,8 +233,8 @@ function App() {
     function endWork(){pendingWork.current=Math.max(0,pendingWork.current-1);setBusy(pendingWork.current>0);}
     async function run(work){beginWork();try{return await work();}catch(error){setMessage(error.message);}finally{endWork();}}
     async function save(next=current.current.workspace,mapEdit=mapChanged.current){
-        const value=await api('workspace','PUT',{draft:next.draft||blank(),course:next.course||{},...(mapEdit?{map:next.map}:{})});
-        mapChanged.current=false;setWorkspace(value);setDirty(false);return value;
+        const value=await api('workspace','PUT',{draft:next.draft||blank(),course:next.course||{},...(settingsChanged.current?{game_settings:next.game_settings||defaultSettings(draft)}:{}),...(mapEdit?{map:next.map}:{})});
+        mapChanged.current=false;settingsChanged.current=false;setWorkspace(value);setDirty(false);return value;
     }
     async function action(name){beginWork();try{
         if(['validate','approve'].includes(name)&&dirty)await save();
@@ -218,7 +249,7 @@ function App() {
         const value=await api('import','POST',{content:await file.text(),format:file.name.endsWith('.csv')?'csv':'json'});
         await initializeMap(value);setMessage('Map imported. Review its object sizes before task setup.');
     });event.target.value='';}
-    async function initializeMap(value){
+    async function initializeMap(value){invalidateRoute();setActiveTask(null);
         const position=value.map.start_pose?.position||value.map.geographic_reference;
         const next={...blank(),task:'custom',start:position,finish:position,speed_m_s:draft.speed_m_s,clearance_m:draft.clearance_m,preferred_buffer_m:draft.preferred_buffer_m??draft.clearance_m};
         await save({...value,draft:next});setValidation(null);setStep(1);setSelected('');setMode('inspect');
@@ -241,13 +272,13 @@ function App() {
       <BoatControls status={status} stale={stale} action={action} operations={operations} results={results}/>
       <div className="workspace-layout">
         <section className="map-panel" aria-label="Course map">
-          <div className="map-toolbar"><div><strong>{workspace.map?.name||'Course map'}</strong><small>{workspace.map?`${workspace.map.buoys.length} buoys · ${workspace.map.obstacles?.length||0} props`:'Load a map to begin'}</small></div><div className="button-row"><button className={buffers?'buffer-toggle active-tool':'buffer-toggle quiet'} aria-pressed={buffers} onClick={()=>setBuffers(!buffers)}>Show buffers</button><button className="quiet" onClick={()=>fitMap()}>Full course</button><button className="quiet" disabled={!draft.planner_task} onClick={()=>fitMap(true)}>Selected task</button><details className="map-options"><summary>Map layers</summary>{[['Object labels',labels,setLabels],['Station annotations',stations,setStations],['Planning overlays',overlays,setOverlays],['Street background',tiles,setTiles]].map(([name,value,set])=><label key={name}><input type="checkbox" checked={value} onChange={e=>set(e.target.checked)}/>{name}</label>)}</details></div></div>
-          {buffers&&<div className="buffer-legend"><strong>Buffer preview · required {draft.clearance_m} m{draft.preferred_buffer_m>draft.clearance_m?` · preferred ${draft.preferred_buffer_m} m`:''}</strong><span>Amber: required obstacle exclusion and boundary inset. Blue: preferred room, when larger. Start ring shows clearance at S; finish ring includes its stopping radius. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
+          <div className="map-toolbar"><div><strong>{workspace.map?.name||'Course map'}</strong><small>{workspace.map?`${workspace.map.buoys.length} buoys · ${workspace.map.obstacles?.length||0} props`:'Load a map to begin'}</small></div><div className="button-row"><button className={buffers?'buffer-toggle active-tool':'buffer-toggle quiet'} aria-pressed={buffers} onClick={()=>setBuffers(!buffers)}>Show buffers</button><button className="quiet" onClick={()=>fitMap()}>Full course</button><button className="quiet" disabled={!draft.planner_task||!activeTask} onClick={()=>fitMap(true)}>Selected task</button><details className="map-options"><summary>Map layers</summary>{[['Object labels',labels,setLabels],['Station annotations',stations,setStations],['Planning overlays',overlays,setOverlays],['Street background',tiles,setTiles]].map(([name,value,set])=><label key={name}><input type="checkbox" checked={value} onChange={e=>set(e.target.checked)}/>{name}</label>)}</details></div></div>
+          {(buffers||step===2)&&<div className="buffer-legend"><strong>Buffer preview · required {previewSettings.clearance_m} m · preferred {previewSettings.preferred_buffer_m??previewSettings.clearance_m} m</strong><span>Amber: required clearance. Blue: preferred room. Purple: tower hard exclusion and fading soft avoidance. Tower distances follow the object surface. Task overrides appear when that task is selected. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
           <div id="course-map"/>
-          <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode==='inspect'?'Inspect mode · click an object for details.':mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel'].includes(mode)?`Drawing ${mode==='channel'?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
-          <div className="map-caption"><span>Objects are obstacles · blue line is the boat route · L/R are passing sides relative to travel</span>{tileError&&<span>Street background unavailable; planning still works.</span>}</div>
+          <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode==='inspect'?(step===2?'Configuration · click a purple tower to adjust its zones.':'Inspect mode · click an object for details.'):mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel'].includes(mode)?`Drawing ${mode==='channel'?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
+          <div className="map-caption"><span>{routeVisible?'Blue: generated route · amber: approach · L/R: reviewed passing sides':'No course route displayed · Generate a task route when ready'}</span>{tileError&&<span>Street background unavailable; planning still works.</span>}</div>
         </section>
-        <aside aria-label="Mission workflow"><Planner workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={api} step={step} setStep={setStep} selected={selected} setSelected={setSelected} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
+        <aside aria-label="Mission workflow"><Planner workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={api} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>setGeneratedTasks(tasks=>[...new Set([...tasks,task])])} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
       </div>
       <section className="feedback" aria-live="polite"><p role="status">{busy?'Working… '+message:message}</p><details><summary>Connection details and map source</summary><p>Boat API: {stale?'offline or stale':status?.state}. Position: {telemetryStale?'unavailable or stale':'live'}. Speed: {telemetry?.speed_m_s?.toFixed(2)??'—'} m/s. Heading: {telemetry?.heading_deg?.toFixed(1)??'—'}°.</p><p>{workspace.map?.schema_version===3?'GPS map · unverified':workspace.map?'Simulator map · alignment required':'No map loaded'}</p><code>{workspace.map?.scene_id||''}</code></details></section>
     </main>;

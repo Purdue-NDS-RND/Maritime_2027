@@ -3,6 +3,7 @@ import asyncio
 from contextlib import asynccontextmanager
 import json
 import os
+import uuid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -14,11 +15,13 @@ from .workspace import Workspace, sha
 from .imports import import_points
 from .planner import suggest, generate
 from .course_setup import prepare_task
+from .settings import effective_settings
 from .attempts import capture_start, check_remaining_snapshot, suggest_remaining
 from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
 
 workspace = Workspace(os.getenv('GCS_DATA', '/data'))
+GCS_SESSION_ID = str(uuid.uuid4())
 
 
 @asynccontextmanager
@@ -91,7 +94,10 @@ def prepare(data: dict):
     state=workspace.read()
     if not state.get('map'):
         raise HTTPException(422,'Load a map first')
-    return checked(prepare_task,state['map'],data['task'],data.get('settings') or state.get('draft'))
+    settings = {**(data.get('settings') or state.get('draft') or {})}
+    if state.get('settings_configured'):
+        settings.update(effective_settings(state['game_settings'], data['task']))
+    return checked(prepare_task,state['map'],data['task'],settings)
 
 
 @app.post('/api/course/suggest')
@@ -123,7 +129,7 @@ def generate_route():
         state = workspace.read()
         if not state.get('map') or not state.get('draft'):
             raise HTTPException(422, 'import map and select a task first')
-        checked(workspace.edit, {'draft': state['draft']})
+        state=checked(workspace.edit, {'draft': state['draft']})
         draft=state['draft']
         if draft.get('geometry_version')==2:
             status=boat('/status') if draft.get('attempt',{}).get('start_source','live')=='live' else None
@@ -192,13 +198,13 @@ def status():
 
 @app.get('/api/telemetry')
 def telemetry_snapshot(request: IncomingRequest):
-    return request.app.state.telemetry.snapshot()
+    return {**request.app.state.telemetry.snapshot(), 'gcs_session_id': GCS_SESSION_ID}
 
 
 async def telemetry_events(telemetry):
     # One latest snapshot per tick. No client queue can accumulate an old track.
     while True:
-        yield 'data: ' + json.dumps(telemetry.snapshot(), allow_nan=False) + '\n\n'
+        yield 'data: ' + json.dumps({**telemetry.snapshot(), 'gcs_session_id': GCS_SESSION_ID}, allow_nan=False) + '\n\n'
         await asyncio.sleep(0.2)
 
 

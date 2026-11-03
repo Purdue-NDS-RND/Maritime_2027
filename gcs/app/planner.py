@@ -7,6 +7,7 @@ import time
 from shared.geometry import to_local, to_gps, finite
 from shared.course import Course, gap, dot, sub, contained
 from shared.clearance import validate_route
+from shared.avoidance import zones
 
 STEPS=((1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1),(0,-1),(1,-1))
 
@@ -100,7 +101,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
         if obj['type']!='cylinder':
             continue
         relative=sub(to_local(obj['centre'],course.reference),origin)
-        along=dot(relative,forward); radius=obj['radius_m']+course.required
+        along=dot(relative,forward); radius=obj['radius_m']+zones(obj,draft)[0]
         if abs(along)<radius:
             half=math.sqrt(radius*radius-along*along); lateral=dot(relative,left)
             intervals.append((lateral-half,lateral+half))
@@ -117,7 +118,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
         return {'success':False,'diagnostics':['Channel entry window is too close to the permitted channel boundary for the required buffer. Move Entry inside the channel with enough room on each side; use Use live boat position to change only the attempt start.']}
     ref=course.reference; start=to_local(draft['start'],ref); finish=to_local(draft['finish'],ref)
     if course.clearance(start,start)<course.required or any(not contained(start,start,p,course.required) for p in course.polygons):
-        conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<course.required]
+        conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<zones(o,draft)[0]]
         return {'success':False,'diagnostics':['obstructed approach: unsafe planning start'+(': '+', '.join(conflicts) if conflicts else ' at planning boundary')],
                 'errors':[{'code':'unsafe_start','reason':'Unsafe planning start','location':list(start),'objects':conflicts}]}
     if course.clearance(finish,finish)<course.required+draft['finish_radius_m'] or any(not contained(finish,finish,p,course.required+draft['finish_radius_m']) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
@@ -125,10 +126,26 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
     polygon=course.polygons[0]; xmin=min(p[0] for p in polygon); xmax=max(p[0] for p in polygon)
     ymin=min(p[1] for p in polygon); ymax=max(p[1] for p in polygon)
     detectors=[o for o in course.objects if o.get('object_type')=='detector']
+    # Tower costs can make the straight-distance bound very weak over a large
+    # map. Bounded weighted A* prioritizes a useful route within the same effort
+    # budget; it does not claim a globally minimum-cost path.
+    heuristic_weight=1
+    heuristic_cache={}
+    def estimate(point,progress):
+        key=(*point,progress)
+        if key not in heuristic_cache:
+            length=course.heuristic(point,finish,progress)
+            heuristic_cache[key]=heuristic_weight*length+course.tower_lower_bound(point,finish,length)
+        return heuristic_cache[key]
     attempts=[]
-    for spacing in resolutions:
+    # If a broad soft zone exhausts the first preference search, increase
+    # heuristic emphasis before spending effort on a finer grid. Hard checks
+    # and the one shared deadline remain identical in every search.
+    searches=[(spacing,weight) for spacing in resolutions for weight in ((4,8,16,32) if course.towers else (1,))]
+    for spacing,heuristic_weight in searches:
+        heuristic_cache.clear()
         # Grid anchored at exact start; goal has a separately checked connection.
-        initial=(0,0,course.initial_progress,-1); costs={initial:0}; parents={}; queue=[(course.heuristic(start,finish,course.initial_progress),0,initial)]; expanded=0; goal=None
+        initial=(0,0,course.initial_progress,-1); costs={initial:0}; parents={}; queue=[(estimate(start,course.initial_progress),0,initial)]; expanded=0; goal=None
         edge_cache={}
         def position(state):
             return start[0]+state[0]*spacing,start[1]+state[1]*spacing
@@ -149,8 +166,8 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
                 key=(state[0],state[1],x,y,progress)
                 if key not in edge_cache:
                     next_progress=course.edge(a,b,progress)
-                    clearance=course.clearance(a,b) if next_progress is not None else 0
-                    detector=sum(1/(1+max(0,gap(o,a,b,ref))) for o in detectors)/max(1,len(detectors)) if next_progress is not None else 0
+                    clearance=course.clearance(a,b,preference=True) if next_progress is not None else 0
+                    detector=course.tower_cost(a,b) if course.tower_policy is not None else (sum(1/(1+max(0,gap(o,a,b,ref))) for o in detectors)/max(1,len(detectors)) if next_progress is not None else 0)
                     edge_cache[key]=(next_progress,clearance,detector)
                 next_progress,clearance,detector=edge_cache[key]
                 if next_progress is None:
@@ -158,12 +175,12 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
                 distance=math.dist(a,b)
                 shortfall=max(0,preferred-clearance)/max(preferred,1e-6)
                 turn=0 if state[3]<0 else min((heading-state[3])%8,(state[3]-heading)%8)*.02
-                new_cost=cost+distance*(1+4*shortfall+min(1,detector))+turn
+                new_cost=cost+distance*(1+4*shortfall+detector)+turn
                 child=(x,y,next_progress,heading)
                 if new_cost<costs.get(child,math.inf)-1e-10:
                     costs[child]=new_cost; parents[child]=state
-                    heapq.heappush(queue,(new_cost+course.heuristic(b,finish,next_progress),new_cost,child))
-        attempts.append({'spacing_m':spacing,'expanded':expanded,'budget_exhausted':expanded>=max_expansions})
+                    heapq.heappush(queue,(new_cost+estimate(b,next_progress),new_cost,child))
+        attempts.append({'spacing_m':spacing,'expanded':expanded,'heuristic_weight':heuristic_weight,'budget_exhausted':expanded>=max_expansions})
         if goal is None:
             continue
         path=[finish]; state=goal
@@ -176,25 +193,33 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
             if time.monotonic()>=deadline:
                 return {'success':False,'diagnostics':['Planning time limit reached while simplifying the route; no draft was generated.'],'attempts':attempts}
             path_progress.append(course.edge(a,b,path_progress[-1]))
+        prefix_cost=[0.0]
+        for a,b in zip(path,path[1:]):
+            if time.monotonic()>=deadline:
+                return {'success':False,'diagnostics':['Planning time limit reached during cost preservation; no draft was generated.'],'attempts':attempts}
+            prefix_cost.append(prefix_cost[-1]+course.travel_cost(a,b,preferred,deadline))
         simplified=[start]; progress=course.initial_progress; i=0
         while i<len(path)-1:
             if time.monotonic()>=deadline:
                 return {'success':False,'diagnostics':['Planning time limit reached while simplifying the route; no draft was generated.'], 'attempts':attempts}
             chosen=i+1
             # Preserve attained preferred clearance on removed edges; no hidden shortcut penalty.
-            baseline=course.clearance(path[i],path[i+1])
+            baseline=course.clearance(path[i],path[i+1],preference=True)
             for j in range(len(path)-1,i,-1):
                 if time.monotonic()>=deadline:
                     return {'success':False,'diagnostics':['Planning time limit reached while simplifying the route; no draft was generated.'],'attempts':attempts}
                 candidate=course.edge(path[i],path[j],progress)
                 expected=path_progress[j]
-                if candidate is not None and candidate==expected and course.clearance(path[i],path[j])>=min(preferred,baseline)-1e-7:
+                if candidate is not None and candidate==expected and course.clearance(path[i],path[j],preference=True)>=min(preferred,baseline)-1e-7 and (not course.towers or course.travel_cost(path[i],path[j],preferred,deadline)<=prefix_cost[j]-prefix_cost[i]+1e-6):
                     chosen=j; break
             progress=course.edge(path[i],path[chosen],progress)
             simplified.append(path[chosen]); i=chosen
         derived=draft
         draft=deepcopy(course_input)
         draft['waypoints']=[to_gps(*p,ref) for p in simplified[1:]]
+        draft.pop('planning_notice',None)
+        if heuristic_weight>4:
+            draft['planning_notice']='Avoidance optimization reached its initial search budget. This route satisfies hard zones; review soft-zone crossings because a better detour may exist.'
         for key in ('derived_sections','excluded_sections','partial_attempt'):
             if key in derived:
                 draft[key]=derived[key]
@@ -228,7 +253,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
 def generate(object_map, draft, *args, **kwargs):
     try:
         result=_generate(object_map,draft,*args,**kwargs)
-    except (ValueError,KeyError,TypeError) as error:
+    except (ValueError,KeyError,TypeError,TimeoutError) as error:
         result={'success':False,'diagnostics':[str(error)]}
     if not result['success'] and 'errors' not in result:
         reason='; '.join(result['diagnostics'])

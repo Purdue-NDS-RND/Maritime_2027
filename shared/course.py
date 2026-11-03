@@ -1,6 +1,8 @@
 """Orientation-independent finite passages and bounded-course constraints."""
 import math
+import time
 from .geometry import finite, to_local, segment_distance
+from .avoidance import tower_policy, zones
 
 
 def dot(a, b):
@@ -75,14 +77,25 @@ class Course:
         self.reference=object_map['geographic_reference']
         self.required=finite(draft['clearance_m'])
         self.objects=[*object_map['buoys'],*object_map.get('obstacles',[])]
+        self.tower_policy=tower_policy(draft)
+        self.towers=[]
+        for obj in self.objects:
+            if obj.get('object_type')=='detector' and self.tower_policy is not None:
+                hard,soft=zones(obj,draft,self.tower_policy)
+                shape=([to_local(p,self.reference) for p in obj['footprint']] if obj['type']=='polygon' else None)
+                centre=to_local(obj['centre'],self.reference)
+                radius=max(math.dist(centre,p) for p in shape) if shape else obj['radius_m']
+                self.towers.append((centre,radius,shape,hard,soft))
         ids={o['id']:o for o in self.objects}
-        self.circles=[(to_local(o['centre'],self.reference),o['radius_m']) for o in self.objects if o['type']=='cylinder']
+        self.circles=[(to_local(o['centre'],self.reference),o['radius_m']+zones(o,draft,self.tower_policy)[0]-self.required) for o in self.objects if o['type']=='cylinder']
         self.footprints=[]
         for obj in self.objects:
             if obj['type']=='polygon':
                 centre=to_local(obj['centre'],self.reference)
                 polygon=[to_local(p,self.reference) for p in obj['footprint']]
-                self.footprints.append((centre,max(math.dist(centre,p) for p in polygon),polygon))
+                self.footprints.append((centre,max(math.dist(centre,p) for p in polygon),polygon,zones(obj,draft,self.tower_policy)[0]-self.required))
+        self.preference_circles=[shape for obj,shape in zip((o for o in self.objects if o['type']=='cylinder'),self.circles) if self.tower_policy is None or obj.get('object_type')!='detector']
+        self.preference_footprints=[shape for obj,shape in zip((o for o in self.objects if o['type']=='polygon'),self.footprints) if self.tower_policy is None or obj.get('object_type')!='detector']
         self.polygons=[]
         self.reviewed_channel=[to_local(p,self.reference) for p in draft.get('reviewed_channel',[])]
         self.access=[to_local(p,self.reference) for p in draft.get('channel_access',[])]
@@ -202,12 +215,62 @@ class Course:
             distance=0 if intersects(a,b,c,d) else min(segment_distance(a,c,d),segment_distance(b,c,d),segment_distance(c,a,b),segment_distance(d,a,b))
             self.remaining_distance[i]=self.remaining_distance[i+1]+distance
 
-    def clearance(self,a,b):
-        minimum=min((segment_distance(centre,a,b)-radius for centre,radius in self.circles),default=math.inf)
-        for centre,radius,polygon in self.footprints:
-            if segment_distance(centre,a,b)-radius<minimum:
-                minimum=min(minimum,polygon_gap(polygon,a,b))
+    def clearance(self,a,b,preference=False):
+        # Required clearance is normalized by each object’s explicit hard zone.
+        # Ordinary preferred room excludes towers with their own soft policy.
+        circles=self.preference_circles if preference else self.circles
+        footprints=self.preference_footprints if preference else self.footprints
+        minimum=min((segment_distance(centre,a,b)-radius for centre,radius in circles),default=math.inf)
+        for centre,radius,polygon,extra in footprints:
+            if segment_distance(centre,a,b)-radius-extra<minimum:
+                minimum=min(minimum,polygon_gap(polygon,a,b)-extra)
         return minimum
+
+    def tower_cost(self,a,b):
+        if not self.towers:
+            return 0
+        penalty=0
+        for centre,radius,polygon,hard,soft in self.towers:
+            if soft<=hard or segment_distance(centre,a,b)-radius>=soft:
+                continue
+            # Integrate proximity, rather than charging the whole leg for its
+            # single closest point. This also survives visibility simplification.
+            for fraction,weight in ((0,.25),(.5,.5),(1,.25)):
+                point=tuple(a[i]+fraction*(b[i]-a[i]) for i in (0,1))
+                distance=polygon_gap(polygon,point,point) if polygon else math.dist(centre,point)-radius
+                penalty+=weight*max(0,min(1,(soft-distance)/(soft-hard)))**2
+        return self.tower_policy['strength']*penalty
+
+    def tower_lower_bound(self,point,finish,length):
+        # Distance to an object surface can increase by at most one metre per
+        # metre travelled. Integrate that best-case escape/approach over two
+        # disjoint half-lengths. This keeps large soft zones from making the
+        # ordinary distance heuristic uninformative, without making them hard.
+        total=0
+        for centre,radius,polygon,hard,soft in self.towers:
+            if soft<=hard:
+                continue
+            for endpoint in (point,finish):
+                if math.dist(centre,endpoint)-radius>=soft:
+                    continue
+                distance=polygon_gap(polygon,endpoint,endpoint) if polygon else math.dist(centre,endpoint)-radius
+                upper=max(0,soft-distance)
+                lower=max(0,upper-length/2)
+                total+=(upper**3-lower**3)/(3*(soft-hard)**2)
+        return total*(self.tower_policy['strength'] if self.tower_policy else 0)
+
+    def travel_cost(self,a,b,preferred,deadline=math.inf):
+        count=max(1,math.ceil(math.dist(a,b)/.5))
+        total=0
+        previous=a
+        for index in range(1,count+1):
+            if time.monotonic()>=deadline:
+                raise TimeoutError('Planning time limit reached while preserving avoidance cost; no draft was generated.')
+            point=tuple(a[i]+index/count*(b[i]-a[i]) for i in (0,1))
+            shortfall=max(0,preferred-self.clearance(previous,point,preference=True))/max(preferred,1e-6)
+            total+=math.dist(previous,point)*(1+4*shortfall+self.tower_cost(previous,point))
+            previous=point
+        return total
 
     def edge(self,a,b,progress):
         if self.clearance(a,b)<self.required-1e-7 or any(not contained(a,b,p,self.required) for p in self.polygons):
@@ -316,7 +379,7 @@ def validate_course(object_map,draft):
             errors.append({'reason':f'leg {i} violates course boundary, passage direction, side or order','location':list(a)})
         else:
             progress=next_progress
-        achieved=course.clearance(a,b)
+        achieved=course.clearance(a,b,preference=True)
         if achieved<preferred:
             sections.append({'leg':i,'clearance_m':achieved})
     if progress!=len(course.planes):

@@ -3,6 +3,7 @@ import math
 from .geometry import finite, segment_distance, to_local, polygon_clearance
 from .object_map import validate_map
 from .course import validate_course
+from .avoidance import tower_policy, zones
 
 
 def validate_route(object_map, draft):
@@ -26,6 +27,7 @@ def validate_route(object_map, draft):
     if clearance < 0:
         reject('total clearance buffer must be nonnegative')
     radius = clearance
+    policy = tower_policy(draft)
     start = to_local(draft['start'], reference)
     route = [start, *points]
     obstacles = [*object_map['buoys'], *object_map.get('obstacles', [])]
@@ -46,7 +48,7 @@ def validate_route(object_map, draft):
         return distance
     for index, (a,b) in enumerate(zip(route, route[1:])):
         for obj in obstacles:
-            gap = gap_to_object(obj,a,b)-radius
+            gap = gap_to_object(obj,a,b)-zones(obj,draft,policy)[0]
             if gap < 0:
                 reject(f'leg {index} violates clearance buffer at {obj["id"]} by {-gap:.3f} m', list(to_local(obj['centre'],reference)))
     finish = to_local(draft['finish'], reference)
@@ -56,7 +58,7 @@ def validate_route(object_map, draft):
     if not 0 < finish_radius <= 1:
         reject('finish radius must be in (0, 1] m')
     for obj in obstacles:
-        if gap_to_object(obj,finish,finish) < radius + finish_radius:
+        if gap_to_object(obj,finish,finish) < zones(obj,draft,policy)[0] + finish_radius:
             reject('finish area violates clearance at ' + obj['id'], list(to_local(obj['centre'],reference)))
     course_errors, sections = validate_course(object_map, draft)
     errors.extend(course_errors)
@@ -68,5 +70,5 @@ def validate_route(object_map, draft):
             reject('select the complete ordered '+task+' passage list')
     elif task != 'custom':
         reject('unsupported course task')
-    return {'preferred_shortfalls': sections, 'map_verification': 'live / unverified' if object_map['schema_version']==3 else 'simulator alignment passed', 'valid': not errors, 'errors': errors, 'swept_radius_m': radius,
+    return {'tower_shortfalls': [{'leg':i,'object_id':obj['id'],'clearance_m':gap_to_object(obj,a,b),'preferred_m':zones(obj,draft,policy)[1]} for i,(a,b) in enumerate(zip(route,route[1:])) for obj in obstacles if policy is not None and obj.get('object_type')=='detector' and gap_to_object(obj,a,b)<zones(obj,draft,policy)[1]], 'preferred_shortfalls': sections, 'map_verification': 'live / unverified' if object_map['schema_version']==3 else 'simulator alignment passed', 'valid': not errors, 'errors': errors, 'swept_radius_m': radius,
             'bound_scope': 'operator-selected total buffer; hull size and tracking error are not inferred'}

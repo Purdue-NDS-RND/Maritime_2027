@@ -21,6 +21,8 @@ def prepare_task(object_map, task, settings=None):
            'speed_m_s':settings.get('speed_m_s',.5),'clearance_m':required,
            'preferred_buffer_m':settings.get('preferred_buffer_m',required),'finish_radius_m':finish_radius,
            'sizes_confirmed':settings.get('sizes_confirmed',False),'course_confirmed':False,'passages':[]}
+    if settings.get('tower_avoidance') is not None:
+        draft['tower_avoidance']=deepcopy(settings['tower_avoidance'])
     notes=[]
     def gps(p):return to_gps(*p,ref)
     if task in ('gate','slalom'):

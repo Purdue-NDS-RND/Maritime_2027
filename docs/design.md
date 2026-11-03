@@ -226,7 +226,7 @@ a fresh safe start and new review/approval without replaying earlier tasks.
 Actual-start safety checks remain in force before upload/start. Each task stops
 at its selected finish; only an explicit subsequent action starts another task.
 Physical/radio qualification, controller optimization, online replanning, drone
-mapping and detection-zone models remain deferred. See the GCS guide for schemas
+mapping and measured detection models remain deferred. See the GCS guide for schemas
 and the milestone for measured validation limits.
 
 Manual move provides an independent saved waypoint queue for repositioning.
@@ -239,7 +239,7 @@ GUIDED control or continuous GCS steering.
 ### Full competition workflow and approach semantics
 
 The full competition scene is the primary development/operator test map; the
-small slalom fixture is regression coverage. The normal GCS uses Map → Task
+small slalom fixture is regression coverage. The normal GCS uses Map → Configure → Task
 setup → Route review with explicit drawing/edit modes and advanced controls
 collapsed. Labeled task suggestions are unconfirmed, use only imported GPS
 geometry/labels and preserve selected speed/buffers. Different map imports
@@ -339,3 +339,32 @@ New attempts retain the complete setup even when selecting a partial run. Setup
 identity and the captured start must match at validation; actual-position checks
 at Upload/Start must preserve the approved progression and safe connection.
 Boat mission envelopes and GPS object-map formats are unchanged.
+
+### Shared course configuration and tower preferences (2026-11-03)
+
+The accepted workflow adds a map-focused Configure step before task selection.
+Shared speed, ordinary required/preferred clearance and tower avoidance settings
+apply across tasks, with explicit task overrides and individual tower distance
+overrides. Preserve existing maps, assignments, saved routes and manual queues;
+back up workspaces before adding settings. A fresh browser session or backend restart shows no saved
+course paths; Generate explicitly reveals a route for the selected task in that
+session. Manual moves remain an explicit independent workflow.
+
+Towers retain their physical footprints. A configurable hard surface-offset zone
+is mandatory, and a larger soft surface-offset zone contributes a decreasing
+squared proximity cost. Tower-specific hard clearance replaces ordinary object
+clearance at that tower; boundary containment and other obstacle buffers retain
+their meanings. These are planning-point distances, without hidden hull/error
+allowances. A purple fading overlay previews the settings. Soft-zone traversal
+is reported for review; weighted avoidance trades distance against proximity
+rather than asserting global maximum minimum clearance or detection avoidance.
+
+Settings changes revoke approval and require generation/review. Settings are
+materialized authoritatively into drafts and frozen with approval; the boat still
+receives ordinary GPS waypoints. Tower planning uses bounded weighted A* (initial distance weight 4; bounded retries at 8/16/32), with a distance-based lower
+bound on approach/escape cost; it makes no global optimality claim.
+Simplification preserves sampled avoidance cost
+so it cannot discard a searched detour merely because a direct segment satisfies
+the hard buffer. Exact final segment/finish validation and the shared 60-second
+search/simplification deadline remain. Continuous replanning and measured LiDAR
+detection behavior are outside this change.

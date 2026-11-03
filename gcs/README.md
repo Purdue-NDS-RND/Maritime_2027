@@ -236,17 +236,21 @@ make -C gcs build
 make -C gcs run
 ```
 
-Open <http://localhost:8080>. The redesigned workspace has three steps:
+Open <http://localhost:8080>. The redesigned workspace has four steps:
 
 1. **Map:** use **Load full competition map**, or import a survey. Click an object
    to inspect/correct it, apply corrections, and confirm reviewed dimensions.
-2. **Task setup:** choose **Gate**, **Slalom / Dodge** or **Channel / Evade**.
+2. **Configure:** set shared speed, required clearance and preferred room. Set
+   tower hard exclusion and soft avoidance distances; click a purple tower to
+   configure it. Settings preview immediately on the map. Save once for the
+   entire course; optional task overrides remain in this panel.
+3. **Task setup:** choose **Gate**, **Slalom / Dodge** or **Channel / Evade**.
    Labeled-map suggestions propose assignments, local direction, finish and bounds.
    Use **Review geometry on map**, inspect numbered passages/arrows and boundaries,
    then confirm the setup. **Live boat** and **Full task** are the defaults.
    Generate captures a fresh position and heartbeat (each at most three seconds
    old). Offline planning requires explicitly selecting **Manual start (offline)**.
-3. **Route review:** review/edit the blue route, then **Validate → Approve →
+4. **Route review:** review/edit the blue route, then **Validate → Approve →
    Upload → Start**. Start stays disabled until the selected approval's upload
    is confirmed. Planning works with the boat offline; Upload/Start need a fresh
    connection. **Stop boat** stays visible independently of the current step.
@@ -256,12 +260,18 @@ and a **Done / cancel tool** button. **Edit on map** explicitly enables waypoint
 placement/dragging; dragging the final waypoint also moves the finish centre.
 **Full course** and **Selected task** change only the view. Labels, station
 annotations, planning overlays and optional street tiles are under **Map layers**.
-Object corrections, passage assignment/order, boundaries, preferred buffer,
+Object corrections, passage assignment/order, boundaries,
 heading, finish size, coordinates and command details are disclosed only where
 needed. Raw passage JSON is no longer part of the normal operator workflow.
 
 The normal saved workspace is `simulation/logs/gcs/workspace.json`. Reload keeps
-it. Each task retains its own draft/settings; switching revokes approval and
+it. Each task retains assignments and saved drafts. A new browser session (or a GCS backend restart detected by its telemetry
+session identifier) displays
+no saved course route, waypoints or captured start until you explicitly
+Generate that task. Selecting a task shows its reviewed geometry and finish;
+choosing Manual start explicitly also shows the editable start. Route review stays disabled until then. Manual queues remain
+available through an explicit Manual move selection. Shared settings persist;
+switching revokes approval and
 never commands the boat. Retry a task from a new start and generate/review a new
 route without repeating previous tasks. Importing a different map archives the
 complete previous workspace in `workspace-before-map-import-*.json`; old task IDs
@@ -378,3 +388,49 @@ slightly conservative sampled visual approximation; backend validation is author
 source and capture time appear in Route review. Amber route sections show the
 approach; blue sections show task travel. Buffer geometry is illustrative;
 authoritative validation checks every emitted GPS segment after simplification.
+
+### Shared configuration and LiDAR tower zones
+
+**Configure** owns settings reused by gate, slalom, channel and manual moves.
+Existing speed/clearance values seed these settings; differing saved task values
+become task overrides. Before adding settings, the GCS makes a byte-exact
+`workspace-before-course-settings-*.json` backup. Saved maps, routes and manual
+queues remain intact. Saving configuration revokes approval and requires planner
+regeneration. Merely opening the configuration panel does not change settings.
+
+Tower zones apply to objects explicitly classified as `detector`, including the
+purple square towers on the full competition map. Color alone does not classify
+a tower. All distances are measured from the boat's GPS planning point to the
+physical object surface, including polygon edges. Tower hard exclusion replaces
+the ordinary required object buffer for that tower; permitted-water boundary
+clearance remains required. Include the hull and navigation allowances when
+choosing distances. The soft distance must be at least the hard distance.
+
+A solid inner outline shows the hard zone; fading purple bands extend to the
+soft distance. Shared distances affect all towers without individual overrides.
+Select a tower on the map or in the panel, enable **Use individual distances**,
+and edit its two distances. Disable the override to inherit shared settings.
+Task overrides can also retain a different set of tower preferences.
+
+The initial soft-distance suggestion is 10 m (or the existing required distance
+when larger), with Strong avoidance. This is editable planning input, not a
+claim about detector coverage. Strong/Very strong increase a squared proximity
+cost that decreases to zero at the soft boundary. Costs from nearby towers add.
+This balances path length with avoidance; it is not an absolute requirement to
+remain outside every soft zone whenever such a route exists. Hard constraints
+never yield. Route review reports each soft-zone penetration and its closest
+planned surface distance. Actual detector performance remains unverified.
+
+The existing 60-second shared deadline remains. Configured tower planning uses
+bounded weighted A* (initial distance-heuristic weight 4), with a distance-based lower bound on
+unavoidable approach/escape cost for large zones. It prioritizes a useful route
+within the search budget and does not claim a globally optimal path. When the
+initial search exhausts its expansion budget, weights 8, 16 and 32 retry that
+resolution before refining; the same hard checks and shared deadline apply.
+A route found after the initial budget carries a visible review notice. Visibility
+simplification samples the same travel/avoidance cost at intervals no greater
+than 0.5 m and preserves the searched detour's cost as well as passage order and
+hard constraints. Every emitted GPS segment and the stopping disk are checked
+against the exact hard geometry. Tower settings freeze with route approval and
+are applied again to the actual-position connection at Upload/Start. Boat
+mission envelopes, controllers and tuning are unchanged.

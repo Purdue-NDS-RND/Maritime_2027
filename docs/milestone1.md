@@ -758,3 +758,44 @@ Primary evidence: `qualification-summary.json`, `*-generated.json`,
 `simulation/logs/general-course/`. Physical boat/radio operation, arbitrary
 speed/error allowances, detector avoidance and continuous replanning remain
 unqualified. No Git commit or push was performed.
+
+### Shared course settings and tower zones (2026-11-03)
+
+The GCS now uses Map → Configure → Task setup → Route review. Shared speed,
+required/preferred obstacle clearance and tower hard/soft surface distances
+persist across tasks, with explicit task and individual-tower overrides. The
+configuration map previews the zones immediately. Invalid distances prevent
+saving. Settings changes revoke approval and require generation/review; the
+boat mission envelope and controller remain unchanged.
+
+New browser sessions hide saved course paths and disable Route review until
+explicit task generation. Saved maps, assignments, routes and manual queues are
+retained; adding settings creates a byte-exact workspace backup. Manual moves
+remain explicitly selectable. Tower hard zones are checked on every segment,
+actual-position connection and finish disk; soft-zone traversal is reported.
+Cost-preserving simplification retains avoidance detours. Bounded weighted A*
+uses the existing shared 60-second deadline and distinguishes search exhaustion
+from a proven hard blockage; fallback effort is identified during route review.
+
+Full-map browser verification covers shared and individual tower controls,
+invalid-distance blocking, persistence after a preview-container restart,
+clicking the purple tower, explicit gate generation and hiding that generated
+route again after reload. The preview uses a copied workspace on port 8082 and
+sends no vehicle commands. Configured gate/slalom/channel routes on the full
+competition map pass final segment/course/finish validation at 0.5 m/s, 1.5 m
+ordinary required/preferred buffers and tower 1.5 m hard / 10 m soft distances.
+A separate channel check with a 30 m soft distance also generates and validates,
+using fallback search effort, without reducing hard clearance.
+
+Automated verification passes 76 backend tests, frontend workflow/settings/
+render checks, production builds and simulator static checks. The open-browser
+backend-restart check also hides a generated route and disables Route review.
+Normal-workspace migration preserves every existing field and has a byte-exact
+backup; the updated local GCS is running without sending vehicle commands.
+
+Raw test/build output, generated routes, workspace snapshots and configuration
+checks are under ignored `simulation/logs/course-configuration/`. These checks
+establish planning/UI behavior, not actual movement with the new preferences.
+Earlier simulator movement evidence remains limited to its recorded settings.
+Detector coverage, physical boat/radio operation and continuous replanning remain
+unqualified. No vehicle tuning, simulator pins/dynamics or MAVLink ports change.

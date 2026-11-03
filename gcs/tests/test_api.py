@@ -115,3 +115,34 @@ class ApiTests(unittest.TestCase):
         edited['attempt'].update(mode='remaining',first_section=0,selection_confirmed=True)
         self.client.put('/api/workspace',json={'draft':edited})
         self.assertEqual(self.client.post('/api/approve').status_code,422)
+
+    def test_shared_course_settings_are_authoritative_and_never_command(self):
+        from gcs.app.settings import defaults
+        settings=defaults(self.fixture.draft)
+        settings['speed_m_s']=.7
+        settings['tower_avoidance'].update(hard_m=2,soft_m=15)
+        response=self.client.put('/api/workspace',json={'game_settings':settings})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(response.json()['draft']['speed_m_s'],.7)
+        self.assertIsNone(response.json()['approval'])
+        self.assertFalse(self.calls)
+        saved=self.main.workspace.read()
+        settings['tower_avoidance']['soft_m']=-1
+        self.assertEqual(self.client.put('/api/workspace',json={'game_settings':settings}).status_code,422)
+        self.assertEqual(self.main.workspace.read(),saved)
+        self.assertFalse(self.calls)
+
+    def test_telemetry_stream_announces_backend_session_for_clean_restart(self):
+        import asyncio
+        import json
+        class Passive:
+            def snapshot(self):return {'position':None,'stale':True}
+        async def snapshot():
+            stream=self.main.telemetry_events(Passive())
+            try:return await anext(stream)
+            finally:await stream.aclose()
+        frame=asyncio.run(snapshot())
+        payload=json.loads(frame.removeprefix('data: '))
+        self.assertEqual(payload['gcs_session_id'],self.main.GCS_SESSION_ID)
+        self.assertTrue(payload['stale'])
+        self.assertFalse(self.calls)

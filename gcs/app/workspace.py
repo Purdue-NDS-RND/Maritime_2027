@@ -8,6 +8,7 @@ import threading
 import uuid
 from shared.clearance import validate_route
 from shared.object_map import validate_map
+from .settings import defaults, validate_settings, effective_settings, FIELDS
 
 
 def sha(value):
@@ -57,6 +58,19 @@ class Workspace:
             self.state['workspace_version'] = 2
             self.save()
 
+        if 'game_settings' not in self.state:
+            if self.path.exists():
+                backup = self.directory / ('workspace-before-course-settings-' + str(uuid.uuid4()) + '.json')
+                backup.write_bytes(self.path.read_bytes())
+            settings = defaults(self.state.get('draft'))
+            for task, draft in self.state.get('tasks', {}).items():
+                if task in ('gate', 'slalom', 'channel'):
+                    override = {key: deepcopy(draft[key]) for key in FIELDS if key in draft and draft[key] != settings[key]}
+                    if override:
+                        settings['task_overrides'][task] = override
+            self.state['game_settings'] = settings
+            self.save()
+
     def save(self):
         temp = self.path.with_suffix('.tmp')
         temp.write_text(json.dumps(self.state, indent=2, allow_nan=False) + '\n')
@@ -84,7 +98,7 @@ class Workspace:
                     updated[key] = deepcopy(data[key])
             for config in updated.get('course', {}).values():
                 if isinstance(config,dict):
-                    for key in ('attempt','derived_sections','excluded_sections','partial_attempt','route_sections','generation_errors','generation_setup_sha256','start','waypoints'):
+                    for key in ('planning_notice','attempt','derived_sections','excluded_sections','partial_attempt','route_sections','generation_errors','generation_setup_sha256','start','waypoints'):
                         config.pop(key,None)
             if 'course' in data and (not isinstance(data['course'], dict) or any(k not in ('gate','slalom','channel') or not isinstance(v,dict) for k,v in data['course'].items())):
                 raise ValueError('course must contain gate/slalom/channel configurations')
@@ -101,6 +115,10 @@ class Workspace:
                 # Previous course/drafts remain in the import backup, not attached
                 # to unrelated object identities in the newly imported map.
                 updated.update(tasks={},course={},draft=None,selected_task=None)
+                settings=updated.get('game_settings',{})
+                for value in [settings,*settings.get('task_overrides',{}).values()]:
+                    if value.get('tower_avoidance'):
+                        value['tower_avoidance']['overrides']={}
             if 'map' in data:
                 updated['map'] = deepcopy(validate_map(data['map']))
                 for config in updated.get('course', {}).values():
@@ -132,6 +150,25 @@ class Workspace:
                     if saved:
                         saved['sizes_confirmed'] = False
                         saved['course_confirmed'] = False
+            if 'game_settings' in data:
+                updated['game_settings'] = validate_settings(data['game_settings'])
+                updated['settings_configured'] = True
+                # Keep saved waypoint data, but revoke its authority and require
+                # new generation with the changed settings.
+                for task, config in updated.get('course', {}).items():
+                    config.update(effective_settings(updated['game_settings'], task))
+                    config['course_confirmed'] = False
+            if updated.get('settings_configured'):
+                for saved in [*updated['tasks'].values(), updated.get('draft')]:
+                    if saved:
+                        saved.update(effective_settings(updated['game_settings'], saved.get('planner_task')))
+                        if 'game_settings' in data:
+                            saved['course_confirmed'] = False
+                for task, config in updated.get('course', {}).items():
+                    config.update(effective_settings(updated['game_settings'], task))
+                if (updated.get('draft') or {}).get('planner_task'):
+                    updated['draft']['course_revision'] = sha({'map': updated['map'], 'course': updated.get('course', {})})
+                    updated['tasks'][updated['draft']['planner_task']] = deepcopy(updated['draft'])
             json.dumps(updated, allow_nan=False)
             updated.pop('migration_notice', None)
             self.state = updated
