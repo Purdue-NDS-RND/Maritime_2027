@@ -799,3 +799,29 @@ establish planning/UI behavior, not actual movement with the new preferences.
 Earlier simulator movement evidence remains limited to its recorded settings.
 Detector coverage, physical boat/radio operation and continuous replanning remain
 unqualified. No vehicle tuning, simulator pins/dynamics or MAVLink ports change.
+
+### GCS operator feedback experiment (2026-11-03)
+
+After committing/pushing shared course settings as `58edab5`, a separate local UI
+pass adds actionable Generate prerequisites, per-button blocking reasons,
+persistent progress/errors, scoped configuration errors and located diagnostics.
+Soft preferences are grouped separately from mandatory failures. Current-session
+asynchronous command failures/unknown outcomes now surface without opening the
+command log first; receipt remains distinct from acknowledgement/readback.
+
+Frontend regression/render/build checks cover stale telemetry, explicit manual
+starts, blocked openings, partial confirmation, armed-upload blocking, pending
+operations and structured failures. Full-map Chrome checks use a copied workspace
+and a controlled status/operation fixture that cannot forward vehicle commands.
+They exercise a stale start and recovery link, invalid tower distances, the
+3.52 m / 3.60 m gate conflict, unsafe-start location, safe generation/validation/
+approval, armed-upload explanation, and a synthetic pending upload followed by
+a readback failure and direct navigation to Command results. Raw evidence and
+fixture inputs are under ignored `simulation/logs/ui-feedback/`. Backend/planner
+and vehicle behavior are unchanged; this is UI evidence, not new actual-motion
+or physical/radio qualification. The UI experiment remains separate from the
+already-pushed course-settings commit. Normal-workspace verification also exposed
+and fixed a startup error when browser-restored operation IDs precede their
+polled results; regression rendering now covers that exact state. The updated
+normal GCS is running with byte-exact preserved workspace data and no vehicle
+commands sent.

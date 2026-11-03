@@ -434,3 +434,34 @@ hard constraints. Every emitted GPS segment and the stopping disk are checked
 against the exact hard geometry. Tower settings freeze with route approval and
 are applied again to the actual-position connection at Upload/Start. Boat
 mission envelopes, controllers and tuning are unchanged.
+
+### Understanding blocked actions and failures
+
+Task setup shows a **Generation readiness** checklist beside Generate. It lists
+only outstanding requirements and links directly to Map, Configure, geometry
+review, start selection or confirmation. A blocked gate shows the actual opening
+and required width; no buffer is changed automatically. Geometry review unlocks
+the setup confirmation. A previous generation failure remains identified as a
+failed attempt rather than showing a green readiness card.
+
+Validate, Approve, Upload and Start show their current blocking reason directly
+below the button. Live planning requires finite position/heartbeat ages no older
+than three seconds; offline planning still explicitly selects Manual start.
+Upload remains disarmed-only and Start awaits the approved mission's confirmed
+upload. Pending commands cannot be mistaken for completed commands, and an
+executing/completed mission is identified rather than prompting another upload.
+
+Progress and action results stay visible in a dismissible notification, including
+elapsed generation time and the shared 60-second limit. Structured API failures
+show readable reasons and recovery guidance. **Locate on map** centres a reported
+conflict and shows its label/buffers. Delayed failures or unknown outcomes for
+commands requested in the current browser session raise a visible alert with a
+**Review command results** link; inspect vehicle state before retrying. Restored
+historical commands do not raise new alerts. No notification retries a command.
+
+Soft-clearance notes are grouped separately from mandatory validation failures;
+they do not block approval when mandatory checks pass. Invalid configuration
+messages identify the shared settings, task override or individual tower that
+needs correction. Task forms and map edits pause during requests, while the
+independent boat Stop controls remain available. These are frontend usability
+changes; planner constraints, approval rules and boat control are unchanged.

@@ -15,6 +15,7 @@ export default function CourseSettings({workspace,selected,setSelected,updateSet
     const error=settingsError(settings);
     return <fieldset disabled={busy} className="configuration-fields">
       <div className="step-heading"><span className="eyebrow">STEP 2 OF 4</span><h2>Configure the course</h2><p>Set your preferences once. Every task uses these settings unless you choose an override.</p></div>
+      {error&&<div className="configuration-error" role="alert"><strong>Configuration needs attention</strong><p>{error}</p><small>Correct this value to enable Save configuration. The existing saved settings have not changed.</small></div>}
       <div className="config-section"><div className="section-title"><span className="config-dot blue"/><h3>Boat & obstacle clearance</h3></div>
         <label>Target speed (m/s)<input aria-label="Course target speed" type="number" min="0.1" step="0.1" value={settings.speed_m_s??''} onChange={e=>update({speed_m_s:e.target.value===''?null:Number(e.target.value)})}/></label>
         <div className="fields"><label>Required clearance (m)<input aria-label="Course required clearance" type="number" min="0" step="0.1" value={settings.clearance_m??''} onChange={e=>update({clearance_m:e.target.value===''?null:Number(e.target.value)})}/></label><label>Preferred room (m)<input aria-label="Course preferred room" type="number" min="0" step="0.1" value={settings.preferred_buffer_m??''} onChange={e=>update({preferred_buffer_m:e.target.value===''?null:Number(e.target.value)})}/></label></div>
@@ -31,14 +32,14 @@ export default function CourseSettings({workspace,selected,setSelected,updateSet
           <button className="text-button" disabled={!Object.keys(policy.overrides||{}).length} onClick={()=>updatePolicy({overrides:{}})}>Reset all towers to shared defaults</button>
         </div>}
       </div>
-      <details><summary>Optional task overrides</summary><p className="hint">Leave tasks on shared settings unless you need a different speed or avoidance configuration. Review task boundaries in the next step.</p>{TASKS.filter(t=>t.id!=='manual').map(t=>{
+      <details open={error.includes('override')||undefined}><summary>Optional task overrides</summary><p className="hint">Leave tasks on shared settings unless you need a different speed or avoidance configuration. Review task boundaries in the next step.</p>{TASKS.filter(t=>t.id!=='manual').map(t=>{
         const override=settings.task_overrides?.[t.id];
         const change=value=>update({task_overrides:{...settings.task_overrides,[t.id]:{...override,...value}}});
         return <div key={t.id} className="task-override"><label><input type="checkbox" checked={!!override} onChange={e=>{const overrides={...settings.task_overrides};if(e.target.checked)overrides[t.id]={speed_m_s:settings.speed_m_s,clearance_m:settings.clearance_m,preferred_buffer_m:settings.preferred_buffer_m,tower_avoidance:structuredClone(policy)};else delete overrides[t.id];update({task_overrides:overrides});}}/>{t.title} · {override?'custom settings':'shared settings'}</label>
           {override&&<><label>Target speed (m/s)<input aria-label={`${t.title} speed`} type="number" step="0.1" value={override.speed_m_s??settings.speed_m_s} onChange={e=>change({speed_m_s:Number(e.target.value)})}/></label><div className="fields">{[['clearance_m','Required clearance'],['preferred_buffer_m','Preferred room']].map(([key,label])=><label key={key}>{label} (m)<input type="number" step="0.1" value={override[key]??settings[key]} onChange={e=>change({[key]:Number(e.target.value)})}/></label>)}</div><DistanceFields prefix={`${t.title} towers `} value={override.tower_avoidance||policy} onChange={value=>change({tower_avoidance:value})}/></>}
         </div>;
       })}</details>
-      {error&&<p className="callout error" role="alert">{error}</p>}
+      {error&&<p className="action-reason error-text">Save is unavailable: {error}</p>}
       <p className="hint">The map previews changes immediately. Saving changes revokes route approval; generate and review a new route.</p>
       <button className="primary wide" disabled={busy||!!error} onClick={saveSettings}>Save configuration & choose task →</button>
     </fieldset>;

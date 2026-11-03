@@ -13,11 +13,13 @@ export function towerZones(obj,settings) {
 export function settingsError(settings) {
     for(const task of [null,'gate','slalom','channel']) {
         const value=effectiveSettings(settings,task);
-        if(!Number.isFinite(value.speed_m_s)||value.speed_m_s<=0)return 'Speed must be greater than zero.';
-        if(!Number.isFinite(value.clearance_m)||value.clearance_m<0||!Number.isFinite(value.preferred_buffer_m)||value.preferred_buffer_m<value.clearance_m)return 'Preferred obstacle room must be at least the required clearance.';
+        const scope=task?`${task==='slalom'?'Slalom / Dodge':task==='channel'?'Channel / Evade':'Gate'} override`:'Shared course settings';
+        const message=text=>`${text} (${scope})`;
+        if(!Number.isFinite(value.speed_m_s)||value.speed_m_s<=0)return message('Speed must be greater than zero.');
+        if(!Number.isFinite(value.clearance_m)||value.clearance_m<0||!Number.isFinite(value.preferred_buffer_m)||value.preferred_buffer_m<value.clearance_m)return message('Preferred obstacle room must be at least the required clearance.');
         const p=value.tower_avoidance;
-        if(!p||!Number.isFinite(p.strength)||p.strength<0||p.strength>100)return 'Choose a tower avoidance strength from 0 to 100.';
-        for(const z of [p,...Object.values(p.overrides||{})])if(!Number.isFinite(z.hard_m)||!Number.isFinite(z.soft_m)||z.hard_m<0||z.soft_m<z.hard_m)return 'Tower soft distance must be at least its nonnegative hard distance.';
+        if(!p||!Number.isFinite(p.strength)||p.strength<0||p.strength>100)return message('Choose a tower avoidance strength from 0 to 100.');
+        for(const [id,z] of [[null,p],...Object.entries(p.overrides||{})])if(!Number.isFinite(z.hard_m)||!Number.isFinite(z.soft_m)||z.hard_m<0||z.soft_m<z.hard_m)return message(`Tower soft distance must be at least its nonnegative hard distance.${id?` Check ${id.replaceAll('_',' ')}.`:' Check the tower defaults.'}`);
     }
     return '';
 }
