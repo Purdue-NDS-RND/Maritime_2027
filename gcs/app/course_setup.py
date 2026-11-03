@@ -4,6 +4,7 @@ import math
 import re
 from shared.geometry import to_local, to_gps, finite
 from shared.course import gap
+from shared.avoidance import zones
 
 
 def prepare_task(object_map, task, settings=None):
@@ -52,9 +53,10 @@ def prepare_task(object_map, task, settings=None):
             if len(pairs)>1:passages.append(passage(pairs[-1],2))
         draft['passages']=passages
         for red,green in (pairs if task=='slalom' else pairs[:1]):
-            opening=math.dist(points[red['id']],points[green['id']])-red['radius_m']-green['radius_m']
-            if opening<2*required:
-                notes.append(f'{red["id"]}: opening {opening:.2f} m; required buffer needs {2*required:.2f} m. Review the buffer allowance or opening; it has not been reduced.')
+            opening=math.dist(points[red['id']],points[green['id']])-red.get('radius_m',0)-green.get('radius_m',0)
+            needed=sum(zones(obj,draft)[0] for obj in (red,green))
+            if opening<needed:
+                notes.append(f'{red["id"]}: opening {opening:.2f} m; hard buffers need {needed:.2f} m. Review the buffer allowance or opening; they have not been reduced.')
         entry=tuple(origin[i]-3*direction[i]for i in (0,1))
         exit=tuple(end[i]+1.5*direction[i]for i in (0,1))
         draft['direction']=list(direction)

@@ -71,7 +71,7 @@ finite and positive; there is no calibrated-speed list or application speed cap.
 ArduPilot still accepts/rejects the speed command and controls actual motion.
 The default buffer for new routes is 1.8 m, an editable starting value rather
 than a measured guarantee. It is the total distance from the reported boat
-reference point to each physical obstacle's surface: include hull size, positioning error,
+reference point to each object GPS centre: include object size, hull size, positioning error,
 tracking error and desired extra room yourself. No hull model or hidden margin
 is added. The buffer must be finite and nonnegative. Validation checks straight
 route segments, ordered passages and the entire finish region; it does not
@@ -239,7 +239,7 @@ make -C gcs run
 Open <http://localhost:8080>. The redesigned workspace has four steps:
 
 1. **Map:** use **Load full competition map**, or import a survey. Click an object
-   to inspect/correct it, apply corrections, and confirm reviewed dimensions.
+   to inspect/correct it, apply corrections, and confirm reviewed positions/types.
 2. **Configure:** set shared speed, required clearance and preferred room. Set
    tower hard exclusion and soft avoidance distances; click a purple tower to
    configure it. Settings preview immediately on the map. Save once for the
@@ -279,26 +279,46 @@ are not applied to the unrelated new map. Map corrections preserve the original
 observations and invalidate affected reviews/approvals.
 
 The practice map is [`examples/competition-gps-map.json`](examples/competition-gps-map.json):
-23 buoys, six physical props, GPS footprints and available labels. It is a
+23 buoy points, six prop points and available labels. It is a
 simulator-derived **unverified GPS practice map**, not a new live survey or
 simulator-alignment qualification. It contains no simulator run/start metadata.
 The same map is bundled with the GCS image and available from the load button.
 [`examples/slalom-gps-points.json`](examples/slalom-gps-points.json) remains a small
 unlabeled regression fixture. Defaults are still 0.5 m/s and a 1.8 m required
 buffer; preferred starts equal to required. The competition Dodge gate has a
-3.52 m surface opening: a 1.8 m required buffer needs 3.60 m and is correctly
-rejected. The setup explains this before generation. Choose a smaller buffer
-only when its hull/navigation allowance is justified; no value is reduced by
-suggestion, search or task selection. Simulator integration tests explicitly
-use 1.5 m for gate/slalom; this is not physical-boat qualification.
+4.00 m centre-to-centre opening: a 2.1 m hard buffer on each side needs
+4.20 m and is correctly rejected. The 1.8 m default fits this point opening.
+No value is reduced by suggestion, search or task selection. Historical simulator
+results with physical footprints use the settings and geometry recorded in the
+milestone; they do not qualify arbitrary centre-based allowances.
 
 Unknown objects are obstacles. JSON point lists (or `{"points": [...]}`) and CSV
-accept `latitude,longitude`, optional `id,color,object_type,radius_m,height_m`.
-Visible radius defaults are buoy 0.25 m and unknown/detector 0.50 m. Confirm every
-size assumption before approval. Polygon props retain editable GPS vertices;
-moving their centre translates the footprint. Original observations are retained
-separately from corrected objects. Existing simulator-map versions 1/2 still
-require their alignment evidence; live version 3 never claims simulator verification.
+accept `latitude,longitude`, with optional `id,color,object_type`. Explicit
+`"object_type": "unknown"` and omitted types both produce unknown obstacles. IDs
+are optional and generated when absent. Provide one consolidated row per object.
+No radius or height is required or added. Legacy dimensions supplied in simple
+point rows are preserved in raw observations but ignored for planning.
+
+```json
+{
+  "points": [
+    {"latitude": 41.12345, "longitude": -86.12345, "object_type": "unknown"},
+    {"latitude": 41.12360, "longitude": -86.12370, "object_type": "detector"}
+  ]
+}
+```
+
+Hard and soft distances start at each object GPS point. Include object size,
+boat size and positioning/tracking allowances in the hard distance. The map
+uses fixed-size identification symbols, including purple tower squares; these
+symbols do not represent a physical footprint. Buffer circles are metric.
+Original observations are retained separately from corrected objects. Existing
+live maps migrate to points after a byte-exact
+`workspace-before-point-objects-*.json` backup; saved routes/manual queues remain
+but approval is revoked and map/task review is required again. Regenerate task
+routes and revalidate manual routes before approval. Native simulator formats
+1/2 retain physical geometry and still require alignment evidence; live version
+3 never claims simulator verification.
 
 Suggestions use imported labels and geometry, never `world_centre`, simulator
 station annotations or truth to steer. Unlabeled/ambiguous maps still require
@@ -375,10 +395,10 @@ telemetry port when running a second GCS.
 ### Buffer preview before validation
 
 Use **Show buffers** above the map immediately after loading a course, before
-confirming sizes/setup or validating. Amber outlines show required clearance
+confirming the map/setup or validating. Amber outlines show required clearance
 around all circular and polygon objects, bands along every planning/channel edge,
 the saved start, and the finish radius plus clearance. A larger preferred buffer
-is blue. The preview updates with edited dimensions and buffer settings and is
+is blue. The preview updates with edited positions and buffer settings and is
 independent of Planning overlays. Edge bands also cover concave boundaries;
 convex polygons additionally show an inset outline. A collapsed inset reports
 no remaining room. Polygon outlines use a
@@ -400,10 +420,10 @@ regeneration. Merely opening the configuration panel does not change settings.
 
 Tower zones apply to objects explicitly classified as `detector`, including the
 purple square towers on the full competition map. Color alone does not classify
-a tower. All distances are measured from the boat's GPS planning point to the
-physical object surface, including polygon edges. Tower hard exclusion replaces
+a tower. In the normal GPS-map workflow, distances are measured directly from the
+boat's planning point to each tower GPS centre; no physical radius is added. Tower hard exclusion replaces
 the ordinary required object buffer for that tower; permitted-water boundary
-clearance remains required. Include the hull and navigation allowances when
+clearance remains required. Include object size, hull and navigation allowances when
 choosing distances. The soft distance must be at least the hard distance.
 
 A solid inner outline shows the hard zone; fading purple bands extend to the
@@ -419,7 +439,7 @@ cost that decreases to zero at the soft boundary. Costs from nearby towers add.
 This balances path length with avoidance; it is not an absolute requirement to
 remain outside every soft zone whenever such a route exists. Hard constraints
 never yield. Route review reports each soft-zone penetration and its closest
-planned surface distance. Actual detector performance remains unverified.
+planned centre distance. Actual detector performance remains unverified.
 
 The existing 60-second shared deadline remains. Configured tower planning uses
 bounded weighted A* (initial distance-heuristic weight 4), with a distance-based lower bound on

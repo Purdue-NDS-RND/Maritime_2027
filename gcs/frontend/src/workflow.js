@@ -38,7 +38,9 @@ export function gateWarnings(map,draft) {
         const a=objects.get(p.red),b=objects.get(p.green);if(!a||!b)return ['Select both gate objects.'];
         const dy=(a.centre.latitude-b.centre.latitude)*111319.49079327357;
         const dx=(a.centre.longitude-b.centre.longitude)*111319.49079327357*Math.cos((a.centre.latitude+b.centre.latitude)*Math.PI/360);
-        const opening=Math.hypot(dx,dy)-a.radius_m-b.radius_m;
-        return opening+1e-6<2*draft.clearance_m?[`Gate opening: ${opening.toFixed(2)} m. Your required buffer needs ${(2*draft.clearance_m).toFixed(2)} m. Review the buffer allowance or the opening before generating.`]:[];
+        const opening=Math.hypot(dx,dy)-(a.radius_m??0)-(b.radius_m??0);
+        const hard=obj=>obj.object_type==='detector'?(draft.tower_avoidance?.overrides?.[obj.id]?.hard_m??draft.tower_avoidance?.hard_m??draft.clearance_m):draft.clearance_m;
+        const needed=hard(a)+hard(b);
+        return opening+1e-6<needed?[`Gate opening: ${opening.toFixed(2)} m. Your hard buffers need ${needed.toFixed(2)} m. Review the buffer allowance or the opening before generating.`]:[];
     });
 }

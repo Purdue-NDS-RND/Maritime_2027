@@ -35,3 +35,6 @@
 .failure-tooltip{background:#422635;color:#ffe5eb;border:1px solid #c07b8b;font-size:11px;white-space:normal;max-width:280px;box-shadow:0 3px 12px #0005}
 fieldset.step-content{border:0;margin:0;min-width:0;width:100%}.conflict-objects{font-size:11px;color:#e9bdca}.preference-notes{border:1px solid #655234;border-radius:8px;padding:12px;background:#28261f}.preference-notes summary{color:#e5c693}
 .task-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.task-card{min-height:96px;padding:12px;text-align:left}.task-card strong{font-size:13px}.task-card span{display:block;font-size:11px;line-height:1.45}.task-card small{font-size:10px}.config-section label{font-size:12px}.failure-tooltip{width:max-content;max-width:280px}
+
+/* Fixed-size symbols identify GPS points; metric circles show configured zones. */
+.tower-point-marker{background:#b15ce5;border:2px solid #e2b7ff;border-radius:2px;box-shadow:0 1px 5px #0008}

@@ -38,6 +38,8 @@ class CourseSettingsTests(unittest.TestCase):
 
     def test_shared_settings_task_overrides_and_backup_preserve_routes(self):
         m,d,_=self.fixture()
+        from gcs.app.imports import point_map
+        m=point_map(m)
         with tempfile.TemporaryDirectory() as directory:
             from pathlib import Path
             path=Path(directory)/'workspace.json'

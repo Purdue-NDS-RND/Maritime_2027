@@ -72,3 +72,8 @@ const restoredHistory=renderToStaticMarkup(<Planner {...props} operations={['old
 assert.match(restoredHistory,/Check your object map/);
 const pendingHistory=renderToStaticMarkup(<Planner {...props} step={4} operations={['upload']} results={{upload:{command:'upload',mission_id:'approved',state:'pending'}}} draft={{...manual,waypoints:[map.geographic_reference]}} workspace={{...props.workspace,approval:{envelope:{mission:{mission_id:'approved'}}}}} stale={false} dirty={false} status={{armed:false,mode:4}}/>);
 assert.match(pendingHistory,/awaiting the boat’s acknowledgement and readback/);
+
+const pointReview=renderToStaticMarkup(<Planner {...props} step={1} selected={map.buoys[0].id}/>);
+assert.match(pointReview,/I reviewed object positions and types/);
+assert.doesNotMatch(pointReview,/Radius \(m\)|Height \(m\)|I reviewed object sizes/);
+assert.ok([...map.buoys,...map.obstacles].every(o=>o.type==='point'&&!('radius_m' in o)&&!('footprint' in o)));

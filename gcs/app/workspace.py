@@ -9,6 +9,7 @@ import uuid
 from shared.clearance import validate_route
 from shared.object_map import validate_map
 from .settings import defaults, validate_settings, effective_settings, FIELDS
+from .imports import point_map
 
 
 def sha(value):
@@ -69,6 +70,21 @@ class Workspace:
                     if override:
                         settings['task_overrides'][task] = override
             self.state['game_settings'] = settings
+            self.save()
+
+        object_map = self.state.get('map')
+        if object_map and object_map['schema_version'] == 3 and any(
+                obj['type'] != 'point' for obj in [*object_map['buoys'], *object_map.get('obstacles', [])]):
+            backup = self.directory / ('workspace-before-point-objects-' + str(uuid.uuid4()) + '.json')
+            backup.write_bytes(self.path.read_bytes())
+            self.state['map'] = point_map(object_map)
+            self.state['approval'] = None
+            for draft in [self.state.get('draft'), *self.state.get('tasks', {}).values(), *self.state.get('course', {}).values()]:
+                if draft:
+                    draft['sizes_confirmed'] = False
+                    draft['course_confirmed'] = False
+                    draft.pop('generation_setup_sha256', None)
+            self.state['migration_notice'] = 'Saved routes and original observations retained. Objects now use GPS points. Review total centre-based hard/soft distances, then regenerate and approve.'
             self.save()
 
     def save(self):

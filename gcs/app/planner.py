@@ -98,10 +98,10 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
     origin,forward,left,low,high,_=course.planes[0]
     intervals=[]
     for obj in course.objects:
-        if obj['type']!='cylinder':
+        if obj['type'] not in ('point','cylinder'):
             continue
         relative=sub(to_local(obj['centre'],course.reference),origin)
-        along=dot(relative,forward); radius=obj['radius_m']+zones(obj,draft)[0]
+        along=dot(relative,forward); radius=obj.get('radius_m',0)+zones(obj,draft)[0]
         if abs(along)<radius:
             half=math.sqrt(radius*radius-along*along); lateral=dot(relative,left)
             intervals.append((lateral-half,lateral+half))

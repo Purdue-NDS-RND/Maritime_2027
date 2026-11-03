@@ -103,7 +103,9 @@ class GeneralCourseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'moved'):check_remaining_snapshot(self.fixture()[0],captured)
 
     def test_workspace_migration_backups_routes_manual_queue_and_revokes(self):
+        from gcs.app.imports import point_map
         m,d,_=self.fixture();d.pop('geometry_version')
+        m=point_map(m)
         manual={'task':'custom','waypoints':[d['finish']]}
         old={'map':m,'draft':d,'tasks':{'slalom':d,'manual':manual},'course':{'slalom':deepcopy(d)},'approval':{'old':True}}
         with tempfile.TemporaryDirectory() as directory:
@@ -143,8 +145,10 @@ class GeneralCourseTests(unittest.TestCase):
         self.assertTrue(segment_within((2,2),(8,2),polygon))
 
 
-    def test_migration_preserves_active_manual_approval(self):
+    def test_general_migration_preserves_active_manual_approval_for_point_map(self):
+        from gcs.app.imports import point_map
         m,d,_=self.fixture();d.pop('geometry_version')
+        m=point_map(m)
         manual={'task':'custom','waypoints':[d['finish']]}
         old={'map':m,'draft':manual,'tasks':{'slalom':d,'manual':manual},'course':{},'approval':{'manual':True}}
         with tempfile.TemporaryDirectory() as directory:

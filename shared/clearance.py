@@ -16,7 +16,7 @@ def validate_route(object_map, draft):
     if object_map['schema_version'] != 3 and (not isinstance(object_map.get('alignment'), dict) or object_map['alignment'].get('outcome') != 'passed'):
         reject('scene geographic alignment is unverified')
     if object_map['schema_version']==3 and not draft.get('sizes_confirmed'):
-        reject('confirm all live-map dimensions and size assumptions')
+        reject('review the GPS object map and total centre-based buffers before planning')
     reference = object_map['geographic_reference']
     points = [to_local(point, reference) for point in draft['waypoints']]
     if not 1 <= len(points) <= 500:
@@ -32,8 +32,8 @@ def validate_route(object_map, draft):
     route = [start, *points]
     obstacles = [*object_map['buoys'], *object_map.get('obstacles', [])]
     def gap_to_object(obj, a, b):
-        if obj['type'] == 'cylinder':
-            return segment_distance(to_local(obj['centre'],reference),a,b)-obj['radius_m']
+        if obj['type'] in ('point', 'cylinder'):
+            return segment_distance(to_local(obj['centre'],reference),a,b)-obj.get('radius_m', 0)
         polygon = [to_local(p,reference) for p in obj['footprint']]
         distance = min(polygon_clearance(polygon,a,0),polygon_clearance(polygon,b,0))
         for c,d in zip(polygon,polygon[1:]+polygon[:1]):

@@ -51,8 +51,8 @@ def contained(a,b,poly,buffer=0):
 
 
 def gap(obj,a,b,reference):
-    if obj['type']=='cylinder':
-        return segment_distance(to_local(obj['centre'],reference),a,b)-obj['radius_m']
+    if obj['type'] in ('point','cylinder'):
+        return segment_distance(to_local(obj['centre'],reference),a,b)-obj.get('radius_m',0)
     poly=[to_local(p,reference) for p in obj['footprint']]
     return polygon_gap(poly,a,b)
 
@@ -84,17 +84,17 @@ class Course:
                 hard,soft=zones(obj,draft,self.tower_policy)
                 shape=([to_local(p,self.reference) for p in obj['footprint']] if obj['type']=='polygon' else None)
                 centre=to_local(obj['centre'],self.reference)
-                radius=max(math.dist(centre,p) for p in shape) if shape else obj['radius_m']
+                radius=max(math.dist(centre,p) for p in shape) if shape else obj.get('radius_m',0)
                 self.towers.append((centre,radius,shape,hard,soft))
         ids={o['id']:o for o in self.objects}
-        self.circles=[(to_local(o['centre'],self.reference),o['radius_m']+zones(o,draft,self.tower_policy)[0]-self.required) for o in self.objects if o['type']=='cylinder']
+        self.circles=[(to_local(o['centre'],self.reference),o.get('radius_m',0)+zones(o,draft,self.tower_policy)[0]-self.required) for o in self.objects if o['type'] in ('point','cylinder')]
         self.footprints=[]
         for obj in self.objects:
             if obj['type']=='polygon':
                 centre=to_local(obj['centre'],self.reference)
                 polygon=[to_local(p,self.reference) for p in obj['footprint']]
                 self.footprints.append((centre,max(math.dist(centre,p) for p in polygon),polygon,zones(obj,draft,self.tower_policy)[0]-self.required))
-        self.preference_circles=[shape for obj,shape in zip((o for o in self.objects if o['type']=='cylinder'),self.circles) if self.tower_policy is None or obj.get('object_type')!='detector']
+        self.preference_circles=[shape for obj,shape in zip((o for o in self.objects if o['type'] in ('point','cylinder')),self.circles) if self.tower_policy is None or obj.get('object_type')!='detector']
         self.preference_footprints=[shape for obj,shape in zip((o for o in self.objects if o['type']=='polygon'),self.footprints) if self.tower_policy is None or obj.get('object_type')!='detector']
         self.polygons=[]
         self.reviewed_channel=[to_local(p,self.reference) for p in draft.get('reviewed_channel',[])]
@@ -135,8 +135,8 @@ class Course:
             forward=(dx/length,dy/length); left=(-forward[1],forward[0])
             if p['kind']=='gate':
                 first,second=ids[p['red']],ids[p['green']]
-                if first==second or first['type']!='cylinder' or second['type']!='cylinder':
-                    raise ValueError('gate requires two distinct circular objects')
+                if first==second or first['type'] not in ('point','cylinder') or second['type'] not in ('point','cylinder'):
+                    raise ValueError('gate requires two distinct point or circular objects')
                 a,b=to_local(first['centre'],self.reference),to_local(second['centre'],self.reference)
                 tangent=sub(b,a); width=math.hypot(*tangent)
                 if width<1e-6:
@@ -148,7 +148,7 @@ class Course:
                 if abs(dot(normal,forward))<.1:
                     raise ValueError('travel direction must cross gate')
                 forward=normal
-                origin=a; low=first['radius_m']+self.required; high=width-second['radius_m']-self.required
+                origin=a; low=first.get('radius_m',0)+zones(first,draft,self.tower_policy)[0]; high=width-second.get('radius_m',0)-zones(second,draft,self.tower_policy)[0]
                 if low>high:
                     raise ValueError('insufficient gate opening: '+p['id'])
             elif p['kind']=='section':
@@ -159,10 +159,10 @@ class Course:
                     raise ValueError('blocked channel section: '+p['id'])
             elif p['kind']=='turn':
                 obj=ids[p['buoy']]
-                if obj['type']!='cylinder' or p.get('side') not in ('left','right'):
+                if obj['type'] not in ('point','cylinder') or p.get('side') not in ('left','right'):
                     raise ValueError('turn requires buoy and passing side')
                 origin=to_local(obj['centre'],self.reference)
-                offset=obj['radius_m']+self.required
+                offset=obj.get('radius_m',0)+zones(obj,draft,self.tower_policy)[0]
                 low,high=(offset,math.inf) if p['side']=='left' else (-math.inf,-offset)
                 if self.general and self.polygons:
                     projections=[dot(sub(v,origin),left) for v in self.polygons[0]]

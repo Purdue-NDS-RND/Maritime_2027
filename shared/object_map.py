@@ -1,4 +1,4 @@
-"""Validate version 1 buoy maps and version 2 fixed-object maps."""
+"""Validate native physical maps and version 3 GPS point maps."""
 import re
 from .geometry import finite, to_local
 
@@ -23,6 +23,10 @@ def validate_map(data):
             raise ValueError('duplicate object identity')
         names.add(obj['id'])
         to_local(obj['centre'], reference)
+        if obj['type'] == 'point' and data['schema_version'] == 3:
+            if any(key in obj for key in ('radius_m', 'height_m', 'footprint')):
+                raise ValueError('point objects use centre-based buffers, without physical dimensions')
+            continue
         if data['schema_version'] in (2,3) and not 0 < finite(obj['height_m']) < 10:
             raise ValueError('invalid object height')
         if obj['type'] == 'cylinder':

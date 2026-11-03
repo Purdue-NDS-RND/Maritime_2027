@@ -20,8 +20,10 @@ class PlannerTests(unittest.TestCase):
         def gps(x,y):
             c,s=math.cos(angle),math.sin(angle)
             return to_gps(c*x-s*y,s*x+c*y,ref)
-        m=import_points(json.dumps([{'id':'a','latitude':gps(4,-width/2)['latitude'],'longitude':gps(4,-width/2)['longitude'],'radius_m':radius},
-                                   {'id':'b','latitude':gps(4,width/2)['latitude'],'longitude':gps(4,width/2)['longitude'],'radius_m':.2}]))
+        # Legacy physical geometry remains covered independently of point imports.
+        m={'schema_version':3,'source':'live','geographic_reference':gps(4,-width/2),'obstacles':[],
+           'buoys':[{'id':'a','type':'cylinder','object_type':'unknown','category':'unknown','centre':gps(4,-width/2),'radius_m':radius,'height_m':1},
+                    {'id':'b','type':'cylinder','object_type':'unknown','category':'unknown','centre':gps(4,width/2),'radius_m':.2,'height_m':1}]}
         d={'task':'custom','planner_task':'gate','direction':[math.cos(angle),math.sin(angle)],'course_confirmed':True,'sizes_confirmed':True,
            'start':gps(0,0),'exit':gps(7,0),'entry':gps(1,0),'entry_radius_m':1,'finish':gps(8,0),'finish_radius_m':.5,'speed_m_s':.5,
            'clearance_m':.8,'preferred_buffer_m':.8,'planning_area':[gps(x,y) for x,y in [(-2,-5),(10,-5),(10,5),(-2,5)]],
@@ -49,7 +51,8 @@ class PlannerTests(unittest.TestCase):
         m,d,gps=self.fixture()
         d['passages']=[{'id':'turn','kind':'turn','buoy':'a','side':'right'}]
         self.assertFalse(validate_route(m,d)['valid'])
-        d['passages']=[{'id':'late','kind':'turn','buoy':'b','side':'right'},{'id':'early','kind':'gate','red':'a','green':'b'}]
+        m['buoys'].append({**m['buoys'][1],'id':'late_turn','centre':gps(6,2)})
+        d['passages']=[{'id':'late','kind':'turn','buoy':'late_turn','side':'right'},{'id':'early','kind':'gate','red':'a','green':'b'}]
         self.assertFalse(validate_route(m,d)['valid'])
         d['passages']=[]; d['planner_task']='channel'
         d['channel']=[gps(x,y) for x,y in [(-1.5,-1.5),(9.5,-1.5),(9.5,1.5),(-1.5,1.5)]]
@@ -88,10 +91,10 @@ class PlannerTests(unittest.TestCase):
         m=import_points('latitude,longitude\n40,-86\n40.0001,-86\n','csv')
         self.assertEqual(m['schema_version'],3);self.assertNotIn('alignment',m)
         self.assertEqual(m['buoys'][0]['object_type'],'unknown')
-        self.assertEqual(m['buoys'][0]['radius_m'],.5)
+        self.assertEqual(m['buoys'][0]['type'],'point');self.assertNotIn('radius_m',m['buoys'][0])
         with tempfile.TemporaryDirectory() as tmp:
             w=Workspace(tmp);w.edit({'map':m,'new_import':True})
-            changed=deepcopy(m);changed['buoys'][0].update(radius_m=1,category='red',object_type='buoy')
+            changed=deepcopy(m);changed['buoys'][0].update(category='red',object_type='buoy')
             w.edit({'map':changed})
             restored=Workspace(tmp).read()
             self.assertEqual(restored['original_map'],m)

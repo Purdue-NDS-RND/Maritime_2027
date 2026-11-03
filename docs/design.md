@@ -92,7 +92,7 @@ objects and defined boundaries. Automatic handling of unexpected obstacles is
 outside the initial scope; a manual operator remains available.
 
 The GCS treats the boat route as a point with a mandatory required buffer
-to obstacle surfaces and an optional preferred buffer that may yield locally. The operator includes hull size, survey/GPS
+to imported object GPS centres and an optional preferred buffer that may yield locally. No object radius is added. The operator includes object size, hull size, survey/GPS
 error, tracking/turn error, buoy movement and mandatory extra room in the required value. The GCS
 checks the planned segments and finish region against all physical obstacles without adding hidden hull or
 tracking allowances. It does not establish that the chosen buffer is sufficient
@@ -206,7 +206,8 @@ The accepted next scope adds backend planning for separate gate, slalom and
 channel missions, using one persistent reviewed GPS object map and task-specific
 course roles/drafts. Live point imports require no simulator identity and are
 never simulator verified. Original observations are retained separately from
-operator corrections, including explicit dimension assumptions. Course geometry,
+operator corrections. Live objects are points, with total hard/soft distances
+measured directly from their GPS centres. Course geometry,
 local direction, passage order, permitted boundaries and finish require operator review;
 geometry suggestions do not confirm assignments. Station annotations are optional.
 
@@ -350,12 +351,15 @@ back up workspaces before adding settings. A fresh browser session or backend re
 course paths; Generate explicitly reveals a route for the selected task in that
 session. Manual moves remain an explicit independent workflow.
 
-Towers retain their physical footprints. A configurable hard surface-offset zone
-is mandatory, and a larger soft surface-offset zone contributes a decreasing
+Live objects, including towers, use GPS points without an object radius. A
+configurable hard centre-distance zone is mandatory, and a larger soft
+centre-distance zone contributes a decreasing
 squared proximity cost. Tower-specific hard clearance replaces ordinary object
 clearance at that tower; boundary containment and other obstacle buffers retain
-their meanings. These are planning-point distances, without hidden hull/error
-allowances. A purple fading overlay previews the settings. Soft-zone traversal
+their meanings. These are distances between the boat planning point and the object GPS point,
+without hidden object, hull or error allowances. Native simulator formats retain
+physical geometry for compatibility and independent evaluation; the normal
+competition practice map uses points. A purple fading overlay previews the settings. Soft-zone traversal
 is reported for review; weighted avoidance trades distance against proximity
 rather than asserting global maximum minimum clearance or detection avoidance.
 
@@ -368,3 +372,22 @@ so it cannot discard a searched detour merely because a direct segment satisfies
 the hard buffer. Exact final segment/finish validation and the shared 60-second
 search/simplification deadline remain. Continuous replanning and measured LiDAR
 detection behavior are outside this change.
+
+### Drone point-map contract (2026-11-03)
+
+A JSON object containing `points` (or a bare point list) supplies latitude and
+longitude in degrees, with optional `id`, `object_type` and `color`. Explicit
+`"object_type": "unknown"` is supported; omitted types become `unknown`, and
+omitted IDs receive stable identifiers within the imported list. Each row must
+represent one consolidated object, not repeated detections. Types do not confirm
+task membership or passage order. No drone routes or physical dimensions are
+required. Legacy dimension fields in simple point rows remain in original
+observations but do not affect planning.
+
+The GCS represents live objects as `type: point` in version 3 maps. Hard and soft
+distances are measured directly from their centres, including tower overrides,
+gate feasibility, starts and stopping regions. Point objects cannot carry a
+hidden radius or footprint. Existing live workspaces are backed up byte-for-byte
+before conversion; original observations and saved routes/manual queues remain,
+while approval and map/task review are invalidated. Regenerate planner routes
+and revalidate manual routes after reviewing total centre-based allowances.

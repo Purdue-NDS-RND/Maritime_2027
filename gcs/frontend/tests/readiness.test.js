@@ -11,9 +11,9 @@ test('readiness explains stale starts and respects explicit offline planning',()
  assert.ok(generationChecks(map,{...draft,attempt:{start_source:'manual'}},true).every(check=>check.ready));
 });
 test('default opening rejection and partial selection have distinct recovery steps',()=>{
- const checks=generationChecks(map,{...draft,clearance_m:1.8,preferred_buffer_m:1.8,attempt:{mode:'remaining',start_source:'manual',first_section:0,selection_confirmed:false}},false);
+ const checks=generationChecks(map,{...draft,clearance_m:2.1,preferred_buffer_m:2.1,attempt:{mode:'remaining',start_source:'manual',first_section:0,selection_confirmed:false}},false);
  assert.equal(checks.find(c=>c.id==='opening').step,2);
- assert.match(checks.find(c=>c.id==='opening').detail,/3.52 m.*3.60 m/);
+ assert.match(checks.find(c=>c.id==='opening').detail,/4.00 m.*4.20 m/);
  assert.equal(checks.find(c=>c.id==='remaining').ready,false);
  assert.equal(generationChecks(map,{...draft,attempt:{mode:'remaining',start_source:'manual',first_section:null,selection_confirmed:true}},false).find(c=>c.id==='remaining').ready,false);
 });

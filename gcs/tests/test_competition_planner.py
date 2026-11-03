@@ -45,13 +45,13 @@ class CompetitionPlannerTests(unittest.TestCase):
                 if task=='channel':
                     self.assertNotEqual(to_local(d['start'],self.map['geographic_reference']),to_local(result['draft']['derived_sections'][0]['centre'],self.map['geographic_reference']))
 
-    def test_default_buffer_failure_explains_gate_without_reduction(self):
-        proposal=prepare_task(self.map,'gate')
-        self.assertTrue(any('3.52 m' in text and '3.60 m' in text for text in proposal['diagnostics']))
+    def test_point_gate_hard_buffer_failure_without_reduction(self):
+        proposal=prepare_task(self.map,'gate',{'clearance_m':2.1})
+        self.assertTrue(any('4.00 m' in text and '4.20 m' in text for text in proposal['diagnostics']))
         d=proposal['draft'];d.update(sizes_confirmed=True,course_confirmed=True)
         result=generate(self.map,d)
         self.assertFalse(result['success']);self.assertIn('insufficient gate opening',result['diagnostics'][0])
-        self.assertEqual(d['clearance_m'],1.8)
+        self.assertEqual(d['clearance_m'],2.1)
 
     def test_channel_start_near_side_returns_actionable_error(self):
         d=prepare_task(self.map,'channel',{'clearance_m':2})['draft']

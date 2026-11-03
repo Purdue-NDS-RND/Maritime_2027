@@ -825,3 +825,33 @@ and fixed a startup error when browser-restored operation IDs precede their
 polled results; regression rendering now covers that exact state. The updated
 normal GCS is running with byte-exact preserved workspace data and no vehicle
 commands sent.
+
+### Centre-based GPS object buffers (2026-11-03)
+
+Normal live imports and the full competition practice map now use object GPS
+points without physical radii, heights or footprints. Hard and soft distances
+are measured directly from each point; the hard distance must include object
+size, boat size and positioning/tracking allowance. Explicit
+`"object_type": "unknown"`, omitted types and omitted IDs are supported. Native
+simulator map formats and physical collision/evaluation geometry remain intact.
+The GCS retains point identification symbols, including purple tower squares,
+and metric buffer previews; map review replaces the old size-review wording.
+
+Existing live workspaces receive a byte-exact point-migration backup and retain
+original observations, settings, task assignments, routes and manual queues.
+Approval and map/task confirmation are revoked. Planner routes need regeneration
+and manual routes need revalidation after reviewing the centre-based allowances.
+An isolated copy of the actual operator workspace verified all 29 point objects,
+preserved observations/routes/queues and revoked approval; the source workspace
+was untouched.
+
+All 82 containerized backend tests pass, including centre-based hard clearance,
+decreasing tower soft costs, unknown imports, stopping regions and migration.
+The production image generates and validates full-map gate/slalom/channel
+routes at 0.5 m/s, 1.8 m hard / 3 m preferred distances and tower
+1.8 m hard / 10 m soft distances (strength 10). Frontend
+workflow/render checks, production build and simulator static checks pass.
+Browser interaction could not be checked because no browser surface was available.
+Raw evidence is under ignored `simulation/logs/point-objects*`. No boat movement
+or physical/radio acceptance is claimed; historical whole-hull results remain
+limited to their recorded physical-map geometry and settings.

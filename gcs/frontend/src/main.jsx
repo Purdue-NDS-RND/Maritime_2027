@@ -59,7 +59,7 @@ function App() {
     const [telemetry,setTelemetry]=useState(null), [telemetryReceived,setTelemetryReceived]=useState(0), [now,setNow]=useState(Date.now());
     const boatMarker=useRef();
     const [focusedFailure,setFocusedFailure]=useState(null);
-    const [message,updateMessage]=useState('Load the full competition map, review object sizes, then choose a task.'), [validation,setValidation]=useState(null);
+    const [message,updateMessage]=useState('Load the full competition map, review object positions and types, then configure buffers.'), [validation,setValidation]=useState(null);
     const [notice,setNotice]=useState(null),[workLabel,setWorkLabel]=useState('Working…'),[startedAt,setStartedAt]=useState(0);
     function setMessage(text,kind='info',errors=[]){updateMessage(text);setNotice({text,detail:text,kind,errors});}
     function reportError(error){updateMessage(error.message);setNotice({kind:'error',text:error.message,detail:error.detail||error.message,errors:error.errors||[]});}
@@ -148,13 +148,13 @@ function App() {
         const {map}=workspace;
         if(map) for(const [i,b] of map.buoys.entries()){
             const colour={red:'#e74b50',green:'#35c78b',white:'#dfe7f2',blue:'#4e9feb',orange:'#fa8b24',purple:'#b15ce5',yellow:'#eed831',cyan:'#25d9df',black:'#151515',zebra:'#ffffff'}[b.category]||'#999';
-            L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7}).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);if(current.current.busy)return;current.current.setSelected(b.id);setStep(b.object_type==='detector'?2:1);if(b.object_type==='detector')setBuffers(true);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
+            (b.type==='point'?(b.object_type==='detector'?L.marker(latlng(b.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(b.centre),{radius:6,color:colour,fillOpacity:0.8})):L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7})).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);if(current.current.busy)return;current.current.setSelected(b.id);setStep(b.object_type==='detector'?2:1);if(b.object_type==='detector')setBuffers(true);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
             if(b.category==='zebra')L.marker(latlng(b.centre),{interactive:false,icon:L.divIcon({className:'zebra-marker',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(group);
 
         }
         if(map)for(const obj of map.obstacles||[]){
             const style={color:obj.task==='launch'?'#20252b':obj.task==='recover'?'#edcc35':obj.task==='evade'?'#bd79e4':'#99724d',fillOpacity:0.65,weight:2};
-            const shape=obj.type==='polygon'?L.polygon(obj.footprint.map(latlng),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m});
+            const shape=obj.type==='point'?(obj.object_type==='detector'?L.marker(latlng(obj.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(obj.centre),{...style,radius:6})):obj.type==='polygon'?L.polygon(obj.footprint.map(latlng),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m});
             shape.addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);if(current.current.busy)return;current.current.setSelected(obj.id);setStep(obj.object_type==='detector'?2:1);if(obj.object_type==='detector')setBuffers(true);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
 
         }
@@ -167,7 +167,7 @@ function App() {
                 for(const obj of [...map.buoys,...(map.obstacles||[])]){
                     if(obj.object_type==='detector'&&previewSettings.tower_avoidance)continue;
                     if(obj.type==='polygon')L.polygon(expandedFootprint(obj.footprint,radius,ref),style).addTo(group);
-                    else L.circle(latlng(obj.centre),{...style,radius:obj.radius_m+radius}).addTo(group);
+                    else L.circle(latlng(obj.centre),{...style,radius:(obj.radius_m??0)+radius}).addTo(group);
                 }
                 for(const key of ['planning_area','channel'])if(draft[key]?.length>=3){
                     for(const band of boundaryBands(draft[key],radius,ref))L.polygon(band,{...style,stroke:false,fillOpacity:.08}).addTo(group);
@@ -183,7 +183,7 @@ function App() {
             for(const obj of [...map.buoys,...(map.obstacles||[])].filter(o=>o.object_type==='detector')){
                 const {hard_m:hard,soft_m:soft}=towerZones(obj,previewSettings);
                 if(!Number.isFinite(hard)||!Number.isFinite(soft)||hard<0||soft<hard)continue;
-                const draw=(distance,style)=>obj.type==='polygon'?L.polygon(expandedFootprint(obj.footprint,distance,map.geographic_reference),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m+distance});
+                const draw=(distance,style)=>obj.type==='polygon'?L.polygon(expandedFootprint(obj.footprint,distance,map.geographic_reference),style):L.circle(latlng(obj.centre),{...style,radius:(obj.radius_m??0)+distance});
                 for(let band=6;band>=1;band--)draw(hard+(soft-hard)*band/6,{color:'#ba8aff',weight:band===6?1:0,dashArray:'3 6',fillColor:'#a77bea',fillOpacity:.025,interactive:false}).addTo(group);
                 draw(hard,{color:selected===obj.id?'#ffcf83':'#df9afc',weight:selected===obj.id?3:2,fillColor:'#b85ce0',fillOpacity:.18,interactive:false}).addTo(group);
             }

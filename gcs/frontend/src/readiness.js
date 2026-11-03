@@ -9,7 +9,7 @@ export function generationChecks(map,draft,stale) {
     const missing=missingSetup(draft),warnings=gateWarnings(map,draft),attempt=draft.attempt||{};
     const partial=attempt.mode==='remaining';
     return [
-        {id:'sizes',label:'Object sizes reviewed',ready:!!draft.sizes_confirmed,detail:'Confirm the map’s object sizes before planning.',step:1},
+        {id:'sizes',label:'Object map reviewed',ready:!!draft.sizes_confirmed,detail:'Review object positions and types before planning.',step:1},
         {id:'assignments',label:'Assignments & boundaries',ready:!missing.length,detail:missing.length?`Still needed: ${missing.join(', ')}.`:'Required task assignments are present.',section:'assignments'},
         {id:'geometry',label:'Geometry reviewed',ready:draft.geometry_version!==2||!!draft.derived_sections?.length,detail:'Use Review geometry on map to check numbered passages and arrows.',action:'geometry'},
         {id:'confirmed',label:'Task setup confirmed',ready:!!draft.course_confirmed,detail:'Confirm the reviewed task setup below.',action:'confirm'},

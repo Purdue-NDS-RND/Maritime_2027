@@ -5,9 +5,9 @@ import {heading,missingSetup,gateWarnings,configuration} from '../src/workflow.j
 const map=JSON.parse(fs.readFileSync(new URL('../../examples/competition-gps-map.json',import.meta.url)));
 test('competition directions have useful labels',()=>{assert.equal(heading([-1,0]),'West · 270°');assert.equal(heading([0,-1]),'South · 180°');});
 test('setup checklist explains what is absent',()=>{assert.deepEqual(missingSetup({planner_task:'channel',finish:{}}),['Task entry','Task exit','Travel direction','Planning boundary','Channel boundary']);});
-test('gate opening warning explains default failure and clears for feasible setting',()=>{
- const d={passages:[{kind:'gate',red:'dodge_gate_a_red',green:'dodge_gate_a_green'}],clearance_m:1.8};
- assert.match(gateWarnings(map,d)[0],/3.52 m.*3.60 m/);
+test('gate opening warning explains blocked opening and clears for feasible setting',()=>{
+ const d={passages:[{kind:'gate',red:'dodge_gate_a_red',green:'dodge_gate_a_green'}],clearance_m:2.1};
+ assert.match(gateWarnings(map,d)[0],/4.00 m.*4.20 m/);
  assert.deepEqual(gateWarnings(map,{...d,clearance_m:1.5}),[]);
 });
 test('course roles never capture route waypoints or planning start',()=>{

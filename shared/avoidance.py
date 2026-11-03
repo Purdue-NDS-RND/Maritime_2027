@@ -1,4 +1,4 @@
-"""Explicit tower zones measured from the planning point to object surfaces."""
+"""Tower zones measured from GPS points, or legacy physical surfaces."""
 from .geometry import finite
 
 
