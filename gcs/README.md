@@ -241,9 +241,11 @@ Open <http://localhost:8080>. The redesigned workspace has three steps:
 1. **Map:** use **Load full competition map**, or import a survey. Click an object
    to inspect/correct it, apply corrections, and confirm reviewed dimensions.
 2. **Task setup:** choose **Gate**, **Slalom / Dodge** or **Channel / Evade**.
-   Labeled-map suggestions select the relevant station, direction, entry/exit,
-   clear finish and planning bounds. Review the highlighted setup and confirm it.
-   Use a manual planning start or fresh boat position. Generate the route.
+   Labeled-map suggestions propose assignments, local direction, finish and bounds.
+   Use **Review geometry on map**, inspect numbered passages/arrows and boundaries,
+   then confirm the setup. **Live boat** and **Full task** are the defaults.
+   Generate captures a fresh position and heartbeat (each at most three seconds
+   old). Offline planning requires explicitly selecting **Manual start (offline)**.
 3. **Route review:** review/edit the blue route, then **Validate → Approve →
    Upload → Start**. Start stays disabled until the selected approval's upload
    is confirmed. Planning works with the boat offline; Upload/Start need a fresh
@@ -291,23 +293,45 @@ require their alignment evidence; live version 3 never claims simulator verifica
 Suggestions use imported labels and geometry, never `world_centre`, simulator
 station annotations or truth to steer. Unlabeled/ambiguous maps still require
 operator assignments. On the labeled competition map, Dodge is westbound and
-Evade is southbound. Entry/exit are finite crossing windows. The approach may
-start outside the channel and crosses no task passage until it enters the
-confirmed entry window. Physical obstacles and the planning boundary constrain
-that whole approach. The channel additionally constrains the route after entry,
-and its entire finish disk must be clear. Correct entry/exit/finish or draw
-boundaries using the task setup's review panel when suggestions do not fit.
-After finishing a task, click **Use live boat position** to update the next
-attempt's start. **Move on map** beside Entry changes the crossing window,
-not the start. For a convex channel, an entry window that cannot fit within
-the required inset is rejected immediately with an explanation. Restore
-suggested task geometry with **Refresh suggestions from map**, then review it.
+Evade is southbound. Gates use their actual pair orientation; slalom turns use
+neighboring anchors for local travel, with an advanced direction override.
+Correct membership/order and passing sides before confirmation. The normal
+workflow has no mandatory manually positioned Entry. An automatic approach
+connects the captured start to the first included finite passage; a full run
+from beyond the beginning may show a return approach. Advanced settings retain
+an exceptional physical connection crossing.
+
+Channel chains include **every** ordered point. Correct their object IDs under
+**Correct ordered channel chains**, then review the derived polygon and section
+connections. Each chain vertex contributes its fraction of chain length; equal
+fractions across the two chains define progress sections. Crossing or ambiguous
+connections require correction. Permitted water is an operator assertion, not a
+boundary proved by buoy observations. Outside starts enter through the selected
+beginning opening; inside starts enforce containment immediately. Starts inside
+an obstacle/boundary exclusion buffer are rejected. Required side-boundary and
+obstacle room is preserved while traversing the entrance cap. The finish disk
+must remain fully inside permitted water with required clearance.
+
+**Remaining section** is an explicit partial attempt. Click **Suggest remaining
+section**; an ambiguous position leaves the choice empty. Choose or correct the
+first included section, review the grey excluded sections and confirm the choice
+before Generate. Excluded passages receive no completion credit and do not
+change the full task setup. Moving more than 1 m after selection requires a new
+review. A start beyond a selected channel cell requires choosing the appropriate
+later first section. Approval freezes the captured start, scope and generated
+route. Upload and Start validate the actual connection against those same inputs;
+no command silently regenerates, changes scope or rewrites approval.
+
+Workspace migration writes `workspace-before-general-course-*.json` before
+changing legacy planner drafts, retains maps/routes/manual queues and assignment
+candidates, and revokes planner approvals. Review geometry and regenerate these
+drafts. Manual routes and boat-only execution retain their existing interfaces.
 
 A* remains deterministic, metric and 8-connected, carrying passage progress and
 incoming direction. It tries 0.25, 0.10 and 0.05 m, with at most 250,000 expansions
 per resolution, with a shared 60-second search/simplification time budget.
 Time exhaustion returns an error without a generated draft or a blockage claim.
-An admissible next-opening distance guides approach search;
+An admissible lower bound through remaining finite openings guides search;
 precomputed local obstacle geometry and conservative distance bounds avoid
 repeated geographic/polygon work without dropping obstacles. Each edge enforces
 required clearance, active task direction/order/sides and boundaries. Final GPS
@@ -326,20 +350,31 @@ Backend operations: `GET /api/examples/competition` supplies the practice map;
 an **unconfirmed** proposed draft plus setup diagnostics. Generic geometry
 suggestions remain at `POST /api/course/suggest`. `POST /api/generate` returns a
 proposed GPS draft, final validation and resolution/search diagnostics. Workspace,
-Validate/Approve and boat command interfaces remain unchanged.
+`POST /api/course/geometry` returns reviewed derived sections, and
+`POST /api/course/remaining` returns an unconfirmed suggestion. Drafts use
+`geometry_version: 2`; `attempt` contains `start_source`, `captured_at`,
+`start_snapshot`, `mode`, `first_section` and selection confirmation. Persistent
+course configuration excludes attempt/route metadata. Generation returns
+`derived_sections`, `excluded_sections`, `partial_attempt`, `route_sections` and
+structured failure `errors` with code/reason/location/object IDs where known.
+Validate/Approve and boat command interfaces remain unchanged. For isolated
+local browser qualification, `GCS_ORIGIN` selects the allowed origin; default
+remains `http://localhost:8080`. Use a separate data directory and unused passive
+telemetry port when running a second GCS.
 
 ### Buffer preview before validation
 
 Use **Show buffers** above the map immediately after loading a course, before
 confirming sizes/setup or validating. Amber outlines show required clearance
-around all circular and polygon objects, convex planning/channel boundary insets,
+around all circular and polygon objects, bands along every planning/channel edge,
 the saved start, and the finish radius plus clearance. A larger preferred buffer
 is blue. The preview updates with edited dimensions and buffer settings and is
-independent of Planning overlays. Concave/unfinished boundary insets are explicitly
-unavailable; a collapsed inset reports no remaining room. Polygon outlines use a
+independent of Planning overlays. Edge bands also cover concave boundaries;
+convex polygons additionally show an inset outline. A collapsed inset reports
+no remaining room. Polygon outlines use a
 slightly conservative sampled visual approximation; backend validation is authoritative.
 
-**S** is the saved attempt start. **Use live boat position** updates S, without
-moving Entry. Entry is a finite crossing window perpendicular to travel where
-task rules begin; the approach runs from S to that window. It stays attached to
-the reviewed course setup rather than following the live boat.
+**S** is the captured attempt start, distinct from the moving boat marker. Its
+source and capture time appear in Route review. Amber route sections show the
+approach; blue sections show task travel. Buffer geometry is illustrative;
+authoritative validation checks every emitted GPS segment after simplification.

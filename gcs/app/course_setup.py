@@ -15,7 +15,8 @@ def prepare_task(object_map, task, settings=None):
     points={o['id']:to_local(o['centre'],ref) for o in objects}
     required=finite(settings.get('clearance_m',1.8))
     finish_radius=finite(settings.get('finish_radius_m',1))
-    draft={'task':'custom','planner_task':task,'waypoints':[],
+    draft={'task':'custom','planner_task':task,'geometry_version':2,'waypoints':[],
+           'attempt':{'mode':'full','start_source':'live'},
            'start':deepcopy(settings.get('start') or object_map.get('start_pose',{}).get('position') or ref),
            'speed_m_s':settings.get('speed_m_s',.5),'clearance_m':required,
            'preferred_buffer_m':settings.get('preferred_buffer_m',required),'finish_radius_m':finish_radius,
@@ -44,7 +45,7 @@ def prepare_task(object_map, task, settings=None):
         passage=lambda pair,index:{'id':f'gate_{index}','kind':'gate','red':pair[0]['id'],'green':pair[1]['id']}
         passages=[passage(first,1)]
         if task=='slalom':
-            turns=sorted((o for o in candidates if re.search(r'(^|_)turn_[0-9]+',o['id'])),key=lambda o:sum(points[o['id']][i]*direction[i]for i in (0,1)))
+            turns=sorted((o for o in candidates if re.search(r'(^|_)turn_[0-9]+',o['id'])),key=lambda o:int(re.search(r'turn_([0-9]+)',o['id']).group(1)))
             passages.extend({'id':f'turn_{i+1}','kind':'turn','buoy':o['id'],'side':'left' if o.get('category')=='red' else 'right' if o.get('category')=='green' else None}for i,o in enumerate(turns))
             if len(pairs)>1:passages.append(passage(pairs[-1],2))
         draft['passages']=passages
@@ -68,11 +69,9 @@ def prepare_task(object_map, task, settings=None):
         delta=tuple(end[i]-origin[i]for i in (0,1));length=math.hypot(*delta)
         direction=tuple(v/length for v in delta)
         entry=tuple(origin[i]-direction[i]for i in (0,1));exit=tuple(end[i]+1.5*direction[i]for i in (0,1))
-        extension=4.5+required+finish_radius+1
-        polygon=[tuple(points[c[j]['id']][i]+sign*extension*direction[i]for i in (0,1))
-                 for c,j,sign in [(chains[0],0,-1),(chains[0],-1,1),(chains[1],-1,1),(chains[1],0,-1)]]
-        draft.update(direction=list(direction),channel=[gps(p)for p in polygon],
-                     channel_chains={name:[o['id']for o in c]for name,c in zip(('left','right'),chains)})
+        polygon=[points[o['id']] for o in chains[0]]+[points[o['id']] for o in reversed(chains[1])]
+        draft.update(direction=list(direction),channel=[gps(p) for p in polygon],
+                     channel_chains={name:[o['id'] for o in c] for name,c in zip(('left','right'),chains)})
     left=(-direction[1],direction[0]);finish=None
     for distance in (4.5,6.5,8.5):
         for lateral in (0,required+finish_radius+1,-required-finish_radius-1):
@@ -82,10 +81,20 @@ def prepare_task(object_map, task, settings=None):
         if finish is not None:break
     if finish is None:
         finish=tuple(end[i]+4.5*direction[i]for i in (0,1));notes.append('Choose a clear finish area; nearby objects block the suggested finish.')
+    if task=='channel':
+        delta=tuple(midpoint(-1)[i]-midpoint(-2)[i] for i in (0,1))
+        length=math.hypot(*delta); final_direction=tuple(v/length for v in delta)
+        finish=tuple(end[i]-(required+finish_radius+.2)*final_direction[i] for i in (0,1))
     all_points=[*points.values(),to_local(draft['start'],ref),entry,exit,finish]
     padding=required+finish_radius+5
     xmin=min(p[0]for p in all_points)-padding;xmax=max(p[0]for p in all_points)+padding
     ymin=min(p[1]for p in all_points)-padding;ymax=max(p[1]for p in all_points)+padding
     draft.update(entry=gps(entry),exit=gps(exit),finish=gps(finish),entry_radius_m=1,exit_radius_m=1,
                  planning_area=[gps(p)for p in [(xmin,ymin),(xmax,ymin),(xmax,ymax),(xmin,ymax)]])
+    draft.pop('entry',None);draft.pop('exit',None)
+    from shared.task_geometry import resolve_geometry
+    try:
+        draft['derived_sections']=resolve_geometry(object_map,draft)['derived_sections']
+    except (ValueError,KeyError) as error:
+        notes.append(str(error))
     return {'draft':draft,'diagnostics':notes,'ready':True}

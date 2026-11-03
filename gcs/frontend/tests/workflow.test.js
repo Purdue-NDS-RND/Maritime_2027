@@ -21,3 +21,9 @@ test('manual move starts a clean route without inherited task geometry',async()=
  assert.equal(d.planner_task,undefined);assert.equal(d.channel,undefined);
  assert.equal(d.speed_m_s,2);assert.equal(d.clearance_m,2);
 });
+test('version 2 has automatic approach and separates attempts from task setup',()=>{
+ const d={geometry_version:2,planner_task:'channel',finish:{},direction:[1,0],planning_area:[{},{},{}],channel:[{},{},{}],attempt:{mode:'remaining'},route_sections:[{}],derived_sections:[{}]};
+ assert.deepEqual(missingSetup(d),[]);
+ const config=configuration(d);
+ assert.equal(config.attempt,undefined);assert.equal(config.route_sections,undefined);assert.equal(config.derived_sections,undefined);
+});

@@ -37,6 +37,26 @@ class Workspace:
             self.state['migration_notice'] = 'Route retained. Set a total clearance buffer, then validate and approve again.'
             self.save()
 
+        if self.state.get('workspace_version', 1) < 2:
+            affected = [d for d in [self.state.get('draft'), *self.state.get('tasks', {}).values()] if d and d.get('planner_task')]
+            affected.extend(self.state.get('course', {}).values())
+            if affected:
+                backup = self.directory / ('workspace-before-general-course-' + str(uuid.uuid4()) + '.json')
+                backup.write_bytes(self.path.read_bytes())
+                for draft in affected:
+                    draft['geometry_version'] = 2
+                    draft['course_confirmed'] = False
+                    draft['legacy_assignments'] = True
+                    if draft.get('planner_task'):
+                        draft.setdefault('attempt', {'mode': 'full', 'start_source': 'live'})
+                for config in self.state.get('course',{}).values():
+                    config.pop('attempt',None)
+                if (self.state.get('draft') or {}).get('planner_task'):
+                    self.state['approval'] = None
+                self.state['migration_notice'] = 'Task assignments and saved routes retained for review. Confirm geometry and regenerate before approving.'
+            self.state['workspace_version'] = 2
+            self.save()
+
     def save(self):
         temp = self.path.with_suffix('.tmp')
         temp.write_text(json.dumps(self.state, indent=2, allow_nan=False) + '\n')
@@ -62,6 +82,10 @@ class Workspace:
             for key in ('course', 'selected_task'):
                 if key in data:
                     updated[key] = deepcopy(data[key])
+            for config in updated.get('course', {}).values():
+                if isinstance(config,dict):
+                    for key in ('attempt','derived_sections','excluded_sections','partial_attempt','route_sections','generation_errors','generation_setup_sha256','start','waypoints'):
+                        config.pop(key,None)
             if 'course' in data and (not isinstance(data['course'], dict) or any(k not in ('gate','slalom','channel') or not isinstance(v,dict) for k,v in data['course'].items())):
                 raise ValueError('course must contain gate/slalom/channel configurations')
             if 'selected_task' in data and data['selected_task'] not in ('gate','slalom','channel','manual'):
@@ -96,7 +120,8 @@ class Workspace:
                     updated['tasks'][updated['draft']['planner_task']] = deepcopy(updated['draft'])
                 elif updated['draft'].get('task') == 'custom':
                     updated['tasks']['manual'] = deepcopy(updated['draft'])
-            if (updated.get('draft') or {}).get('planner_task') and updated.get('course'):
+            if (updated.get('draft') or {}).get('planner_task') and (updated.get('course') or updated['draft'].get('geometry_version')==2):
+                updated.setdefault('course', {})
                 task = updated['draft']['planner_task']
                 config = updated['course'].get(task, {})
                 updated['draft'].update(deepcopy(config))
@@ -120,6 +145,12 @@ class Workspace:
             draft = self.state['draft']
             if draft.get('planner_task') and draft.get('course_revision') != sha({'map': self.state['map'], 'course': self.state.get('course')}):
                 return {'valid': False, 'errors': [{'reason': 'course changed: review assignments and regenerate', 'location': None}]}
+            if draft.get('geometry_version')==2 and not draft.get('attempt',{}).get('captured_at'):
+                return {'valid':False,'errors':[{'reason':'Generate a fresh attempt before validation and approval','location':None}]}
+            if draft.get('geometry_version')==2:
+                from shared.task_geometry import setup_identity
+                if draft.get('generation_setup_sha256')!=setup_identity(self.state['map'],draft) or draft.get('attempt',{}).get('start_snapshot')!=draft['start']:
+                    return {'valid':False,'errors':[{'reason':'Task setup or attempt start changed: regenerate and review the new attempt','location':None}]}
             return validate_route(self.state['map'], draft)
 
     def approve(self):

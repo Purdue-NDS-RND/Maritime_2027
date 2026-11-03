@@ -99,6 +99,20 @@ class EvaluationTests(unittest.TestCase):
         self.course['task_channel']=[(.2,-.1),(6,-.1),(6,.1),(.2,.1)]
         self.assertIn('whole hull escaped channel/planning boundary',self.result()['failures'])
 
+    def test_finite_passage_ignores_unrelated_extended_plane(self):
+        self.course['finite_passages']=True
+        self.course['passages'].append({'id':'remote','kind':'gate','origin':[3,20],'direction':[1,0],'y_min':-1,'y_max':1})
+        result=self.result()
+        self.assertIn('incomplete course/stern exit',result['failures'])
+        self.assertNotIn('footprint outside gate opening: remote',result['failures'])
+        self.assertEqual([p['id'] for p in result['passages']],['gate'])
+
+    def test_stern_entry_waits_for_whole_hull_before_containment(self):
+        self.course['task_entry']={'origin':[1,0],'direction':[1,0],'half_width_m':1,'activate_on_stern':True}
+        self.course['task_channel']=[(1,-1),(6,-1),(6,1),(1,1)]
+        self.assertEqual(self.result()['outcome'],'passed')
+
+
 
 class ProjectionTests(unittest.TestCase):
     def test_ninety_degree_pitch_projects_collision_height(self):

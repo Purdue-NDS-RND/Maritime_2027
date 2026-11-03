@@ -30,7 +30,7 @@ def intersects(a,b,c,d):
 
 
 def polygon_valid(poly):
-    if len(poly)<3 or len(poly)>64 or abs(sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(poly,poly[1:]+poly[:1])))<1e-6:
+    if len(poly)<3 or len(poly)>64 or any(math.dist(a,b)<1e-8 for a,b in zip(poly,poly[1:]+poly[:1])) or abs(sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(poly,poly[1:]+poly[:1])))<1e-6:
         return False
     edges=list(zip(poly,poly[1:]+poly[:1]))
     return all(not intersects(a,b,c,d) for i,(a,b) in enumerate(edges) for j,(c,d) in enumerate(edges)
@@ -68,6 +68,10 @@ def polygon_gap(poly,a,b):
 
 class Course:
     def __init__(self, object_map, draft):
+        from .task_geometry import resolve_geometry
+        draft=resolve_geometry(object_map,draft)
+        self.draft=draft
+        self.general=draft.get('geometry_version')==2
         self.reference=object_map['geographic_reference']
         self.required=finite(draft['clearance_m'])
         self.objects=[*object_map['buoys'],*object_map.get('obstacles',[])]
@@ -80,8 +84,12 @@ class Course:
                 polygon=[to_local(p,self.reference) for p in obj['footprint']]
                 self.footprints.append((centre,max(math.dist(centre,p) for p in polygon),polygon))
         self.polygons=[]
+        self.reviewed_channel=[to_local(p,self.reference) for p in draft.get('reviewed_channel',[])]
+        self.access=[to_local(p,self.reference) for p in draft.get('channel_access',[])]
         self.channel=None
-        self.has_entry=bool(draft.get("planner_task") and draft.get("entry"))
+        self.start_inside_channel=False
+        self.has_entry=bool(draft.get('planner_task') and draft.get('entry')) or bool(draft.get('channel_entrance'))
+        self.initial_progress=0
         for key in ('planning_area','channel'):
             if key in draft:
                 poly=[to_local(p,self.reference) for p in draft[key]]
@@ -130,6 +138,12 @@ class Course:
                 origin=a; low=first['radius_m']+self.required; high=width-second['radius_m']-self.required
                 if low>high:
                     raise ValueError('insufficient gate opening: '+p['id'])
+            elif p['kind']=='section':
+                origin=to_local(p['centre'],self.reference)
+                width=finite(p['half_width_m'])
+                low,high=-width+self.required,width-self.required
+                if low>=high:
+                    raise ValueError('blocked channel section: '+p['id'])
             elif p['kind']=='turn':
                 obj=ids[p['buoy']]
                 if obj['type']!='cylinder' or p.get('side') not in ('left','right'):
@@ -137,6 +151,9 @@ class Course:
                 origin=to_local(obj['centre'],self.reference)
                 offset=obj['radius_m']+self.required
                 low,high=(offset,math.inf) if p['side']=='left' else (-math.inf,-offset)
+                if self.general and self.polygons:
+                    projections=[dot(sub(v,origin),left) for v in self.polygons[0]]
+                    low=max(low,min(projections)); high=min(high,max(projections))
             else:
                 raise ValueError('unsupported passage kind')
             self.planes.append((origin,forward,left,low,high,p['id']))
@@ -151,6 +168,40 @@ class Course:
                 raise ValueError('exit radius must be positive')
             self.planes.append((to_local(draft['exit'],self.reference),forward,left,-width,width,'task_exit'))
 
+        if self.general and self.channel:
+            start=to_local(draft['start'],self.reference)
+            if inside(start,self.channel):
+                if not contained(start,start,self.channel,self.required):
+                    raise ValueError('unsafe planning start: inside channel boundary exclusion buffer at '+str(list(start)))
+                origin,forward,_,_,_,_=self.planes[0]
+                self.start_inside_channel=True
+                # The entrance may be omitted only when the start is in its
+                # selected first cell. Later cells require the full return.
+                next_plane=self.planes[1] if len(self.planes)>1 else None
+                if next_plane is None or dot(sub(start,next_plane[0]),next_plane[1])<0:
+                    self.initial_progress=1
+                elif draft.get('attempt',{}).get('mode')=='remaining':
+                    raise ValueError('start lies beyond the selected remaining channel section; review and confirm a later first section')
+                elif not contained(origin,origin,self.channel,self.required):
+                    raise ValueError('full-task return to the beginning conflicts with the channel start allowance; correct permitted water or explicitly confirm Remaining section')
+
+        attempt=draft.get('attempt',{})
+        if self.general and 'initial_progress' in attempt and (attempt['initial_progress']!=self.initial_progress or attempt.get('started_inside_channel')!=self.start_inside_channel):
+            raise ValueError('actual position changes selected task progress or channel connection; review and generate a new attempt')
+
+        self.windows=[]
+        for origin,forward,left,low,high,_ in self.planes:
+            if math.isfinite(low) and math.isfinite(high):
+                self.windows.append((tuple(origin[i]+low*left[i] for i in (0,1)),tuple(origin[i]+high*left[i] for i in (0,1))))
+            else:
+                self.windows=[]
+                break
+        self.remaining_distance=[0.0]*len(self.windows)
+        for i in range(len(self.windows)-2,-1,-1):
+            a,b=self.windows[i];c,d=self.windows[i+1]
+            distance=0 if intersects(a,b,c,d) else min(segment_distance(a,c,d),segment_distance(b,c,d),segment_distance(c,a,b),segment_distance(d,a,b))
+            self.remaining_distance[i]=self.remaining_distance[i+1]+distance
+
     def clearance(self,a,b):
         minimum=min((segment_distance(centre,a,b)-radius for centre,radius in self.circles),default=math.inf)
         for centre,radius,polygon in self.footprints:
@@ -161,8 +212,28 @@ class Course:
     def edge(self,a,b,progress):
         if self.clearance(a,b)<self.required-1e-7 or any(not contained(a,b,p,self.required) for p in self.polygons):
             return None
-        entered = not self.has_entry or progress>0
+        entered = not self.has_entry or progress>0 or self.start_inside_channel
         channel_start = a if entered else None
+        if self.general and self.channel and not entered:
+            # Outside approaches may enter only through the selected opening.
+            access=self.access
+            for c,d in zip(self.channel,self.channel[1:]+self.channel[:1]):
+                if intersects(a,b,c,d):
+                    delta=sub(b,a);edge=sub(d,c)
+                    cross=lambda u,v:u[0]*v[1]-u[1]*v[0]
+                    denominator=cross(delta,edge)
+                    if abs(denominator)>1e-12:
+                        fraction=cross(sub(c,a),edge)/denominator
+                        crossing=tuple(a[i]+fraction*delta[i] for i in (0,1))
+                        centre=tuple((access[0][i]+access[1][i])/2 for i in (0,1))
+                        if dot(sub(crossing,centre),self.planes[0][1])>1e-7:
+                            return None
+            if inside(b,self.channel):
+                for c,d in zip(self.channel,self.channel[1:]+self.channel[:1]):
+                    if all(segment_distance(p,*access)<1e-6 for p in (c,d)):
+                        continue
+                    if segment_distance(b,c,d)<self.required-1e-7:
+                        return None
         events=[]
         for index,(origin,forward,left,low,high,_) in enumerate(self.planes):
             u,v=dot(sub(a,origin),forward),dot(sub(b,origin),forward)
@@ -174,18 +245,46 @@ class Course:
                 side=dot(sub(point,origin),left)
                 events.append((fraction,index,u<=0<v,low-1e-7<=side<=high+1e-7,point))
         for _,index,forward,opening,point in sorted(events):
+            if self.general and self.start_inside_channel and self.initial_progress==1 and index==0:
+                continue
             if self.has_entry and progress==0:
                 # Approach may cross extended task planes while outside the task.
                 # Only a forward crossing of the finite entry window starts it.
                 if index==0 and forward and opening:
-                    progress=1;channel_start=point
+                    progress=1;channel_start=channel_start or point
                 continue
+            if self.general:
+                # Only finite directed crossings participate in progression.
+                # Before the first passage a return approach may cross later ones.
+                if progress==0 and index!=0:
+                    continue
+                if not opening:
+                    if index==progress and self.draft['passages'][index-int(bool(self.draft.get('entry')))]['kind']=='turn':
+                        return None
+                    continue
             if not forward or not opening or index!=progress:
                 return None
             progress+=1
-        if self.channel and channel_start is not None and not contained(channel_start,b,self.channel,self.required):
+        if self.channel and channel_start is not None and not self.channel_contains(channel_start,b):
             return None
         return progress
+
+    def channel_contains(self,a,b):
+        if self.reviewed_channel and self.reviewed_channel!=self.channel and not contained(a,b,self.reviewed_channel,self.required):
+            return False
+        if contained(a,b,self.channel,self.required):
+            return True
+        if not self.general or self.start_inside_channel or not inside(a,self.channel) or not inside(b,self.channel):
+            return False
+        access=self.access
+        # The selected entrance cap is traversable during the connection. Side
+        # boundary clearance and all physical obstacle buffers remain mandatory.
+        for c,d in zip(self.channel,self.channel[1:]+self.channel[:1]):
+            if all(segment_distance(p,*access)<1e-6 for p in (c,d)):
+                continue
+            if intersects(a,b,c,d) or min(segment_distance(a,c,d),segment_distance(b,c,d),segment_distance(c,a,b),segment_distance(d,a,b))<self.required-1e-7:
+                return False
+        return True
 
     def heuristic(self, point, finish, progress):
         direct=math.dist(point,finish)
@@ -196,13 +295,18 @@ class Course:
             delta=sub(p,origin); lateral=dot(delta,left)
             offset=max(low-lateral,0,lateral-high)
             return math.hypot(dot(delta,forward),offset)
-        return max(direct,distance(point)+distance(finish))
+        bound=distance(point)+distance(finish)
+        if self.windows:
+            a,b=self.windows[-1]
+            bound=max(bound,distance(point)+self.remaining_distance[progress]+segment_distance(finish,a,b))
+        return max(direct,bound)
 
 
 def validate_course(object_map,draft):
     course=Course(object_map,draft)
     route=[to_local(draft['start'],course.reference),*[to_local(p,course.reference) for p in draft['waypoints']]]
-    errors=[]; progress=0; sections=[]
+    draft=course.draft
+    errors=[]; progress=course.initial_progress; sections=[]
     preferred=finite(draft.get('preferred_buffer_m',draft['clearance_m']))
     if preferred<course.required:
         errors.append({'reason':'preferred buffer must be at least required buffer','location':None})
@@ -223,7 +327,7 @@ def validate_course(object_map,draft):
     if draft.get('planner_task'):
         if draft['planner_task'] not in ('gate','slalom','channel'):
             raise ValueError('unsupported planner task')
-        if not draft.get('course_confirmed') or not draft.get('sizes_confirmed') or not draft.get('planning_area') or not draft.get('entry') or not draft.get('exit'):
+        if not draft.get('course_confirmed') or not draft.get('sizes_confirmed') or not draft.get('planning_area') or (not course.general and (not draft.get('entry') or not draft.get('exit'))):
             errors.append({'reason':'incomplete course assignments: confirm sizes, direction, entry, finish and planning area','location':None})
         if draft['planner_task']=='channel' and not draft.get('channel'):
             errors.append({'reason':'channel boundary chains are required','location':None})

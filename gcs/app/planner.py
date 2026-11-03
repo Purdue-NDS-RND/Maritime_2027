@@ -73,16 +73,23 @@ def suggest(object_map, direction):
             'diagnostics':['Geometry candidates may overlap tasks. Assign objects and confirm every role; unknown passing sides require operator input.']}
 
 
-def generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60):
+def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60):
     deadline=time.monotonic()+max_seconds
     draft=deepcopy(draft)
     preferred=finite(draft.get('preferred_buffer_m',draft['clearance_m']))
     if preferred<finite(draft['clearance_m']):
         raise ValueError('preferred buffer must be at least required buffer')
-    if not draft.get('planner_task') or not draft.get('sizes_confirmed') or not draft.get('course_confirmed') or not draft.get('planning_area') or not draft.get('entry') or not draft.get('exit'):
+    if not draft.get('planner_task') or not draft.get('sizes_confirmed') or not draft.get('course_confirmed') or not draft.get('planning_area') or (draft.get('geometry_version')!=2 and (not draft.get('entry') or not draft.get('exit'))):
         return {'success':False,'diagnostics':['incomplete course assignments']}
+    course_input=deepcopy(draft)
     try:
         course=Course(object_map,draft)
+        if not course.planes:
+            raise ValueError('missing passage assignments')
+        draft=deepcopy(course.draft)
+        if course.general:
+            course_input.setdefault('attempt',{})['initial_progress']=course.initial_progress
+            course_input['attempt']['started_inside_channel']=course.start_inside_channel
     except (KeyError,ValueError) as error:
         return {'success':False,'diagnostics':[str(error)]}
     # An interval union on the entry plane can prove a blocked approach for
@@ -106,11 +113,13 @@ def generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000
         return {'success':False,'diagnostics':['obstructed approach: confirmed entry window is blocked at required buffer']}
     if draft['planner_task']=='channel' and not draft.get('channel'):
         return {'success':False,'diagnostics':['incomplete channel boundary assignments']}
-    if draft['planner_task']=='channel' and not entry_fits_channel(course):
+    if not course.general and draft['planner_task']=='channel' and not entry_fits_channel(course):
         return {'success':False,'diagnostics':['Channel entry window is too close to the permitted channel boundary for the required buffer. Move Entry inside the channel with enough room on each side; use Use live boat position to change only the attempt start.']}
     ref=course.reference; start=to_local(draft['start'],ref); finish=to_local(draft['finish'],ref)
     if course.clearance(start,start)<course.required or any(not contained(start,start,p,course.required) for p in course.polygons):
-        return {'success':False,'diagnostics':['obstructed approach: unsafe planning start']}
+        conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<course.required]
+        return {'success':False,'diagnostics':['obstructed approach: unsafe planning start'+(': '+', '.join(conflicts) if conflicts else ' at planning boundary')],
+                'errors':[{'code':'unsafe_start','reason':'Unsafe planning start','location':list(start),'objects':conflicts}]}
     if course.clearance(finish,finish)<course.required+draft['finish_radius_m'] or any(not contained(finish,finish,p,course.required+draft['finish_radius_m']) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
         return {'success':False,'diagnostics':['unsafe finish area']}
     polygon=course.polygons[0]; xmin=min(p[0] for p in polygon); xmax=max(p[0] for p in polygon)
@@ -119,7 +128,7 @@ def generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000
     attempts=[]
     for spacing in resolutions:
         # Grid anchored at exact start; goal has a separately checked connection.
-        initial=(0,0,0,-1); costs={initial:0}; parents={}; queue=[(course.heuristic(start,finish,0),0,initial)]; expanded=0; goal=None
+        initial=(0,0,course.initial_progress,-1); costs={initial:0}; parents={}; queue=[(course.heuristic(start,finish,course.initial_progress),0,initial)]; expanded=0; goal=None
         edge_cache={}
         def position(state):
             return start[0]+state[0]*spacing,start[1]+state[1]*spacing
@@ -162,7 +171,12 @@ def generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000
             path.append(position(state)); state=parents[state]
         path.append(start); path.reverse()
         # Greedy visibility simplification also preserves passage progress.
-        simplified=[start]; progress=0; i=0
+        path_progress=[course.initial_progress]
+        for a,b in zip(path,path[1:]):
+            if time.monotonic()>=deadline:
+                return {'success':False,'diagnostics':['Planning time limit reached while simplifying the route; no draft was generated.'],'attempts':attempts}
+            path_progress.append(course.edge(a,b,path_progress[-1]))
+        simplified=[start]; progress=course.initial_progress; i=0
         while i<len(path)-1:
             if time.monotonic()>=deadline:
                 return {'success':False,'diagnostics':['Planning time limit reached while simplifying the route; no draft was generated.'], 'attempts':attempts}
@@ -170,19 +184,72 @@ def generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000
             # Preserve attained preferred clearance on removed edges; no hidden shortcut penalty.
             baseline=course.clearance(path[i],path[i+1])
             for j in range(len(path)-1,i,-1):
+                if time.monotonic()>=deadline:
+                    return {'success':False,'diagnostics':['Planning time limit reached while simplifying the route; no draft was generated.'],'attempts':attempts}
                 candidate=course.edge(path[i],path[j],progress)
-                expected=progress
-                for k in range(i,j):
-                    expected=course.edge(path[k],path[k+1],expected)
-                    if expected is None:
-                        break
+                expected=path_progress[j]
                 if candidate is not None and candidate==expected and course.clearance(path[i],path[j])>=min(preferred,baseline)-1e-7:
                     chosen=j; break
             progress=course.edge(path[i],path[chosen],progress)
             simplified.append(path[chosen]); i=chosen
+        derived=draft
+        draft=deepcopy(course_input)
         draft['waypoints']=[to_gps(*p,ref) for p in simplified[1:]]
+        for key in ('derived_sections','excluded_sections','partial_attempt'):
+            if key in derived:
+                draft[key]=derived[key]
+        if course.general:
+            from shared.task_geometry import setup_identity
+            draft['generation_setup_sha256']=setup_identity(object_map,draft)
+        draft.pop('generation_errors',None)
         result=validate_route(object_map,draft)
+        if time.monotonic()>=deadline:
+            return {'success':False,'diagnostics':['Planning time limit reached during final GPS validation; no draft was generated.'],'attempts':attempts}
         if result['valid']:
+            draft['route_sections']=[]
+            progress=course.initial_progress
+            for i,(a,b) in enumerate(zip(simplified,simplified[1:])):
+                next_progress=course.edge(a,b,progress)
+                crossing=None
+                if progress==0 and next_progress>0:
+                    origin,forward,_,_,_,_=course.planes[0]
+                    u,v=dot(sub(a,origin),forward),dot(sub(b,origin),forward)
+                    if u<=0<v:
+                        fraction=-u/(v-u)
+                        crossing=tuple(a[k]+fraction*(b[k]-a[k]) for k in (0,1))
+                        draft['route_sections'].append({'leg':i,'kind':'approach','start':to_gps(*a,ref),'end':to_gps(*crossing,ref)})
+                draft['route_sections'].append({'leg':i,'kind':'task' if crossing or progress>0 else 'approach','start':to_gps(*(crossing or a),ref),'end':to_gps(*b,ref),'from_progress':progress,'to_progress':next_progress})
+                progress=next_progress
             return {'success':True,'draft':draft,'validation':result,'attempts':attempts,'diagnostics':[]}
         return {'success':False,'diagnostics':[e['reason'] for e in result['errors']],'attempts':attempts}
     return {'success':False,'diagnostics':['search exhaustion: no route at supported resolutions; blockage is not proven'], 'attempts':attempts}
+
+
+def generate(object_map, draft, *args, **kwargs):
+    try:
+        result=_generate(object_map,draft,*args,**kwargs)
+    except (ValueError,KeyError,TypeError) as error:
+        result={'success':False,'diagnostics':[str(error)]}
+    if not result['success'] and 'errors' not in result:
+        reason='; '.join(result['diagnostics'])
+        code='search_exhausted' if any(word in reason.lower() for word in ('exhaust','time limit')) else 'blocked' if any(word in reason.lower() for word in ('blocked','insufficient gate')) else 'invalid_setup'
+        location=None; related=[]
+        if 'start' in reason.lower():
+            location=list(to_local(draft['start'],object_map['geographic_reference']))
+        elif 'finish' in reason.lower():
+            location=list(to_local(draft['finish'],object_map['geographic_reference']))
+        for obj in [*object_map['buoys'],*object_map.get('obstacles',[])]:
+            if obj['id'] in reason:
+                location=list(to_local(obj['centre'],object_map['geographic_reference']));related.append(obj['id'])
+        passage=None
+        ids={o['id']:o for o in [*object_map['buoys'],*object_map.get('obstacles',[])]}
+        for p in draft.get('passages',[]):
+            if p.get('id') and p['id'] in reason:
+                passage=p['id']
+                objects=[ids[p[key]] for key in ('red','green','buoy') if p.get(key) in ids]
+                if objects:
+                    points=[to_local(o['centre'],object_map['geographic_reference']) for o in objects]
+                    location=[sum(p[i] for p in points)/len(points) for i in (0,1)]
+                    related.extend(o['id'] for o in objects)
+        result['errors']=[{'code':code,'reason':reason,'location':location,'objects':sorted(set(related)),'passage':passage,'boundary':'channel' if 'channel' in reason.lower() else None}]
+    return result

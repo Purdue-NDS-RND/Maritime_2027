@@ -14,6 +14,7 @@ from .workspace import Workspace, sha
 from .imports import import_points
 from .planner import suggest, generate
 from .course_setup import prepare_task
+from .attempts import capture_start, check_remaining_snapshot, suggest_remaining
 from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
 
@@ -37,7 +38,7 @@ app = FastAPI(lifespan=lifespan)
 @app.middleware('http')
 async def same_origin(request: IncomingRequest, call_next):
     origin = request.headers.get('origin')
-    if origin and origin not in ('http://localhost:8080', 'http://127.0.0.1:8080'):
+    if origin and origin not in (os.getenv('GCS_ORIGIN','http://localhost:8080'), 'http://127.0.0.1:8080'):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=403, content={'detail': 'cross-origin request rejected'})
     return await call_next(request)
@@ -98,6 +99,24 @@ def suggestions(data: dict):
     return checked(suggest, workspace.read()['map'], data['direction'])
 
 
+@app.post('/api/course/geometry')
+def geometry():
+    from shared.task_geometry import resolve_geometry
+    state=workspace.read()
+    draft={**state['draft'],'attempt':{'mode':'full'}}
+    resolved=checked(resolve_geometry,state['map'],draft)
+    return {key:resolved.get(key) for key in ('derived_sections','channel') if key in resolved}
+
+
+@app.post('/api/course/remaining')
+def remaining():
+    state=workspace.read()
+    draft=state['draft']
+    status=boat('/status') if draft.get('attempt',{}).get('start_source','live')=='live' else None
+    draft=checked(capture_start,draft,status)
+    return checked(suggest_remaining,state['map'],draft)
+
+
 @app.post('/api/generate')
 def generate_route():
     with workspace.lock:
@@ -105,7 +124,12 @@ def generate_route():
         if not state.get('map') or not state.get('draft'):
             raise HTTPException(422, 'import map and select a task first')
         checked(workspace.edit, {'draft': state['draft']})
-        result = checked(generate, state['map'], state['draft'])
+        draft=state['draft']
+        if draft.get('geometry_version')==2:
+            status=boat('/status') if draft.get('attempt',{}).get('start_source','live')=='live' else None
+            draft=checked(capture_start,draft,status)
+            checked(check_remaining_snapshot,state['map'],draft)
+        result = checked(generate, state['map'], draft)
         if result['success']:
             result['workspace'] = checked(workspace.edit, {'draft': result['draft']})
         return result
@@ -123,11 +147,15 @@ def approve():
 
 def validate_actual_start(approval):
     status = boat('/status')
-    if status.get('position_age_s') is None or status['position_age_s'] > 3 or status.get('heartbeat_age_s') is None or status['heartbeat_age_s'] > 3:
+    import math
+    if not status.get('position') or any(not isinstance(status.get(k),(int,float)) or not math.isfinite(status[k]) or not 0<=status[k]<=3 for k in ('position_age_s','heartbeat_age_s')):
         raise HTTPException(409, 'fresh vehicle position/heartbeat required')
     # Validate the actual start connection as well as the frozen planned start.
     draft = {**approval['inputs']['draft'], 'start': status['position'], 'start_heading_deg': status.get('heading_deg')}
-    result = checked(validate_route, approval['inputs']['map'], draft)
+    try:
+        result = validate_route(approval['inputs']['map'], draft)
+    except (ValueError,KeyError,TypeError) as error:
+        raise HTTPException(409, str(error)) from error
     if not result['valid']:
         raise HTTPException(409, result)
 

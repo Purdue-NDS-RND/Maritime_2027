@@ -89,3 +89,29 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(proposed.json()['draft']['clearance_m'],2)
         self.assertFalse(proposed.json()['draft']['course_confirmed'])
         self.assertFalse(self.calls)
+
+
+    def test_general_attempt_uses_generate_time_position_and_freezes_approval(self):
+        from test_general_course import GeneralCourseTests
+        m,d,gps=GeneralCourseTests().fixture()
+        d['planner_task']='gate';d['passages']=d['passages'][:1];d['finish']=gps(5,0)
+        d['attempt']['start_source']='live'
+        self.client.put('/api/workspace',json={'map':m,'new_import':True,'course':{}})
+        self.client.put('/api/workspace',json={'draft':d})
+        self.vehicle.update(position=gps(-4,0),position_age_s=5)
+        self.assertEqual(self.client.post('/api/generate').status_code,422)
+        self.vehicle['position_age_s']=.1
+        result=self.client.post('/api/generate').json()
+        self.assertTrue(result['success'],result)
+        self.assertEqual(result['draft']['start'],self.vehicle['position'])
+        self.assertIn('captured_at',result['draft']['attempt'])
+        self.assertEqual(self.client.post('/api/approve').status_code,200)
+        frozen=self.client.get('/api/workspace').json()['approval']
+        self.vehicle['position']=m['buoys'][0]['centre']
+        self.assertEqual(self.client.post('/api/upload').status_code,409)
+        self.assertEqual(self.client.get('/api/workspace').json()['approval'],frozen)
+        self.assertFalse(any(method!='GET' for _,method,_ in self.calls))
+        edited=self.client.get('/api/workspace').json()['draft']
+        edited['attempt'].update(mode='remaining',first_section=0,selection_confirmed=True)
+        self.client.put('/api/workspace',json={'draft':edited})
+        self.assertEqual(self.client.post('/api/approve').status_code,422)

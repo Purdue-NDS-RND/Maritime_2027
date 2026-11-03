@@ -42,3 +42,16 @@ export function crossingWindow(draft, key, ref) {
     const [x,y]=local(draft[key],ref),r=draft[`${key}_radius_m`]??1;
     return [-1,1].map(s=>gps([x-s*dy/length*r,y+s*dx/length*r],ref));
 }
+
+// Edge capsules illustrate the exclusion band for concave as well as convex
+// boundaries. Exact inset topology and segment validation belong to the backend.
+export function boundaryBands(points, buffer, ref) {
+    if(points.length<3||buffer<=0)return [];
+    const poly=points.map(p=>local(p,ref));
+    return poly.map((a,i)=>{
+        const b=poly[(i+1)%poly.length],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+        if(length<1e-7)return [];
+        const n=[-(b[1]-a[1])/length*buffer,(b[0]-a[0])/length*buffer];
+        return [[a[0]+n[0],a[1]+n[1]],[b[0]+n[0],b[1]+n[1]],[b[0]-n[0],b[1]-n[1]],[a[0]-n[0],a[1]-n[1]]].map(p=>gps(p,ref));
+    }).filter(p=>p.length);
+}

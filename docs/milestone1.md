@@ -476,7 +476,7 @@ inventory, exact removed tags and output remain in `canonical-runtime/`
 subject to unrelated host activity. Historical tags/containers are not runtime
 dependencies. Physical boat/radio behavior remains unverified.
 
-## GPS assisted planner extension (browser acceptance pending)
+## GPS assisted planner extension
 
 This subsequent scope adds separate gate/slalom/channel planning, independent
 retries and persistent reviewed course roles. It does not change the historical
@@ -671,3 +671,90 @@ validation, then Channel setup with the same preview enabled. Saved geometry
 and settings were retained; no vehicle commands were sent. Screenshot/build
 evidence is under `simulation/logs/channel-planner-fix/buffers-*`. This is a
 visual debugging aid, not new route or vehicle acceptance.
+
+### General-course planning (2026-11-01)
+
+Version 2 task geometry separates reviewed setup from attempt start/scope.
+Normal operation uses Live boat and Full task; Generate captures position and
+heartbeat no older than three seconds. Remaining section suggestions require
+operator confirmation and label the result as partial, without credit for
+excluded passages. Local finite crossings replace a mandatory manual Entry.
+Channels follow all chain points, reject invalid section connections and support
+safe inside starts. Approval freezes the selected progress and route; actual
+Upload/Start positions cannot silently change that selection. Workspace migration
+backs up existing state and preserves maps, routes and manual queues for review.
+
+Full-map Chrome checks exercised all three task generations, gate assignment
+correction, buffers before confirmation, the unchanged blocked-opening warning,
+ambiguous and explicitly confirmed Remaining section selection, partial labels,
+slalom validation/approval, and armed-upload blocking. The checks used an isolated
+workspace on port 8082; the operator's normal workspace was not replaced.
+Automated verification passed 68 GCS tests, frontend workflow/render/buffer checks,
+19 independent evaluator tests, production builds and simulator static checks.
+Raw inputs, build/test logs and runtime evidence are under ignored
+`simulation/logs/general-course/`. Independent simulator movement qualification is recorded below; HTTP completion
+alone was not used as acceptance.
+Physical boat/radio performance, detector avoidance, drone mapping, unexpected
+obstacle avoidance and continuous replanning remain unverified or deferred.
+
+
+One separate mission per task ran on each physical Gazebo fixture in run
+`20261101T182911-12690`, using isolated GCS workspaces and disarmed position
+resets. Target speed was **0.5 m/s**, required/preferred point buffers **1.5 m**,
+and independent minimum whole-hull clearance **0.25 m**. These test settings do
+not replace the operator's saved 2 m/s / 2 m settings or the application defaults.
+Actual speed includes pivots and stopped settling; this is not continuous-speed
+qualification. The rotated fixture turns all objects/footprints by **0.47 rad**.
+The bent fixture also staggers Dodge turns/the final gate and shifts both middle
+channel-chain points by 3 m, retaining all reviewed boundary vertices.
+
+| Fixture | Gate min hull clearance | Slalom min hull clearance | Channel min hull clearance |
+| --- | ---: | ---: | ---: |
+| Baseline | 1.286408 m | 1.032169 m | 5.243459 m |
+| Rotated | 1.260925 m | 0.952706 m | 5.191515 m |
+| Bent | 1.273973 m | 0.974589 m | 2.906822 m |
+
+All nine independently passed contiguous every-step physics evidence, finite
+local passage order/passing sides/stern clearance, whole-hull clearance against
+all circular and polygon objects, permitted-water containment, no contacts, and
+finish settling within 1 m at ≤0.2 m/s for 5 s. This is **one pass per task and
+fixture**, rather than three repeats of a frozen approval. Dynamic Gazebo pose
+fixtures were checked against frozen GPS maps at every recorded physics step;
+no simulator truth was used by boat steering or route generation.
+
+Two additional baseline-channel attempts started safely inside: Full task and
+an explicitly confirmed Remaining section. Both passed immediate containment,
+clearance, no-contact and stopped-finish evaluation, with minimum hull clearance
+**5.150066 m** and **5.392722 m**, respectively. The partial attempt excluded
+prior sections without changing the full setup or claiming competition completion.
+Moving the disarmed boat outside the approved full attempt's progress region
+caused Upload to return HTTP 409; the approval remained unchanged.
+Restoring a safe actual position allowed that same approved route to execute.
+
+The active contact recorder was qualified by deliberate disarmed contact after
+mission windows. One channel start was rejected by normal ArduPilot pre-arm
+checks after a test heading teleport (`DCM Yaw inconsistent 81 deg`). Subsequent
+resets preserved heading; no force-arm or parameter bypass occurred. A rotated
+channel setup rejection exposed near-duplicate normalized fractions after GPS
+round trips; numerical coalescing and a full-map rotation regression fixed it.
+Transient Gazebo reset-service timeouts received bounded, idempotent retries.
+Rejected inputs/operations remain archived separately from successful missions.
+
+All **11** saved GPS routes pass final-source segment/course/finish revalidation.
+Original static object poses were restored exactly; final boat position was
+within **0.033 m** of its original position, disarmed in HOLD at reported zero
+speed. No tuning, dynamics, firmware pins, camera assets, direct MAVLink ports
+or boat mission envelope changed. The normal GCS was updated locally; migration
+created a byte-exact workspace backup and preserved the reviewed/original maps,
+all saved routes, settings and manual queue while requiring renewed planner review.
+Chrome confirmed Live boat / Full task, unchanged saved 2 m/s / 2 m settings,
+live boat marker, buffers before review, and disabled generation until confirmation.
+
+Primary evidence: `qualification-summary.json`, `*-generated.json`,
+`*-approval.json`, `*-observation.jsonl`, `*-physics.jsonl.gz`, `*-evaluation.json`,
+`contact-proof.json`, `final-source-revalidation.json`,
+`operator-migration-verification.json`, `frozen-scene-verification.json` and
+`restoration-verification.json` under
+`simulation/logs/general-course/`. Physical boat/radio operation, arbitrary
+speed/error allowances, detector avoidance and continuous replanning remain
+unqualified. No Git commit or push was performed.

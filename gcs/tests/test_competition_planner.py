@@ -43,7 +43,7 @@ class CompetitionPlannerTests(unittest.TestCase):
                 self.assertEqual(result['draft']['clearance_m'],required)
                 self.assertTrue(validate_route(self.map,result['draft'])['valid'])
                 if task=='channel':
-                    self.assertNotEqual(to_local(d['start'],self.map['geographic_reference']),to_local(d['entry'],self.map['geographic_reference']))
+                    self.assertNotEqual(to_local(d['start'],self.map['geographic_reference']),to_local(result['draft']['derived_sections'][0]['centre'],self.map['geographic_reference']))
 
     def test_default_buffer_failure_explains_gate_without_reduction(self):
         proposal=prepare_task(self.map,'gate')
@@ -53,19 +53,15 @@ class CompetitionPlannerTests(unittest.TestCase):
         self.assertFalse(result['success']);self.assertIn('insufficient gate opening',result['diagnostics'][0])
         self.assertEqual(d['clearance_m'],1.8)
 
-    def test_channel_entry_near_side_returns_actionable_error(self):
+    def test_channel_start_near_side_returns_actionable_error(self):
         d=prepare_task(self.map,'channel',{'clearance_m':2})['draft']
         d.update(sizes_confirmed=True,course_confirmed=True)
         ref=self.map['geographic_reference']
-        d['entry']=to_gps(-61.627589,3.930947,ref)
-        d['start']=to_gps(-61.564887,3.885050,ref)
-        for polygon in (d['channel'],list(reversed(d['channel']))):
-            d['channel']=polygon
-            result=generate(self.map,d,max_expansions=0)
-            self.assertFalse(result['success'])
-            self.assertIn('Channel entry window',result['diagnostics'][0])
-            self.assertNotIn('attempts',result)
-            self.assertEqual(d['clearance_m'],2)
+        d['start']=to_gps(-61.627589,-3.930947,ref)
+        result=generate(self.map,d,max_expansions=0)
+        self.assertFalse(result['success'])
+        self.assertIn('boundary exclusion',result['diagnostics'][0])
+        self.assertEqual(d['clearance_m'],2)
 
     def test_planning_deadline_reports_exhaustion_without_claiming_blockage(self):
         d=prepare_task(self.map,'channel')['draft']

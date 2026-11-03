@@ -21,3 +21,9 @@ test('polygon buffer expands physical surfaces and entry is a finite lateral win
     assert.ok(Math.abs(window[0][0]-4)<1e-7&&Math.abs(window[1][0]-6)<1e-7);
     assert.ok(window.every(p=>Math.abs(p[1]-5)<1e-7));
 });
+test('concave boundaries have bands along every edge',async()=>{
+ const {boundaryBands}=await import('../src/buffers.js');
+ const concave=[[0,0],[12,0],[12,5],[5,5],[5,12],[0,12]].map(point);
+ assert.equal(boundaryBands(concave,2,ref).length,6);
+ assert.ok(boundaryBands(concave,2,ref).every(band=>band.length===4));
+});

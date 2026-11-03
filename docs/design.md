@@ -207,7 +207,7 @@ channel missions, using one persistent reviewed GPS object map and task-specific
 course roles/drafts. Live point imports require no simulator identity and are
 never simulator verified. Original observations are retained separately from
 operator corrections, including explicit dimension assumptions. Course geometry,
-direction, entry/exit/finish and bounded planning area require operator review;
+local direction, passage order, permitted boundaries and finish require operator review;
 geometry suggestions do not confirm assignments. Station annotations are optional.
 
 Deterministic metric grid A* carries ordered passage progress and incoming
@@ -245,21 +245,18 @@ collapsed. Labeled task suggestions are unconfirmed, use only imported GPS
 geometry/labels and preserve selected speed/buffers. Different map imports
 archive prior drafts rather than reusing incompatible identities.
 
-The planning boundary and all physical obstacles constrain the complete task
-approach. Before the finite task entry is crossed, extended passage planes do
-not prohibit approaching from another part of the competition map. Channel
-containment becomes active at entry; confirmed passage order/direction/sides
-remain mandatory thereafter, and the selected finish disk must be inside the
-channel and clear. This makes independent channel attempts from elsewhere on
-the course possible without weakening obstacle clearance.
+The planning boundary and all physical obstacles constrain the complete approach.
+Only finite local passage crossings affect progress; unrelated extended planes
+do not block return approaches. Each generated attempt captures its start and
+selected progress, and approval freezes those inputs for actual-position checks.
 
-### Proposed general-course planning revision (2026-11-01)
+### General-course planning (2026-11-01)
 
 Confirmed operating requirements: the course may have arbitrary geographic
 orientation, uneven buoy spacing, staggered gates and curved channel boundaries.
 Neither cardinal alignment nor collinearity is a valid prerequisite. The
-following is a proposal for review, not implemented planner behavior or new
-simulator/physical acceptance.
+implementation uses version 2 task geometry and separate attempt metadata.
+Qualification results and limits are recorded in the milestone.
 
 - Keep the reviewed GPS object map fixed while the boat moves. Use one fixed
   local metric reference for geometry; the boat start is a separate live
@@ -304,16 +301,41 @@ simulator/physical acceptance.
   finish. Mapping remains an import boundary for now; drone mapping, unexpected
   obstacle avoidance and continuous replanning remain deferred.
 
-Implementation should first remove straight-course setup assumptions and define
-start/progress semantics, then adapt planning/UI and qualify rotated, translated,
-staggered, uneven and bent full-course fixtures. Verify safe starts inside and
+The implementation separates task geometry and attempt progress before search
+and UI handling. Qualification covers rotated, translated, staggered, uneven
+and bent fixtures; measured limits are recorded in the milestone. Verify safe starts inside and
 outside channels, explicit partial retries, blocked openings, stale telemetry,
 changed starts after approval, narrow bends and ambiguous assignments. Static
 geometry checks must be followed by full-map browser workflows and independent
 simulator whole-hull passage/clearance/finish evaluation. Rotation equivalence is
 about valid task behavior and clearance, not identical grid-generated waypoints.
 
-Open decisions before implementation: whether channel attempts always require
-the official entrance or may explicitly resume inside, and how the operator
-defines permitted channel edges between sparse buoy observations. Existing
-finite-entry behavior remains in effect until this proposal is implemented.
+Agreed defaults are **Suggest, then confirm**, **Live boat**, and **Full task**.
+Generate captures position and heartbeat ages no greater than three seconds;
+offline planning explicitly selects Manual start. Remaining section suggestions
+never confirm themselves. The operator confirms or changes the first included
+section; excluded sections receive no completion credit. Movement over 1 m after
+that selection requires another review. Full task retains every assigned passage
+and shows any return approach. Safe starts in the selected first channel cell
+activate containment immediately; starts in later full-task cells retain the
+return to the beginning. A partial selection behind an inside start is rejected
+with instructions to review the first included section.
+
+Channel boundaries connect all ordered chain points, with operator correction.
+Progress connections pair the union of normalized chain-vertex distances.
+Crossing chains, self-intersections and sections outside permitted water require
+correction. Start/finish crossing stations use end-cap allowances where needed. Short
+first intervals retain the finite beginning opening; dense end observations
+require explicitly reviewed water and a finish beyond the last section.
+The permitted polygon is never expanded automatically. Outside connections enter through
+the selected beginning opening. Its entrance cap is traversable during connection;
+side boundary and physical obstacle buffers remain mandatory. Inside starts
+already in any boundary exclusion band are rejected. Finish clearance includes
+the entire stopping disk. An advanced connection crossing remains available.
+
+Workspace version 2 archives legacy state before migration, keeps saved routes,
+manual queues and assignment candidates, and revokes affected planner approvals.
+New attempts retain the complete setup even when selecting a partial run. Setup
+identity and the captured start must match at validation; actual-position checks
+at Upload/Start must preserve the approved progression and safe connection.
+Boat mission envelopes and GPS object-map formats are unchanged.

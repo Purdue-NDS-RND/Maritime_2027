@@ -5,8 +5,8 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import Planner from './Planner';
 import BoatControls from './BoatControls';
-import {heading,friendly} from './workflow';
-import {expandedFootprint,insetBoundary,crossingWindow} from './buffers';
+import {configuration,heading,friendly} from './workflow';
+import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 
 async function api(path, method='GET', body) {
     const response = await fetch('/api/' + path, {method, headers: {'Content-Type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)});
@@ -66,7 +66,7 @@ function App() {
     function edit(next) {
         setWorkspace(w=>{
             if(next.planner_task){
-                const {waypoints,start,planner_task,course_revision,...roles}=next;
+                const roles=configuration(next);const planner_task=next.planner_task;
                 return {...w,draft:next,course:{...w.course,[planner_task]:roles},approval:null};
             }
             return {...w,draft:next,approval:null};
@@ -79,8 +79,8 @@ function App() {
             if(mode==='inspect')return;
             if(mode==='waypoint'){edit({...draft,waypoints:[...draft.waypoints,point(e.latlng)],...(!draft.planner_task?{finish:point(e.latlng)}:{})});return;}
             const next={...draft,[mode]:['planning_area','channel'].includes(mode)?[...(draft[mode]||[]),point(e.latlng)]:point(e.latlng),course_confirmed:false};
-            if(mode==='start'){edit(next);setMode('inspect');return;}
-            const {waypoints,start,planner_task,course_revision,...roles}=next;
+            if(mode==='start'){next.attempt={...draft.attempt,start_source:'manual',selection_confirmed:false};edit(next);setMode('inspect');return;}
+            const roles=configuration(next);const planner_task=next.planner_task;
             changeWorkspace({...workspace,draft:next,course:draft.planner_task?{...workspace.course,[draft.planner_task]:roles}:workspace.course,approval:null});
             if(!['planning_area','channel'].includes(mode))setMode('inspect');
         });
@@ -140,6 +140,8 @@ function App() {
                     else L.circle(latlng(obj.centre),{...style,radius:obj.radius_m+radius}).addTo(group);
                 }
                 for(const key of ['planning_area','channel'])if(draft[key]?.length>=3){
+                    for(const band of boundaryBands(draft[key],radius,ref))L.polygon(band,{...style,stroke:false,fillOpacity:.08}).addTo(group);
+                    for(const vertex of draft[key])L.circle(latlng(vertex),{...style,radius,stroke:false,fillOpacity:.04}).addTo(group);
                     const inset=insetBoundary(draft[key],radius,ref);
                     if(inset?.length)L.polygon(inset,{...style,fillOpacity:0}).addTo(group);
                 }
@@ -152,20 +154,31 @@ function App() {
             else L.marker(latlng(station.position),{interactive:false,icon:L.divIcon({className:'station-anchor',html:'',iconSize:[0,0]})}).addTo(group).bindTooltip(document.createTextNode(station.label),{permanent:true,direction:'center',className:'station-tooltip'});
         }
         if(overlays&&map){
-            for(const p of draft.passages||[]){
+            for(const [passageIndex,p] of (draft.passages||[]).entries()){
                 const objects=[...map.buoys,...(map.obstacles||[])];
                 if(p.kind==='gate'){const a=objects.find(o=>o.id===p.red),b=objects.find(o=>o.id===p.green);if(a&&b)L.polyline([latlng(a.centre),latlng(b.centre)],{color:'#f7df78',dashArray:'3 4'}).addTo(group).bindTooltip(`Gate · ${friendly(p.red)} / ${friendly(p.green)}`);}
-                else {const o=objects.find(o=>o.id===p.buoy);if(o)L.marker(latlng(o.centre),{icon:icon(p.side==='left'?'L':p.side==='right'?'R':'?','#766044')}).addTo(group).bindTooltip(`Pass ${p.side||'?'} · ${friendly(p.buoy)} · relative to ${heading(draft.direction)} travel`);}
+                else {const o=objects.find(o=>o.id===p.buoy);if(o)L.marker(latlng(o.centre),{icon:icon(`${passageIndex+1}${p.side==='left'?'L':p.side==='right'?'R':'?'}`,'#766044')}).addTo(group).bindTooltip(`Pass ${p.side||'?'} · ${friendly(p.buoy)} · relative to ${heading(draft.direction)} travel`);}
+            }
+            for(const [i,section] of (draft.derived_sections||[]).entries()){
+                const excluded=draft.attempt?.mode==='remaining'&&i<(draft.attempt.first_section||0);
+                if(section.a)L.polyline([latlng(section.a),latlng(section.b)],{color:excluded?'#777':'#f7df78',dashArray:'4 4'}).addTo(group).bindTooltip(`Section ${i+1}${excluded?' · excluded from partial attempt':''}`);
+                L.marker(latlng(section.centre),{icon:icon(i+1,excluded?'#666':'#766044')}).addTo(group);
+                if(section.direction){const [x,y]=local(section.centre,map.geographic_reference);const d=section.direction;L.polyline([gps([x-2*d[0],y-2*d[1]],map.geographic_reference),gps([x+2*d[0],y+2*d[1]],map.geographic_reference)],{color:'#f7df78'}).addTo(group).bindTooltip('Local travel →');const at=gps([x+3*d[0],y+3*d[1]],map.geographic_reference);L.marker(at,{interactive:false,icon:L.divIcon({className:'travel-arrow',html:`<span style="display:block;transform:rotate(${Math.atan2(d[0],d[1])*180/Math.PI}deg);font-size:26px;color:#f7df78">↑</span>`,iconSize:[24,28],iconAnchor:[12,14]})}).addTo(group);}
             }
             for(const key of ['planning_area','channel'])if(draft[key]?.length)L.polygon(draft[key].map(latlng),{color:key==='channel'?'#44ddb5':'#ffce70',fillOpacity:.03}).addTo(group);
-            if(draft.exit)L.circle(latlng(draft.exit),{radius:draft.exit_radius_m||1,color:'#fff'}).addTo(group).bindTooltip('Exit',{permanent:true,direction:'top',className:'setup-tooltip'});
-            if(draft.entry){
+            if(draft.geometry_version!==2&&draft.exit)L.circle(latlng(draft.exit),{radius:draft.exit_radius_m||1,color:'#fff'}).addTo(group).bindTooltip('Exit',{permanent:true,direction:'top',className:'setup-tooltip'});
+            if(draft.connection_override){
+                const window=crossingWindow({...draft,entry:draft.connection_override},'entry',map.geographic_reference);
+                if(window.length)L.polyline(window,{color:'#fff',weight:5}).addTo(group).bindTooltip('Reviewed physical connection crossing',{permanent:true,direction:'top',className:'setup-tooltip'});
+            }
+            if(draft.geometry_version!==2&&draft.entry){
                 const window=crossingWindow(draft,'entry',map.geographic_reference);
                 if(window.length)L.polyline(window,{color:'#fff',weight:5}).addTo(group).bindTooltip('Entry · cross here to begin the task',{permanent:true,direction:'top',className:'setup-tooltip'});
             }
             for(const section of validation?.preferred_shortfalls||[]){const route=[draft.start,...draft.waypoints];L.polyline([latlng(route[section.leg]),latlng(route[section.leg+1])],{color:'#ff963f',weight:8}).addTo(group).bindTooltip(`Achieved clearance ${section.clearance_m.toFixed(3)} m`);}
         }
-        if(draft.waypoints.length)L.polyline([latlng(draft.start),...draft.waypoints.map(latlng)],{color:'#6ea9ff',weight:3}).addTo(group);
+        if(draft.route_sections?.length)for(const section of draft.route_sections){const route=[draft.start,...draft.waypoints];if(route[section.leg+1])L.polyline([latlng(section.start||route[section.leg]),latlng(section.end||route[section.leg+1])],{color:section.kind==='approach'?'#d9b470':'#6ea9ff',weight:5}).addTo(group).bindTooltip(section.kind==='approach'?'Approach to first included passage':'Task route');}
+        if(draft.waypoints.length&&!draft.route_sections?.length)L.polyline([latlng(draft.start),...draft.waypoints.map(latlng)],{color:'#6ea9ff',weight:3}).addTo(group);
         for(const [i,p]of draft.waypoints.entries()){
             const marker=L.marker(latlng(p),{draggable:mode==='waypoint',icon:icon(i+1,'#487dce')}).addTo(group);
             marker.on('dragend',()=>{const {draft,edit}=current.current;const moved=point(marker.getLatLng());edit({...draft,waypoints:draft.waypoints.map((v,n)=>n===i?moved:v),...(i===draft.waypoints.length-1?{finish:moved}:{})});});
@@ -174,7 +187,7 @@ function App() {
         L.marker(latlng(draft.start),{icon:icon('S','#596579')}).addTo(group).bindTooltip('Planning start');
         L.circle(latlng(draft.finish),{radius:draft.finish_radius_m,color:'#ab91f2',fillOpacity:0.1}).addTo(group).bindTooltip('Finish',{permanent:true,direction:'top',className:'setup-tooltip'});
 
-        for(const failure of validation?.errors||[])if(failure.location&&map){const [x,y]=failure.location;const ref=map.geographic_reference;const lat=ref.latitude+y/111319.49079327357;const lon=ref.longitude+x/(111319.49079327357*Math.cos(lat*Math.PI/180));L.circleMarker([lat,lon],{radius:10,color:'#ff5d68'}).addTo(group).bindTooltip(failure.reason);}
+        for(const failure of [...(validation?.errors||[]),...(draft.generation_errors||[])])if(failure.location&&map){const [x,y]=failure.location;const ref=map.geographic_reference;const lat=ref.latitude+y/111319.49079327357;const lon=ref.longitude+x/(111319.49079327357*Math.cos(lat*Math.PI/180));L.circleMarker([lat,lon],{radius:10,color:'#ff5d68'}).addTo(group).bindTooltip(failure.reason);}
     },[workspace,validation,ready,labels,stations,overlays,buffers,mode]);
     useEffect(()=>{
         if(!ready||(!telemetry?.position&&!boatMarker.current))return;
@@ -229,7 +242,7 @@ function App() {
       <div className="workspace-layout">
         <section className="map-panel" aria-label="Course map">
           <div className="map-toolbar"><div><strong>{workspace.map?.name||'Course map'}</strong><small>{workspace.map?`${workspace.map.buoys.length} buoys · ${workspace.map.obstacles?.length||0} props`:'Load a map to begin'}</small></div><div className="button-row"><button className={buffers?'buffer-toggle active-tool':'buffer-toggle quiet'} aria-pressed={buffers} onClick={()=>setBuffers(!buffers)}>Show buffers</button><button className="quiet" onClick={()=>fitMap()}>Full course</button><button className="quiet" disabled={!draft.planner_task} onClick={()=>fitMap(true)}>Selected task</button><details className="map-options"><summary>Map layers</summary>{[['Object labels',labels,setLabels],['Station annotations',stations,setStations],['Planning overlays',overlays,setOverlays],['Street background',tiles,setTiles]].map(([name,value,set])=><label key={name}><input type="checkbox" checked={value} onChange={e=>set(e.target.checked)}/>{name}</label>)}</details></div></div>
-          {buffers&&<div className="buffer-legend"><strong>Buffer preview · required {draft.clearance_m} m{draft.preferred_buffer_m>draft.clearance_m?` · preferred ${draft.preferred_buffer_m} m`:''}</strong><span>Amber: required obstacle exclusion and boundary inset. Blue: preferred room, when larger. Start ring shows clearance at S; finish ring includes its stopping radius. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)===null)&&<span>Concave or unfinished boundary: inset preview unavailable; validation still checks it.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
+          {buffers&&<div className="buffer-legend"><strong>Buffer preview · required {draft.clearance_m} m{draft.preferred_buffer_m>draft.clearance_m?` · preferred ${draft.preferred_buffer_m} m`:''}</strong><span>Amber: required obstacle exclusion and boundary inset. Blue: preferred room, when larger. Start ring shows clearance at S; finish ring includes its stopping radius. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
           <div id="course-map"/>
           <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode==='inspect'?'Inspect mode · click an object for details.':mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel'].includes(mode)?`Drawing ${mode==='channel'?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
           <div className="map-caption"><span>Objects are obstacles · blue line is the boat route · L/R are passing sides relative to travel</span>{tileError&&<span>Street background unavailable; planning still works.</span>}</div>

@@ -111,8 +111,12 @@ def evaluate(samples, footprint, course, start_s, end_s):
         if not task_active and previous and entry:
             direction=entry['direction'];length=math.hypot(*direction)
             forward=[v/length for v in direction];left=[-forward[1],forward[0]];origin=entry['origin']
-            before=sum((previous[k]-origin[i])*forward[i]for i,k in enumerate(('x','y')))
-            after=sum(((x,y)[i]-origin[i])*forward[i]for i in (0,1))
+            if entry.get('activate_on_stern'):
+                before=min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in previous['polygon'])
+                after=min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in polygon)
+            else:
+                before=sum((previous[k]-origin[i])*forward[i]for i,k in enumerate(('x','y')))
+                after=sum(((x,y)[i]-origin[i])*forward[i]for i in (0,1))
             if before<=0<after:
                 fraction=-before/(after-before)
                 crossing=[previous[k]+fraction*((x,y)[i]-previous[k])for i,k in enumerate(('x','y'))]
@@ -122,6 +126,8 @@ def evaluate(samples, footprint, course, start_s, end_s):
             # Independent physics-footprint projection into each confirmed course frame.
             # Legacy evaluation specs default to +X, with lateral coordinates in world Y.
             for index, passage in enumerate(sequence):
+                if course.get('finite_passages') and next_passage==0 and index!=0:
+                    continue
                 direction = passage.get('direction', [1, 0])
                 length = math.hypot(*direction)
                 if not length:
@@ -132,7 +138,7 @@ def evaluate(samples, footprint, course, start_s, end_s):
                 def project(point, axis):
                     return sum((point[i]-origin[i])*axis[i] for i in (0, 1))
                 centre_plane = project((x,y), forward)
-                if previous is None and centre_plane > enclosing_radius:
+                if not course.get('finite_passages') and previous is None and centre_plane > enclosing_radius:
                     missing.append('recording starts after passage approach')
                     continue
                 old_plane = project((previous['x'],previous['y']),forward) if previous else centre_plane
@@ -141,6 +147,8 @@ def evaluate(samples, footprint, course, start_s, end_s):
                     continue
                 longitudinal = [project(p, forward) for p in polygon]
                 lateral = [project(p, left) for p in polygon]
+                if course.get('finite_passages') and (min(lateral)>passage['y_max'] or max(lateral)<passage['y_min']):
+                    continue
                 lowest, highest = min(longitudinal), max(longitudinal)
                 if previous is None and highest >= 0:
                     missing.append('recording starts after passage approach')

@@ -34,3 +34,9 @@ assert.match(controls({armed:true,mode:4,speed_m_s:0},true),/disabled=""[^>]*>Di
 const armedReview=renderToStaticMarkup(<Planner {...props} draft={manual} step={3} stale={false} dirty={false} workspace={{...props.workspace,approval:{envelope:{mission:{mission_id:'test'}}}}} status={{armed:true,mode:4}}/>);
 assert.match(armedReview,/disabled=""[^>]*>3. Upload to boat<\/button>/);
 assert.match(armedReview,/Disarm using Boat controls/);
+const general={...draft,planner_task:'channel',geometry_version:2,attempt:{mode:'remaining',start_source:'live',first_section:1},derived_sections:[{id:'section_1'},{id:'section_2'}]};
+const generalHtml=renderToStaticMarkup(<Planner {...props} draft={general} step={2}/>);
+assert.match(generalHtml,/Live boat/);assert.match(generalHtml,/Full task/);assert.match(generalHtml,/Remaining section/);
+assert.match(generalHtml,/no completion credit/);assert.match(generalHtml,/I confirm this partial selection/);
+assert.match(generalHtml,/disabled=""[^>]*>Generate route/);
+assert.doesNotMatch(generalHtml,/Entry is a separate/);

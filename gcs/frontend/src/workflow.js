@@ -12,7 +12,7 @@ export function manualDraft(settings, position) {
 }
 export const friendly = value => (value||'Unknown object').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 export function configuration(draft) {
-    const {waypoints,start,planner_task,course_revision,...roles}=draft;
+    const {waypoints,start,planner_task,course_revision,attempt,derived_sections,excluded_sections,partial_attempt,route_sections,generation_errors,generation_setup_sha256,...roles}=draft;
     return roles;
 }
 export function heading(direction) {
@@ -23,9 +23,9 @@ export function heading(direction) {
 export function missingSetup(draft) {
     if(!draft.planner_task)return [];
     const missing=[];
-    for(const [key,label] of [['entry','Task entry'],['exit','Task exit'],['finish','Finish area'],['direction','Travel direction']])if(!draft[key])missing.push(label);
+    for(const [key,label] of [...(draft.geometry_version===2?[]:[['entry','Task entry'],['exit','Task exit']]),['finish','Finish area'],['direction','Travel direction']])if(!draft[key])missing.push(label);
     if((draft.planning_area||[]).length<3)missing.push('Planning boundary');
-    if(draft.planner_task==='channel'&&(draft.channel||[]).length<3)missing.push('Channel boundary');
+    if(draft.planner_task==='channel'&&(draft.channel||[]).length<3&&!(draft.channel_chains?.left?.length>=2&&draft.channel_chains?.right?.length>=2))missing.push('Channel boundary');
     if(draft.planner_task==='gate'&&!draft.passages?.some(p=>p.kind==='gate'))missing.push('Gate pair');
     if(draft.planner_task==='slalom'&&!draft.passages?.some(p=>p.kind==='turn'))missing.push('Slalom turns');
     if(draft.passages?.some(p=>p.kind==='turn'&&!['left','right'].includes(p.side)))missing.push('Passing sides');
