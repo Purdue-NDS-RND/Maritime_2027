@@ -4,6 +4,16 @@ Last updated: 2026-11-04. A portable numerical implementation and synthetic demo
 now exist under `drone/`; see [commands](../drone/README.md). Optional ROS package/launch
 source exists but has not run. Hardware and physical accuracy remain unverified.
 
+## Detailed explanatory documents
+
+The [pipeline report](perception_reports/Maritime_Pipeline_Report.docx) contains a visual
+walkthrough and component responsibilities. The [completion plan](perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+separates missing software, owner-answerable inputs, experiments and integration checks.
+Both describe source `999f1ac`; the maintained references here remain authoritative as
+code evolves. The [first-test guide](../drone/README.md#first-tests-with-manual-pixels-and-real-recordings)
+connects manual pixel replay to an initial measured land-grid recording without waiting
+for trained inference or flight. No physical validation is claimed by publishing them.
+
 ## Implemented standalone milestone
 
 The actual entry point is `perception_synthetic.demo`: it generates explicit measurement

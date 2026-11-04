@@ -77,6 +77,111 @@ Missing calibration, unknown required covariance, missing heading/height quality
 timing produces explicit rejection/unavailability. A rejected measurement never becomes
 a fresh GPS observation; retained tracks may still be explicitly predicted/stale.
 
+## First tests with manual pixels and real recordings
+
+The [pipeline report](../docs/perception_reports/Maritime_Pipeline_Report.docx) explains
+current components and visuals. The [completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+separates implementation work, owner-answerable questions and experimental tests.
+These are source-pinned snapshots of commit `999f1ac`; this README and the topic documents
+remain the living references. No physical acceptance or new runtime behavior is implied.
+
+Start with the analytic and stationary commands above. Inspect `evaluation.json`,
+`result/reports.jsonl`, `result/observations.jsonl` and rejection diagnostics. Then change
+only one input at a time. Target GPS coordinates are evaluation references, not raycast
+inputs; supplying those as results would bypass the algorithms being tested.
+
+### Inject a chosen pixel through the existing replay contract
+
+After running the analytic demo above, this creates a separate, explicitly synthetic
+session containing one manually chosen pixel per frame. It copies vehicle states and
+calibration unchanged, excludes truth, and refuses to overwrite an existing session.
+Run from the repository root:
+
+```bash
+.venv/bin/python - <<'PYTHON'
+import json
+from pathlib import Path
+
+source = Path("simulation/logs/perception/analytic-demo/session")
+target = Path("simulation/logs/perception/manual-pixel-session")
+target.mkdir(parents=True, exist_ok=False)
+config = json.loads((source / "config.json").read_text())
+config["survey_id"] = "synthetic_manual_pixel"
+(target / "config.json").write_text(json.dumps(config, indent=2) + "\n")
+with (target / "measurements.jsonl").open("w") as output:
+    for raw in (source / "measurements.jsonl").read_text().splitlines():
+        event = json.loads(raw)
+        if event["kind"] == "frame":
+            frame = event["data"]
+            frame["detections"] = [{
+                "id": frame["id"] + "_manual", "class_id": "buoy",
+                "pixel_uv": [700.0, 480.0],
+                "pixel_covariance": [[0.25, 0.0], [0.0, 0.25]],
+                "reference_method": "water_centre",
+            }]
+        output.write(json.dumps(event, allow_nan=False) + "\n")
+PYTHON
+.venv/bin/python -m maritime_perception.replay --session simulation/logs/perception/manual-pixel-session --output simulation/logs/perception/manual-pixel-result
+```
+
+In this specific synthetic calibration, the camera is at ENU `(0,0,4)`, attitude is
+identity, the fixed optical mount maps image right toward South, `fx=fy=600`, the
+principal point is `(640,480)`, and water is at `Up=0`. Pixel `(700,480)` must therefore
+project to `(East,North)=(0,-0.4)` metres. `(640,480)` gives `(0,0)`; `(640,330)` gives
+`(1,0)`. These expectations depend on the declared mount, not an assumed IMX519 orientation.
+The documented example was executed on 2026-11-04: four reports, one confirmed identity,
+final ENU `(0,-0.4000000000000001,0)`, and no replay errors. This is a noiseless-pose
+software check, not a measured accuracy result.
+
+The nonzero pixel covariance is a synthetic assumption. `water_centre` is justified here
+by the planar point target; that string does not validate a real buoy reference method.
+
+Inspect the last report's `tracks`, `position_enu_m`, `position_wgs84` and `uncertainty`.
+A changed measurement file invalidates the original scenario's evaluator correspondences;
+use these analytic checks or a separately updated evaluator. Do not reuse old truth as
+though it described edited observations. All generated sessions/results stay ignored.
+
+### Establish the first real recording
+
+Collect a read-only camera/telemetry recording before building a live adapter. The core
+already exports JSON reports; the highest-value missing interfaces are upstream:
+
+| Stream or fact | Record or establish | Why it blocks a valid physical test |
+| --- | --- | --- |
+| FCU and host inventory | Actual controller/firmware, GNSS receiver, available USB/serial/network interface, JetPack/Python/ROS versions | Select one supported acquisition path without assuming the boat's setup applies |
+| Vehicle state | Position, full quaternion including earth-referenced heading, velocity/angular rate, source timestamps, quality and any covariance | Raw IMU alone cannot anchor object GPS; capture rates, units, frames and reset behavior |
+| Camera | Original images, image IDs, resolution/mode/focus/exposure, available sensor and arrival timestamps | Calibration and exposure-time pose must describe these exact pixels |
+| Geometry | Intrinsics/distortion, optical-to-body rotation, lens/body/antenna offsets, target-plane height | A real image plus arbitrary pose/calibration cannot establish physical geolocation error |
+| Error and timing | Unknown fields explicitly marked; measured or justified uncertainty model and clock mapping | Do not set unknown covariance to zero or certify arrival time as exposure time |
+
+If ROS is already installed, `ros2 topic list -t` and selected `ros2 topic info -v`,
+`ros2 topic echo` and `ros2 topic hz` observations can inventory the *actual* interfaces.
+If telemetry is available only as MAVLink, retain a read-only telemetry log and document
+its message fields; do not assume ROS topics or request a new flight/arming sequence.
+Preserve raw records even when fields are unknown. The production projection should
+reject unavailable requirements until the adapter/calibration contract is established.
+
+For the first physical geometry experiment, use a stationary mounted camera over a flat
+measured target grid on land. Manually annotate the planar target centres, measure camera
+height/orientation and local target offsets, calibrate the chosen image mode, and replay
+with timestamps and declared uncertainty. Flat ground temporarily plays the modeled
+surface; this isolates geometry before moving-camera timing, buoy freeboard or detector
+errors. Test centre and edge targets, then rotate the rig and repeat. Absolute GPS truth
+is unnecessary for a relative-grid test.
+
+An arbitrary configured WGS84 origin can exercise geodetic serialization in an explicitly
+labeled synthetic/bench fixture. It cannot validate absolute GPS accuracy. Vehicle fixes
+are converted into fixed-origin ENU with `GeodeticConverter.to_enu(latitude, longitude,
+ellipsoid_height)`; never insert latitude/longitude degrees into `position_enu_m`. Keep
+origin uncertainty and GNSS common errors. Real target GPS/reference coordinates remain
+outside processing inputs. Mixed real pixels/fake state are a software smoke test only.
+Do not silently select synthetic mode/calibration after a hardware failure.
+
+The first integration deliverable is one replayable short session: original images,
+raw telemetry, timestamps/clock evidence, calibration/mount/height measurements, annotated
+pixels and a separate measured target grid. A live ROS adapter, trained YOLO, flight,
+radio and GCS importer are later increments; none is needed to start this land test.
+
 ## Tests and implementation boundaries
 
 Verified on 2026-11-04: 74 drone tests and 11 existing GCS workspace tests passed.

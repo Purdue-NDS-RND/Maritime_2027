@@ -31,6 +31,16 @@ handoff report for each chat. New chats should read this index rather than the f
 The current GitHub feature branch is the canonical shared context. The earlier exported
 Markdown pack is a historical starting point; use current repository files for future work.
 
+## Readable reports and first bench test
+
+The user-requested [pipeline report](../docs/perception_reports/Maritime_Pipeline_Report.docx)
+and [completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+are explanatory snapshots pinned to source `999f1ac`, not new acceptance evidence.
+The [README first-test guide](README.md#first-tests-with-manual-pixels-and-real-recordings)
+shows explicit manual-pixel injection through replay and the inventory/recording needed
+for a stationary planar-grid experiment. Fake origins exercise software only; target
+truth stays outside processing, and unknown physical inputs remain unavailable.
+
 ## Implemented portable milestone (2026-11-04)
 
 `maritime_perception/` contains validated source-neutral records, explicit clock mapping,

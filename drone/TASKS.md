@@ -237,6 +237,18 @@ SP-41/SP-42/SP-40 require actual sensors/reference trials. No camera, FCU or rad
 
 ## Recommended next development slice
 
+The [completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+is a source-pinned explanatory snapshot; acceptance remains with the task IDs here.
+The [first-test guide](README.md#first-tests-with-manual-pixels-and-real-recordings)
+provides a replayable manual-pixel example and an inventory/flat-grid recording checklist.
+Prioritize SP-01/SP-02/SP-04/SP-05/SP-06: observed interfaces, source clocks, measured
+camera calibration/mount/height and annotated planar targets. Relative bench geometry
+can be tested without an accurate WGS84 anchor; absolute GPS acceptance cannot.
+The documented manual-pixel replay was executed with four reports, one confirmed track
+at the analytical `(0,-0.4)` m EN point, and no replay errors. Both existing demos and
+all 74 drone tests passed again. These checks do not complete the hardware tasks or
+select an unverified runtime.
+
 Run the README demonstration first. Then establish SP-01/SP-02/SP-04 and SP-41/SP-42
 hardware/frame/clock/covariance contracts, replace synthetic sources with annotated real
 recordings and evaluate SP-34. Collect SP-14 in parallel. Keep the deterministic replay
