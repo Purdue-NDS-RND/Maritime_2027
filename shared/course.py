@@ -191,7 +191,7 @@ class Course:
                 # The entrance may be omitted only when the start is in its
                 # selected first cell. Later cells require the full return.
                 next_plane=self.planes[1] if len(self.planes)>1 else None
-                if next_plane is None or dot(sub(start,next_plane[0]),next_plane[1])<0:
+                if not draft.get('require_full_entrance') and (next_plane is None or dot(sub(start,next_plane[0]),next_plane[1])<0):
                     self.initial_progress=1
                 elif draft.get('attempt',{}).get('mode')=='remaining':
                     raise ValueError('start lies beyond the selected remaining channel section; review and confirm a later first section')
@@ -385,7 +385,7 @@ def validate_course(object_map,draft):
     if progress!=len(course.planes):
         errors.append({'reason':'route must cross all confirmed passages in order','location':None})
     finish=to_local(draft['finish'],course.reference)
-    if any(not contained(finish,finish,p,course.required+draft['finish_radius_m']) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
+    if any(not contained(finish,finish,p,course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m'])) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
         errors.append({'reason':'unsafe finish area at course boundary','location':list(finish)})
     if draft.get('planner_task'):
         if draft['planner_task'] not in ('gate','slalom','channel'):

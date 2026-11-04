@@ -164,6 +164,7 @@ python3 -m unittest discover -s tests -p test_camera_rate.py -q
 
 python3 -m unittest discover -s tests -p test_scene_export.py -q
 python3 -m unittest discover -s tests -p test_evaluator.py -q
+python3 -m unittest discover -s tests -p test_survey_scenarios.py -q
 python3 -m unittest discover -s tests -p test_calibration.py -q
 
 python3 -m unittest discover -s tests -p test_competition.py -q

@@ -77,3 +77,20 @@ const pointReview=renderToStaticMarkup(<Planner {...props} step={1} selected={ma
 assert.match(pointReview,/I reviewed object positions and types/);
 assert.doesNotMatch(pointReview,/Radius \(m\)|Height \(m\)|I reviewed object sizes/);
 assert.ok([...map.buoys,...map.obstacles].every(o=>o.type==='point'&&!('radius_m' in o)&&!('footprint' in o)));
+
+const runDraft={...draft,planning_mode:'competition',selected_tasks:['gate','slalom','channel'],task_setup:{},settings:{speed_m_s:.5,clearance_m:1.8,preferred_buffer_m:3,tower_avoidance:{hard_m:1.8,soft_m:10,strength:10}},planning_area:[],attempt:{mode:'full',start_source:'live'},share_gate:false,execution_budget_s:500};
+const runSetup=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition',run_draft:runDraft}} draft={runDraft} step={3}/>);
+assert.match(runSetup,/Competition run/);assert.match(runSetup,/Complete tasks in standard order/);
+assert.match(runSetup,/Individual task overrides apply only to separate missions/);
+assert.match(runSetup,/disabled=""[^>]*>Generate competition run/);
+assert.match(runSetup,/Review shared entrance gate/);
+assert.doesNotMatch(runSetup,/Remaining section/);
+const runReview=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition'}} draft={{...runDraft,waypoints:[draft.finish],route_length_m:100,nominal_travel_s:200,suggested_budget_s:460,blocks:[{task:'slalom',tasks:['gate','slalom'],waypoint_start:0,waypoint_end:1,stopped_finish:true}]}} step={4}/>);
+assert.match(runReview,/suggested budget 460/);assert.match(runReview,/telemetry derived, not judge-confirmed/);
+assert.match(runReview,/stopped finish/);assert.match(runReview,/Use suggested budget/);
+const inheritedZones={...runDraft,settings:{...runDraft.settings,tower_avoidance:{...runDraft.settings.tower_avoidance,overrides:{tower_a:{hard_m:2,soft_m:12}}}}};
+const inheritedHtml=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition'}} draft={inheritedZones} step={3}/>);
+assert.match(inheritedHtml,/Individual tower zones for this run/);assert.match(inheritedHtml,/take precedence/);
+const badBudgetHtml=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition'}} draft={{...runDraft,execution_budget_s:7201}} step={3}/>);
+assert.match(badBudgetHtml,/Execution budget must be within/);
+assert.match(badBudgetHtml,/disabled=""[^>]*>Generate competition run/);

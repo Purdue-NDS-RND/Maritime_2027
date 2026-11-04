@@ -44,7 +44,12 @@ def project_footprint(footprint, x, y, roll, pitch, yaw):
 
 def evaluate(samples, footprint, course, start_s, end_s):
     minimum = math.inf
+    polygon_bounds = {}
+    for name, obstacle in course.get('polygon_obstacles', {}).items():
+        centre = obstacle['pose'][:2]
+        polygon_bounds[name] = (centre, max(math.dist(centre,p) for p in obstacle['footprint']))
     task_active = not course.get("task_entry")
+    channel_active = not course.get('channel_entry')
     failures, missing, passages, trajectory = [], [], [], []
     sequence = course['passages']
     next_passage = 0
@@ -64,7 +69,7 @@ def evaluate(samples, footprint, course, start_s, end_s):
             continue
         count += 1
         poses = {item['name']: item['pose'] for item in sample['poses']}
-        required = {'blueboat/base_link', *course['buoys']}
+        required = {'blueboat/base_link', *course['buoys'], *course.get('polygon_obstacles', {}), *course.get('frozen_objects', {})}
         if not required <= set(poses):
             missing.append('missing boat or buoy pose')
             continue
@@ -84,6 +89,9 @@ def evaluate(samples, footprint, course, start_s, end_s):
         except (ValueError, KeyError, TypeError) as error:
             missing.append(str(error))
             continue
+        for name, expected in course.get('frozen_objects', {}).items():
+            if math.dist(poses[name][:2],expected) > .01:
+                missing.append('physical object differs from frozen scene: '+name)
         step_minimum = math.inf
         enclosing_radius = max(math.hypot(px-x, py-y) for px, py in polygon)
         for name, buoy in course['buoys'].items():
@@ -94,6 +102,20 @@ def evaluate(samples, footprint, course, start_s, end_s):
             separation = polygon_clearance(polygon, poses[name][:2], buoy['radius_m'])
             step_minimum = min(step_minimum, separation)
             minimum = min(minimum, separation)
+        from shared.course import polygon_gap, inside
+        for name, obstacle in course.get('polygon_obstacles', {}).items():
+            original = obstacle['pose']
+            pose = poses[name]
+            if math.dist(pose[:2], original[:2]) > .01 or abs(math.remainder(pose[5]-original[5], 2*math.pi)) > .01:
+                missing.append('polygon obstacle moved from frozen physical scene: '+name)
+            centre, radius = polygon_bounds[name]
+            if math.dist((x,y),centre)-radius-enclosing_radius > step_minimum:
+                continue
+            poly = obstacle['footprint']
+            # Signed polygon-to-polygon separation, including full containment.
+            distance = -1e-9 if any(inside(p,polygon) for p in poly) or any(inside(p,poly) for p in polygon) else min(polygon_gap(poly,a,b) for a,b in zip(polygon,polygon[1:]+polygon[:1]))
+            step_minimum = min(step_minimum, distance)
+            minimum = min(minimum, distance)
         speed = 0
         if previous is not None:
             dt = t - previous['time_s']
@@ -122,10 +144,23 @@ def evaluate(samples, footprint, course, start_s, end_s):
                 crossing=[previous[k]+fraction*((x,y)[i]-previous[k])for i,k in enumerate(('x','y'))]
                 lateral=sum((crossing[i]-origin[i])*left[i]for i in (0,1))
                 task_active=abs(lateral)<=entry.get('half_width_m',1)
+        entrance = course.get('channel_entry')
+        if entrance and not channel_active and previous and next_passage >= course.get('channel_starts_after', 0):
+            direction = entrance['direction']; length = math.hypot(*direction)
+            forward = [v/length for v in direction]; origin = entrance['origin']
+            before = min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in previous['polygon'])
+            after = min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in polygon)
+            left = [-forward[1], forward[0]]
+            lateral = sum(((x,y)[i]-origin[i])*left[i] for i in (0,1))
+            if before <= 0 < after and abs(lateral) <= entrance['half_width_m']:
+                channel_active = True
         if task_active:
             # Independent physics-footprint projection into each confirmed course frame.
             # Legacy evaluation specs default to +X, with lateral coordinates in world Y.
+            active_block = sequence[min(next_passage,len(sequence)-1)].get('block') if sequence else None
             for index, passage in enumerate(sequence):
+                if active_block is not None and passage.get('block') != active_block:
+                    continue
                 if course.get('finite_passages') and next_passage==0 and index!=0:
                     continue
                 direction = passage.get('direction', [1, 0])
@@ -171,7 +206,7 @@ def evaluate(samples, footprint, course, start_s, end_s):
                         next_passage += 1
                 if old_stern is not None and old_stern > 0 >= lowest and index < next_passage:
                     failures.append('reversed cleared passage: ' + passage['id'])
-        for boundary in [*course.get('boundary_polygons', []), *([course['task_channel']] if task_active and course.get('task_channel') else [])]:
+        for boundary in [*course.get('boundary_polygons', []), *([course['task_channel']] if task_active and channel_active and course.get('task_channel') else [])]:
             from shared.course import contained
             if -polygon_clearance(boundary,(x,y),0) > enclosing_radius:
                 continue
@@ -199,6 +234,8 @@ def evaluate(samples, footprint, course, start_s, end_s):
         missing.append('evidence does not cover mission window')
     if minimum < course['minimum_clearance_m']:
         failures.append('minimum footprint clearance violated')
+    if course.get('channel_entry') and not channel_active:
+        failures.append('reviewed channel entrance was not crossed')
     if not task_active:
         failures.append('confirmed task entry was not crossed')
     if next_passage != len(sequence):
@@ -233,6 +270,7 @@ def verify_contact_evidence(course, course_directory):
         course['contact_recorder_verified'] = (
             hashlib.sha256(path.read_bytes()).hexdigest() == course['contact_verification_sha256']
             and proof.get('scene_id') == course['scene_id'] and proof.get('outcome') == 'passed'
+            and ('contact_run_id' not in course or proof.get('run_id') == course['contact_run_id'])
             and any(s.get('contacts') for s in proof.get('samples', [])))
     except (ValueError, KeyError, OSError, TypeError):
         pass

@@ -198,6 +198,21 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual([item['x'] for item in self.link.stored[1:]],
                          [round(point.latitude * 1e7) for point in points])
 
+    def test_editable_execution_budget_times_out_and_never_restarts(self):
+        self.running()
+        self.executor.mission = replace(self.mission, timeout_s=10)
+        self.link.time += 11
+        self.executor.last_position = self.executor.last_gps = self.executor.last_heartbeat = self.link.time
+        self.executor.tick()
+        self.assertEqual(self.executor.state, "failed")
+        self.assertIn("timeout", self.executor.detail)
+        self.assertIn(("mode", 4), self.link.commands)
+        commands = list(self.link.commands)
+        self.executor.tick()
+        self.assertEqual(self.link.commands, commands)
+        with self.assertRaises(MissionError):
+            self.executor.start()
+
     def test_manual_takeover_does_not_send_hold_or_resume(self):
         self.running()
         self.link.put("HEARTBEAT", custom_mode=0, base_mode=128, autopilot=3, type=11)

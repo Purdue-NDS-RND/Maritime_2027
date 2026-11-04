@@ -68,9 +68,10 @@ function App() {
     const [results,setResults]=useState({});
     const watchedOperations=useRef(new Set());
     const mapRef=useRef(), layers=useRef(), tileRef=useRef(), vehicleLayer=useRef(), current=useRef(), [ready,setReady]=useState(false);
-    const draft=workspace.draft||blank();
-    const routeVisible=routeIsVisible(draft.planner_task,generatedTasks,activeTask);
-    const previewSettings=step===2?effectiveSettings(workspace.game_settings||defaultSettings(draft)):draft;
+    const competition=workspace.planning_mode==='competition';
+    const draft=(competition?workspace.run_draft:workspace.draft)||blank();
+    const routeVisible=routeIsVisible(competition?'competition':draft.planner_task,generatedTasks,activeTask);
+    const previewSettings=step===2?effectiveSettings(workspace.game_settings||defaultSettings(draft)):competition?{...draft,...draft.settings}:draft;
     function invalidateRoute(){setGeneratedTasks([]);}
     function updateSettings(settings){
         settingsChanged.current=true;invalidateRoute();
@@ -82,12 +83,14 @@ function App() {
         setMessage('Configuration saved. Choose a task, review its assignments, then Generate.');
     });}
     function changeWorkspace(w,mapEdit=false,isDirty=true){
-        if(mapEdit){invalidateRoute();mapChanged.current=true;for(const config of Object.values(w.course||{})){config.sizes_confirmed=false;config.course_confirmed=false;}if(w.draft){w.draft.sizes_confirmed=false;w.draft.course_confirmed=false;}}
+        if(mapEdit){invalidateRoute();mapChanged.current=true;for(const config of Object.values(w.course||{})){config.sizes_confirmed=false;config.course_confirmed=false;}if(w.draft){w.draft.sizes_confirmed=false;w.draft.course_confirmed=false;}if(w.run_draft){w.run_draft.generation_identity=null;w.run_draft.waypoints=[];}}
         setWorkspace(w);setDirty(isDirty);setValidation(null);
     }
     current.current={workspace,draft,edit,mode,changeWorkspace,setMode,setSelected,busy};
     function edit(next) {
+        if(competition&&['start','planning_area','settings','selected_tasks','task_setup','share_gate'].some(key=>next[key]!==draft[key]))invalidateRoute();
         setWorkspace(w=>{
+            if(w.planning_mode==='competition')return {...w,run_draft:next,approval:null};
             if(next.planner_task){
                 const roles=configuration(next);const planner_task=next.planner_task;
                 return {...w,draft:next,course:{...w.course,[planner_task]:roles},approval:null};
@@ -103,6 +106,7 @@ function App() {
             if(mode==='waypoint'){edit({...draft,waypoints:[...draft.waypoints,point(e.latlng)],...(!draft.planner_task?{finish:point(e.latlng)}:{})});return;}
             const next={...draft,[mode]:['planning_area','channel'].includes(mode)?[...(draft[mode]||[]),point(e.latlng)]:point(e.latlng),course_confirmed:false};
             if(mode==='start'){next.attempt={...draft.attempt,start_source:'manual',selection_confirmed:false};edit(next);setMode('inspect');return;}
+            if(workspace.planning_mode==='competition'){edit({...next,waypoints:[],generation_identity:null});if(!['planning_area','channel'].includes(mode))setMode('inspect');return;}
             const roles=configuration(next);const planner_task=next.planner_task;
             changeWorkspace({...workspace,draft:next,course:draft.planner_task?{...workspace.course,[draft.planner_task]:roles}:workspace.course,approval:null});
             if(!['planning_area','channel'].includes(mode))setMode('inspect');
@@ -176,7 +180,7 @@ function App() {
                     if(inset?.length)L.polygon(inset,{...style,fillOpacity:0}).addTo(group);
                 }
                 if(activeTask&&step>=3&&(routeVisible||draft.attempt?.start_source==='manual')&&draft.start)L.circle(latlng(draft.start),{...style,radius}).addTo(group);
-                if(activeTask&&step>=3&&draft.finish)L.circle(latlng(draft.finish),{...style,radius:(draft.finish_radius_m||0)+radius}).addTo(group);
+                if(activeTask&&step>=3&&draft.finish&&(!competition||draft.selected_tasks?.length))L.circle(latlng(draft.finish),{...style,radius:(draft.finish_radius_m||0)+radius}).addTo(group);
             }
         }
         if(map&&(buffers||step===2)&&previewSettings.tower_avoidance){
@@ -216,7 +220,29 @@ function App() {
             }
             for(const section of validation?.preferred_shortfalls||[]){const route=[draft.start,...draft.waypoints];L.polyline([latlng(route[section.leg]),latlng(route[section.leg+1])],{color:'#ff963f',weight:8}).addTo(group).bindTooltip(`Achieved clearance ${section.clearance_m.toFixed(3)} m`);}
         }
-        if(routeVisible&&draft.route_sections?.length)for(const section of draft.route_sections){const route=[draft.start,...draft.waypoints];if(route[section.leg+1])L.polyline([latlng(section.start||route[section.leg]),latlng(section.end||route[section.leg+1])],{color:section.kind==='approach'?'#d9b470':'#6ea9ff',weight:5}).addTo(group).bindTooltip(section.kind==='approach'?'Approach to first included passage':'Task route');}
+        if(competition&&step>=3&&overlays&&map){
+            for(const task of draft.selected_tasks||[]){
+                const setup=draft.task_setup?.[task];if(!setup)continue;
+                if(setup.channel?.length)L.polygon(setup.channel.map(latlng),{color:'#44ddb5',fillOpacity:.03}).addTo(group).bindTooltip('Channel containment');
+                for(const passage of setup.passages||[]){
+                    const points=[passage.red,passage.green,passage.buoy].filter(Boolean).map(id=>[...map.buoys,...(map.obstacles||[])].find(o=>o.id===id)?.centre).filter(Boolean);
+                    if(points.length===2)L.polyline(points.map(latlng),{color:task==='gate'?'#ffdf78':'#b199f0',weight:draft.share_gate&&task==='gate'?8:3}).addTo(group).bindTooltip(document.createTextNode(`${friendly(task)} ${passage.id}${draft.share_gate&&task==='gate'?' · confirmed shared crossing':''}`));
+                }
+                const geometry=draft.review_geometry?.[task];
+                if(geometry?.channel?.length)L.polygon(geometry.channel.map(latlng),{color:'#44ddb5',fillOpacity:.02}).addTo(group);
+                for(const [i,section] of (geometry?.derived_sections||[]).entries()){
+                    L.marker(latlng(section.centre),{icon:icon(i+1,'#766044')}).addTo(group).bindTooltip(document.createTextNode(`${friendly(task)} ${section.id}`));
+                    const [x,y]=local(section.centre,map.geographic_reference),d=section.direction;
+                    if(d){L.polyline([gps([x-2*d[0],y-2*d[1]],map.geographic_reference),gps([x+2*d[0],y+2*d[1]],map.geographic_reference)],{color:'#f7df78'}).addTo(group).bindTooltip(document.createTextNode(`${friendly(task)} local travel →`));}
+                }
+                for(const [i,p] of (setup.passages||[]).entries())if(p.kind==='turn'){
+                    const obj=map.buoys.find(o=>o.id===p.buoy);if(obj)L.marker(latlng(obj.centre),{icon:icon(`${i+1}${p.side==='left'?'L':'R'}`,'#766044')}).addTo(group).bindTooltip(document.createTextNode(`${friendly(task)} pass ${p.side}`));
+                }
+                if(setup.finish&&!(task==='gate'&&draft.share_gate))L.circleMarker(latlng(setup.finish),{radius:5,color:task===draft.selected_tasks.at(-1)?'#ab91f2':'#d9b470'}).addTo(group).bindTooltip(document.createTextNode(`${friendly(task)} ${task===draft.selected_tasks.at(-1)?'final stopped finish':'transit endpoint'}`));
+            }
+            if(draft.planning_area?.length)L.polygon(draft.planning_area.map(latlng),{color:'#ffce70',fillOpacity:.02}).addTo(group).bindTooltip('Common run planning boundary');
+        }
+        if(routeVisible&&draft.route_sections?.length)for(const section of draft.route_sections){const route=[draft.start,...draft.waypoints];if(route[section.leg+1])L.polyline([latlng(section.start||route[section.leg]),latlng(section.end||route[section.leg+1])],{color:['approach','connector'].includes(section.kind)?'#d9b470':'#6ea9ff',weight:5}).addTo(group).bindTooltip(['approach','connector'].includes(section.kind)?'Approach to first included passage':`Task route · ${section.task||draft.planner_task}`);}
         if(routeVisible&&draft.waypoints.length&&!draft.route_sections?.length)L.polyline([latlng(draft.start),...draft.waypoints.map(latlng)],{color:'#6ea9ff',weight:3}).addTo(group);
         for(const [i,p]of (routeVisible?draft.waypoints:[]).entries()){
             const marker=L.marker(latlng(p),{draggable:mode==='waypoint'&&!busy,icon:icon(i+1,'#487dce')}).addTo(group);
@@ -224,7 +250,7 @@ function App() {
             marker.bindTooltip('Waypoint '+(i+1)+(mode==='waypoint'?' · drag to move':' · enable Edit on map to move'));
         }
         if(activeTask&&step>=3&&(routeVisible||draft.attempt?.start_source==='manual'||activeTask==='manual'))L.marker(latlng(draft.start),{icon:icon('S','#596579')}).addTo(group).bindTooltip('Planning start');
-        if(activeTask&&step>=3)L.circle(latlng(draft.finish),{radius:draft.finish_radius_m,color:'#ab91f2',fillOpacity:0.1}).addTo(group).bindTooltip('Finish',{permanent:true,direction:'top',className:'setup-tooltip'});
+        if(activeTask&&step>=3&&draft.finish&&(!competition||draft.selected_tasks?.length))L.circle(latlng(draft.finish),{radius:draft.finish_radius_m,color:'#ab91f2',fillOpacity:0.1}).addTo(group).bindTooltip('Finish',{permanent:true,direction:'top',className:'setup-tooltip'});
 
         for(const failure of [...(validation?.errors||[]),...(draft.generation_errors||[]),...(focusedFailure?[focusedFailure]:[])])if(failure.location&&map){const [x,y]=failure.location;const ref=map.geographic_reference;const lat=ref.latitude+y/111319.49079327357;const lon=ref.longitude+x/(111319.49079327357*Math.cos(lat*Math.PI/180));L.circleMarker([lat,lon],{radius:10,color:'#ff5d68',failureReason:failure.reason}).addTo(group).bindTooltip(failure.reason,{permanent:failure===focusedFailure,direction:'top',className:'failure-tooltip'});}
     },[workspace,validation,ready,labels,stations,overlays,buffers,mode,step,activeTask,routeVisible,selected,focusedFailure,busy]);
@@ -241,7 +267,7 @@ function App() {
     function endWork(){pendingWork.current=Math.max(0,pendingWork.current-1);setBusy(pendingWork.current>0);}
     async function run(work){beginWork();try{return await work();}catch(error){reportError(error);}finally{endWork();}}
     async function save(next=current.current.workspace,mapEdit=mapChanged.current){
-        const value=await api('workspace','PUT',{draft:next.draft||blank(),course:next.course||{},...(settingsChanged.current?{game_settings:next.game_settings||defaultSettings(draft)}:{}),...(mapEdit?{map:next.map}:{})});
+        const value=await api('workspace','PUT',{planning_mode:next.planning_mode||'single',...(next.run_draft?{run_draft:next.run_draft}:{}),draft:next.draft||blank(),course:next.course||{},...(settingsChanged.current?{game_settings:next.game_settings||defaultSettings(draft)}:{}),...(mapEdit?{map:next.map}:{})});
         mapChanged.current=false;settingsChanged.current=false;setWorkspace(value);setDirty(false);return value;
     }
     async function action(name){beginWork({validate:'Validating route',approve:'Approving route',upload:'Requesting upload',start:'Requesting start',stop:'Requesting Hold / Stop',disarm:'Requesting Disarm'}[name]);try{
@@ -291,12 +317,12 @@ function App() {
       <div className="workspace-layout">
         <section className="map-panel" aria-label="Course map">
           <div className="map-toolbar"><div><strong>{workspace.map?.name||'Course map'}</strong><small>{workspace.map?`${workspace.map.buoys.length} buoys · ${workspace.map.obstacles?.length||0} props`:'Load a map to begin'}</small></div><div className="button-row"><button className={(buffers||step===2)?'buffer-toggle active-tool':'buffer-toggle quiet'} aria-pressed={buffers||step===2} title={step===2?'Buffers stay visible while configuring distances.':'Toggle buffer preview'} onClick={()=>{if(step===2)setMessage('Buffer preview stays visible while configuring distances.');else setBuffers(!buffers);}}>Show buffers</button><button className="quiet" onClick={()=>fitMap()}>Full course</button><button className="quiet" disabled={!draft.planner_task||!activeTask} onClick={()=>fitMap(true)}>Selected task</button><details className="map-options"><summary>Map layers</summary>{[['Object labels',labels,setLabels],['Station annotations',stations,setStations],['Planning overlays',overlays,setOverlays],['Street background',tiles,setTiles]].map(([name,value,set])=><label key={name}><input type="checkbox" checked={value} onChange={e=>set(e.target.checked)}/>{name}</label>)}</details></div></div>
-          {(buffers||step===2)&&<div className="buffer-legend"><strong>Buffer preview · required {previewSettings.clearance_m} m · preferred {previewSettings.preferred_buffer_m??previewSettings.clearance_m} m</strong><span>Amber: required clearance. Blue: preferred room. Purple: tower hard exclusion and fading soft avoidance. Tower distances follow the object surface. Task overrides appear when that task is selected. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],draft.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
+          {(buffers||step===2)&&<div className="buffer-legend"><strong>Buffer preview · required {previewSettings.clearance_m} m · preferred {previewSettings.preferred_buffer_m??previewSettings.clearance_m} m</strong><span>Amber: required clearance. Blue: preferred room. Purple: tower hard exclusion and fading soft avoidance. Tower distances follow the object surface. Task overrides appear when that task is selected. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],previewSettings.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],previewSettings.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
           <div id="course-map"/>
           <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode==='inspect'?(step===2?'Configuration · click a purple tower to adjust its zones.':'Inspect mode · click an object for details.'):mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel'].includes(mode)?`Drawing ${mode==='channel'?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
           <div className="map-caption"><span>{routeVisible?'Blue: generated route · amber: approach · L/R: reviewed passing sides':'No course route displayed · Generate a task route when ready'}</span>{tileError&&<span>Street background unavailable; planning still works.</span>}</div>
         </section>
-        <aside aria-label="Mission workflow"><Planner workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>setGeneratedTasks(tasks=>[...new Set([...tasks,task])])} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
+        <aside aria-label="Mission workflow"><Planner workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>{setActiveTask(task);setGeneratedTasks(tasks=>[...new Set([...tasks,task])]);}} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
       </div>
       <Feedback notice={notice} busy={busy} label={workLabel} elapsed={Math.max(0,Math.floor((now-startedAt)/1000))} onDismiss={()=>{setNotice(null);setFocusedFailure(null);}} onReview={step=>{setStep(step);setMode('inspect');setNotice(null);if(step===4)requestAnimationFrame(()=>{const details=document.getElementById('command-results');if(details){details.open=true;details.scrollIntoView({block:'center'});}});}} onFocus={focusFailure}/>
       <section className="feedback" aria-live="polite"><p>{message}</p><details><summary>Connection details and map source</summary><p>Boat API: {stale?'offline or stale':status?.state}. Position: {telemetryStale?'unavailable or stale':'live'}. Speed: {telemetry?.speed_m_s?.toFixed(2)??'—'} m/s. Heading: {telemetry?.heading_deg?.toFixed(1)??'—'}°.</p><p>{workspace.map?.schema_version===3?'GPS map · unverified':workspace.map?'Simulator map · alignment required':'No map loaded'}</p><code>{workspace.map?.scene_id||''}</code></details></section>

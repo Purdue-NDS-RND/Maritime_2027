@@ -391,3 +391,44 @@ hidden radius or footprint. Existing live workspaces are backed up byte-for-byte
 before conversion; original observations and saved routes/manual queues remain,
 while approval and map/task review are invalidated. Regenerate planner routes
 and revalidate manual routes after reviewing total centre-based allowances.
+
+## Continuous competition runs and imperfect surveys
+
+The optional Competition run mode composes any nonempty selection in Gate →
+Slalom → Channel order from reviewed complete task setups. Single task remains
+the default for existing workspaces; manual queues and individual drafts remain
+separate. A run has its own common planning boundary, point-buffer/tower settings,
+speed, execution budget and fresh Live boat start (position and heartbeat ≤3 s).
+Manual start is explicitly offline. Individual task overrides apply only to
+separate missions. All blocks share one 60-second generation/simplification
+budget. Every emitted segment is validated with its task and global waypoint
+range; joins remain intact. Connecting approaches obey the common boundary and
+all hard zones. Only the final waypoint has stopped-finish semantics in the
+unchanged ordinary boat mission format. Channel is last and retains containment
+from its reviewed entrance through its finish.
+
+Matching Gate/Slalom entrance pairs with matching forward crossing and connection
+requirements may share one event only after explicit confirmation. The resulting
+block contains the full Slalom progression. Otherwise both crossing requirements
+remain and the operator reviews the return approach. Opposite directions cannot
+share. This relationship records planned semantics, not official scoring credit.
+
+Generation publishes a complete run atomically. Approval freezes map, setups,
+settings, start, sharing and complete path. Relevant edits revoke authority;
+Upload/Start recheck the initial connection and start displacement (≤1 m).
+Start consumes run execution authority even if its outcome is unknown. Stop or
+GCS restart requires fresh generation/approval of complete tasks. Uploaded boat
+execution remains independent of GCS connectivity. No automatic resume,
+regeneration, upload or next-task command is introduced.
+
+Survey developer tools perturb the imported point list while keeping the map
+reference and physical scene fixed. Reviewed assignment IDs are explicit inputs;
+the harness never reconstructs missing roles from physical truth. Capture time
+comes from the source and import time is separate. Missing/legacy capture times
+are unknown/unverified; age alone imposes no expiry. Seeded offset/point-error
+sweeps are exploratory inputs, not accuracy estimates. Independent physics
+assessment includes omitted objects, polygon props, hull passages, contacts,
+channel containment and stopped settling. Missing physics/contact proof makes
+acceptance inconclusive. See the simulator guide for isolated commands and the
+milestone for measured results and limits. Controller tuning, curves, physical
+qualification, drone flight automation and official scoring remain deferred.

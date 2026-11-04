@@ -485,3 +485,47 @@ messages identify the shared settings, task override or individual tower that
 needs correction. Task forms and map edits pause during requests, while the
 independent boat Stop controls remain available. These are frontend usability
 changes; planner constraints, approval rules and boat control are unchanged.
+
+## Optional competition run
+
+1. Review the full map, configure shared course settings, and review/confirm the
+   complete assignments for each selected task in Single task mode.
+2. In Task setup choose **Competition run**. Select any of Gate, Slalom and
+   Channel; the order is fixed. Review the per-task assignments and finish; use **Review run geometry on map**
+   to inspect local travel arrows and channel sections.
+3. Review one common planning boundary, one run speed and one set of hard/soft
+   point/tower zones. These initialize from shared course settings; separate task
+   overrides do not configure the run. Correct the run settings independently.
+4. Use **Review shared entrance gate**. Explicitly confirm sharing only for a
+   matching pair and forward direction. Without sharing, review the separate
+   Gate finish and return approach to Slalom. No scoring credit is asserted.
+5. Choose Live boat or explicit Manual start and press **Generate competition
+   run**. Generation captures a fresh start and has one 60-second budget. Failure
+   revokes the prior executable attempt and publishes no partial route.
+6. Review task/connector sections, global waypoint ranges, the shared crossing,
+   final finish, nominal travel time and execution budget. Suggested seconds are
+   `max(300, ceil(2 * route_length / speed + 60))`; explicitly choose a budget
+   within the boat's unchanged 10–7200 s limits. Suggestions over 7200 are flagged.
+7. Validate → Approve → disarmed Upload/readback → explicit Start. The boat gets
+   one ordinary mission (at most 500 GPS waypoints), one speed and one final
+   stopped finish. Intermediate endpoints carry no HOLD or settling command.
+
+Saved paths stay hidden on browser startup until Generate. Existing workspaces
+get a byte-exact `workspace-before-competition-run-*.json` backup before migration;
+maps, individual drafts, manual queues and historical approval files remain.
+Inside-channel run starts return to the first reviewed section; position alone
+does not establish completion. Runs use `planning_mode: "competition"` and a separate `run_draft`; Single task
+uses `planning_mode: "single"` and the existing `draft`. `/api/generate`,
+`/api/validate` and `/api/approve` act on the selected mode. `/api/run/prepare`
+initializes a run, `/api/run/geometry` derives review overlays, and `/api/run/relationship` checks its entrance relationship.
+Approval freezes all run inputs. A changed actual start or progress requires
+review; displacement over 1 m requires a fresh run. Start, Stop, manual takeover
+and GCS process restart never trigger automatic continuation. After an attempted
+Start or process restart, Generate and approve a complete run again.
+
+The UI estimates sections from ArduPilot's waypoint item; this is telemetry
+progress, not judge-confirmed task completion. GCS disconnection does not stop
+uploaded execution. Survey point JSON may include `captured_at` and
+`geographic_reference`; import preserves source capture time and records
+`imported_at` separately. Unknown/legacy survey times are unverified. No
+unmeasured age expiry rule is applied.

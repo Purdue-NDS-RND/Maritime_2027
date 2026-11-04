@@ -17,6 +17,8 @@ from .planner import suggest, generate
 from .course_setup import prepare_task
 from .settings import effective_settings
 from .attempts import capture_start, check_remaining_snapshot, suggest_remaining
+from .competition import generate_run, new_run, review_geometry
+from shared.competition import shared_gate
 from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
 
@@ -123,10 +125,40 @@ def remaining():
     return checked(suggest_remaining,state['map'],draft)
 
 
+@app.post('/api/run/prepare')
+def prepare_run():
+    state = workspace.read()
+    return checked(new_run, state)
+
+
+@app.post('/api/run/geometry')
+def run_geometry(data: dict):
+    return checked(review_geometry, workspace.read()['map'], data)
+
+
+@app.post('/api/run/relationship')
+def run_relationship(data: dict):
+    return checked(shared_gate, workspace.read()['map'], data)
+
+
 @app.post('/api/generate')
 def generate_route():
     with workspace.lock:
         state = workspace.read()
+        if state.get('planning_mode') == 'competition':
+            draft = state.get('run_draft')
+            if not draft or not state.get('map'):
+                raise HTTPException(422, 'Load a map and review the run setup first')
+            # Revoke the prior executable attempt before any fallible work.
+            workspace.state['approval'] = None
+            workspace.state['run_draft'].pop('generation_identity', None)
+            workspace.state['run_draft']['waypoints'] = []
+            workspace.save()
+            status = boat('/status') if draft.get('attempt', {}).get('start_source', 'live') == 'live' else None
+            result = checked(generate_run, state['map'], draft, status)
+            if result['success']:
+                result['workspace'] = workspace.publish_run(result['draft'])
+            return result
         if not state.get('map') or not state.get('draft'):
             raise HTTPException(422, 'import map and select a task first')
         state=checked(workspace.edit, {'draft': state['draft']})
@@ -159,7 +191,11 @@ def validate_actual_start(approval):
     # Validate the actual start connection as well as the frozen planned start.
     draft = {**approval['inputs']['draft'], 'start': status['position'], 'start_heading_deg': status.get('heading_deg')}
     try:
-        result = validate_route(approval['inputs']['map'], draft)
+        if draft.get('planning_mode') == 'competition':
+            from shared.competition import validate_run
+            result = validate_run(approval['inputs']['map'], approval['inputs']['draft'], status['position'])
+        else:
+            result = validate_route(approval['inputs']['map'], draft)
     except (ValueError,KeyError,TypeError) as error:
         raise HTTPException(409, str(error)) from error
     if not result['valid']:
@@ -178,12 +214,17 @@ def upload():
 def start():
     approval = checked(workspace.approved)
     validate_actual_start(approval)
+    workspace.consume_run()
     return boat('/missions/' + quote(approval['envelope']['mission']['mission_id'], safe='') + '/start', 'POST')
 
 
 @app.post('/api/stop')
 def stop():
-    return boat('/stop', 'POST')
+    # Send HOLD before waiting for workspace persistence or a planner lock.
+    try:
+        return boat('/stop', 'POST')
+    finally:
+        workspace.consume_run()
 
 
 @app.post('/api/disarm')

@@ -855,3 +855,89 @@ Browser interaction could not be checked because no browser surface was availabl
 Raw evidence is under ignored `simulation/logs/point-objects*`. No boat movement
 or physical/radio acceptance is claimed; historical whole-hull results remain
 limited to their recorded physical-map geometry and settings.
+
+### Imperfect surveys and continuous competition runs (2026-11-03)
+
+Implemented optional Single task / Competition run planning. Runs consume
+reviewed complete task setups, select any nonempty subset in Gate → Slalom →
+Channel order, and use one common boundary, speed and avoidance configuration.
+One shared 60-second generation/simplification deadline publishes the complete
+route atomically. Task/block joins remain fixed; every emitted GPS segment and
+its task/connector range is revalidated. Matching Gate/Slalom entrance crossings
+share a full Slalom block only after explicit confirmation. Opposite or
+incompatible crossings cannot share; unconfirmed requirements retain a return
+approach. Sharing records planned semantics, not official scoring credit.
+
+Approval freezes map, complete task setup, settings, fresh start, sharing and
+route. Upload/Start recheck actual position/initial progress. Start consumes run
+authority; Stop or GCS restart requires renewed generation/approval of complete
+tasks. Single tasks and manual routes retain their ordinary mission interface
+and five-minute timeout. Runs flatten into the same ≤500-waypoint mission with
+one speed and one editable 10–7200 s execution budget. Only the final finish
+stops. Nominal time and the suggested budget are shown during review.
+
+Developer tools generate seeded imperfect point surveys and execute them in
+isolated workspaces/private simulator networks. They refuse active operator
+runtimes, retain original observations, and never repair assignments from hidden
+truth. Source capture time and import time are separate; legacy/unknown survey
+times are unverified, with no age-based expiry. Physical evaluation independently
+checks all 29 true objects, including polygon props, the projected whole hull,
+ordered passages, contact evidence, channel containment and stopped settling.
+Missing physics or fresh recorder qualification remains inconclusive.
+
+The exploratory sweep covers offsets and bounded point errors at 0, 0.25, 0.5,
+1 and 2 m, seeds 0–2: **30 cases**, **17 map-valid routes**, **12 planning
+rejections** and **one search exhaustion**. All 17 generated paths pass final
+source revalidation. Channel test inputs explicitly use reviewed ordered chain
+IDs to derive permitted water; the common boundary and finish remain fixed.
+These inputs do not estimate hardware accuracy. Rejected cases were retained
+without forcing execution or reducing hard clearance. Separate evaluator tests
+prove that a map-valid route can fail against omitted true obstacles and polygon
+props, and that missing contact evidence produces an inconclusive result.
+
+Three consecutive baseline combined runs, a representative 0.25 m common offset
+and bounded 0.25 m independent point errors passed actual-motion evaluation:
+
+| Run | Minimum hull clearance | Maximum error during final settling | Peak settling speed |
+| --- | ---: | ---: | ---: |
+| Baseline 1 | 0.986867 m | 0.416444 m | 0.199534 m/s |
+| Baseline 2 | 0.986551 m | 0.411981 m | 0.199801 m/s |
+| Baseline 3 | 0.987009 m | 0.413306 m | 0.199953 m/s |
+| 0.25 m common offset, seed 1 | 1.096295 m | 0.431647 m | 0.199897 m/s |
+| Bounded 0.25 m point errors, seed 0 | 1.076120 m | 0.455534 m | 0.199636 m/s |
+
+Each run passed all nine ordered whole-hull events (the confirmed shared entrance
+is one event), no contacts, continuous channel containment, ≥0.25 m independent
+hull clearance, and settling within 1 m at ≤0.2 m/s for at least 5 s. Observed
+settling windows were 5.648–5.878 s. No intermediate HOLD was observed. All three
+baseline runs completed with the GCS disconnected. A separate interruption run
+confirmed HOLD/continued stopped state and rejection of repeated Start until a
+new complete run is generated and approved; it is not counted as task completion.
+Every accepted run has fresh per-runtime deliberate-disarmed-contact proof.
+Preliminary pre-arm/evidence failures and two unqualified diagnostic movement
+windows are retained separately and excluded from consecutive acceptance.
+
+Development settings were **0.5 m/s**, **1.8 m hard / 3 m preferred** point
+buffers, tower **1.8 m hard / 10 m soft, strength 10**, and a **1500 s** run
+execution budget. Controller tuning, dynamics, source pins, calibration assets,
+MAVLink ports and normal `make run` behavior were unchanged. The actual operator
+workspace was untouched. Copy-based migration verified exact backups and
+preservation of all existing fields after the pre-existing point-map migration;
+new run state defaults to Single task and retains maps, drafts, manual queues
+and historical approvals.
+
+Verification passed **92 backend tests**, **25 boat tests**, **8 survey-tool
+tests**, **19 evaluator tests**, frontend workflow/render/build checks, all seven
+full-map task selections and simulator static/SDF checks. Browser interaction
+could not be qualified: browser automation APIs failed before page inspection.
+The UI has render/build coverage, without a claimed interactive-browser pass.
+Physical boat/radio operation, turn qualification, curve smoothing, drone flight
+automation, detector effectiveness and official scoring remain deferred.
+
+Evidence: `simulation/logs/survey-competition/qualification-summary.json`,
+`planning-reviewed-chains/summary.json`, `full-map-final-selections.json`,
+`final-source-sweep-validation.json`, `operator-run-migration-verification.json`,
+and each run's inputs, change records, source/image identities, approval,
+acknowledgements, physics recording, contact proof and evaluation. The accepted
+baseline artifacts are `baseline-4` through `baseline-6`; `offset-025` and
+`point-025` are the error cases. No commit or push was performed.

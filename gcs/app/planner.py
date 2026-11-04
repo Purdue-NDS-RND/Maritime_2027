@@ -74,9 +74,10 @@ def suggest(object_map, direction):
             'diagnostics':['Geometry candidates may overlap tasks. Assign objects and confirm every role; unknown passing sides require operator input.']}
 
 
-def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60):
-    deadline=time.monotonic()+max_seconds
+def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60, deadline=None, transit_finish=False):
+    deadline=min(deadline, time.monotonic()+max_seconds) if deadline is not None else time.monotonic()+max_seconds
     draft=deepcopy(draft)
+    draft['transit_finish']=transit_finish
     preferred=finite(draft.get('preferred_buffer_m',draft['clearance_m']))
     if preferred<finite(draft['clearance_m']):
         raise ValueError('preferred buffer must be at least required buffer')
@@ -121,7 +122,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
         conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<zones(o,draft)[0]]
         return {'success':False,'diagnostics':['obstructed approach: unsafe planning start'+(': '+', '.join(conflicts) if conflicts else ' at planning boundary')],
                 'errors':[{'code':'unsafe_start','reason':'Unsafe planning start','location':list(start),'objects':conflicts}]}
-    if course.clearance(finish,finish)<course.required+draft['finish_radius_m'] or any(not contained(finish,finish,p,course.required+draft['finish_radius_m']) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
+    if course.clearance(finish,finish)<course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m']) or any(not contained(finish,finish,p,course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m'])) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
         return {'success':False,'diagnostics':['unsafe finish area']}
     polygon=course.polygons[0]; xmin=min(p[0] for p in polygon); xmax=max(p[0] for p in polygon)
     ymin=min(p[1] for p in polygon); ymax=max(p[1] for p in polygon)
@@ -227,7 +228,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
             from shared.task_geometry import setup_identity
             draft['generation_setup_sha256']=setup_identity(object_map,draft)
         draft.pop('generation_errors',None)
-        result=validate_route(object_map,draft)
+        result=validate_route(object_map,draft,transit_finish=transit_finish)
         if time.monotonic()>=deadline:
             return {'success':False,'diagnostics':['Planning time limit reached during final GPS validation; no draft was generated.'],'attempts':attempts}
         if result['valid']:

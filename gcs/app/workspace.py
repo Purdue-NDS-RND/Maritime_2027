@@ -25,6 +25,9 @@ class Workspace:
         self.lock = threading.RLock()
         self.path = self.directory / 'workspace.json'
         self.state = json.loads(self.path.read_text()) if self.path.exists() else {'map': None, 'draft': None, 'approval': None}
+        if 'planning_mode' not in self.state and self.path.exists():
+            backup = self.directory / ('workspace-before-competition-run-' + str(uuid.uuid4()) + '.json')
+            backup.write_bytes(self.path.read_bytes())
         if self.state.get('map') and 'original_map' not in self.state:
             self.state['original_map'] = deepcopy(self.state['map'])
         # Old clearance values excluded the hull and tracking allowance. Never
@@ -87,6 +90,30 @@ class Workspace:
             self.state['migration_notice'] = 'Saved routes and original observations retained. Objects now use GPS points. Review total centre-based hard/soft distances, then regenerate and approve.'
             self.save()
 
+        if 'planning_mode' not in self.state:
+            self.state.update(planning_mode='single', run_draft=None, run_consumed=False)
+            self.save()
+
+        if self.state.get('planning_mode') == 'competition':
+            # Process restart never restores execution authority for a run.
+            self.state['run_consumed'] = True
+            self.save()
+
+    def active_draft(self):
+        return self.state.get('run_draft') if self.state.get('planning_mode') == 'competition' else self.state.get('draft')
+
+    def publish_run(self, draft):
+        with self.lock:
+            self.state.update(run_draft=deepcopy(draft), approval=None, run_consumed=False)
+            self.save()
+            return self.read()
+
+    def consume_run(self):
+        with self.lock:
+            if self.state.get('planning_mode') == 'competition':
+                self.state['run_consumed'] = True
+                self.save()
+
     def save(self):
         temp = self.path.with_suffix('.tmp')
         temp.write_text(json.dumps(self.state, indent=2, allow_nan=False) + '\n')
@@ -130,7 +157,7 @@ class Workspace:
             if data.get('new_import'):
                 # Previous course/drafts remain in the import backup, not attached
                 # to unrelated object identities in the newly imported map.
-                updated.update(tasks={},course={},draft=None,selected_task=None)
+                updated.update(tasks={},course={},draft=None,selected_task=None,run_draft=None,run_consumed=False,planning_mode='single')
                 settings=updated.get('game_settings',{})
                 for value in [settings,*settings.get('task_overrides',{}).values()]:
                     if value.get('tower_avoidance'):
@@ -185,6 +212,24 @@ class Workspace:
                 if (updated.get('draft') or {}).get('planner_task'):
                     updated['draft']['course_revision'] = sha({'map': updated['map'], 'course': updated.get('course', {})})
                     updated['tasks'][updated['draft']['planner_task']] = deepcopy(updated['draft'])
+            if 'planning_mode' in data:
+                if data['planning_mode'] not in ('single', 'competition'):
+                    raise ValueError('planning_mode must be single or competition')
+                updated['planning_mode'] = data['planning_mode']
+            if 'run_draft' in data:
+                if not isinstance(data['run_draft'], dict):
+                    raise ValueError('run_draft must be an object')
+                updated['run_draft'] = deepcopy(data['run_draft'])
+            changed = any(updated.get(k) != self.state.get(k) for k in ('map', 'course', 'game_settings'))
+            if changed and updated.get('run_draft'):
+                updated['run_draft'].pop('generation_identity', None)
+                updated['run_draft'].pop('review_geometry', None)
+                updated['run_draft']['waypoints'] = []
+                if updated.get('map') != self.state.get('map'):
+                    updated['run_draft']['sizes_confirmed'] = False
+                    for config in updated['run_draft'].get('task_setup', {}).values():
+                        config['sizes_confirmed'] = False
+                        config['course_confirmed'] = False
             json.dumps(updated, allow_nan=False)
             updated.pop('migration_notice', None)
             self.state = updated
@@ -193,9 +238,14 @@ class Workspace:
 
     def validate(self):
         with self.lock:
-            if not self.state['map'] or not self.state['draft']:
+            if not self.state['map'] or not self.active_draft():
                 raise ValueError('import map and create route first')
-            draft = self.state['draft']
+            draft = self.active_draft()
+            if self.state.get('planning_mode') == 'competition':
+                if self.state.get('run_consumed'):
+                    return {'valid': False, 'errors': [{'reason': 'Run started, interrupted or GCS restarted: Generate and approve a new complete run', 'location': None}]}
+                from shared.competition import validate_run
+                return validate_run(self.state['map'], draft)
             if draft.get('planner_task') and draft.get('course_revision') != sha({'map': self.state['map'], 'course': self.state.get('course')}):
                 return {'valid': False, 'errors': [{'reason': 'course changed: review assignments and regenerate', 'location': None}]}
             if draft.get('geometry_version')==2 and not draft.get('attempt',{}).get('captured_at'):
@@ -211,13 +261,15 @@ class Workspace:
             result = self.validate()
             if not result['valid']:
                 raise ValueError(json.dumps(result))
-            inputs = {'map': self.state['map'], 'draft': self.state['draft']}
+            inputs = deepcopy({'map': self.state['map'], 'draft': self.active_draft(), 'planning_mode': self.state['planning_mode']})
+            if self.state['planning_mode'] == 'single':
+                inputs.pop('planning_mode')
             revision = sha(inputs)
             approval_id = str(uuid.uuid4())
             draft = inputs['draft']
             mission = {'mission_id': approval_id, 'waypoints': draft['waypoints'], 'speed_m_s': draft['speed_m_s'],
                        'finish_radius_m': draft['finish_radius_m'], 'finish_speed_m_s': 0.2, 'finish_settle_s': 5,
-                       'timeout_s': 300, 'max_start_distance_m': 100}
+                       'timeout_s': draft['execution_budget_s'] if self.state['planning_mode'] == 'competition' else 300, 'max_start_distance_m': 100}
             envelope = {'approval_id': approval_id, 'revision_sha256': revision,
                         'mission': mission}
             approval = {'approved_at': datetime.now(timezone.utc).isoformat(), 'inputs': inputs,
@@ -230,11 +282,16 @@ class Workspace:
 
     def approved(self):
         with self.lock:
+            if self.state.get('planning_mode') == 'competition' and self.state.get('run_consumed'):
+                raise ValueError('Run already started or interrupted: Generate and approve a new complete run')
             approval = self.state['approval']
             if approval is None:
                 raise ValueError('current draft has no approval')
-            if self.state['draft'].get('planner_task') and not self.validate()['valid']:
+            if (self.active_draft().get('planner_task') or self.state.get('planning_mode') == 'competition') and not self.validate()['valid']:
                 raise ValueError('course changed; regenerate, review and approve again')
-            if sha({'map': self.state['map'], 'draft': self.state['draft']}) != approval['envelope']['revision_sha256']:
+            inputs = {'map': self.state['map'], 'draft': self.active_draft()}
+            if self.state.get('planning_mode') == 'competition':
+                inputs['planning_mode'] = 'competition'
+            if sha(inputs) != approval['envelope']['revision_sha256']:
                 raise ValueError('approved inputs changed; approve again')
             return deepcopy(approval)

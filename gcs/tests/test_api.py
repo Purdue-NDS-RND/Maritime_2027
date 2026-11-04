@@ -146,3 +146,49 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload['gcs_session_id'],self.main.GCS_SESSION_ID)
         self.assertTrue(payload['stale'])
         self.assertFalse(self.calls)
+
+    def test_competition_atomic_generation_start_checks_and_consumption(self):
+        from test_competition_run import CompetitionRunTests
+        from copy import deepcopy
+        m,r,gps=CompetitionRunTests().fixture()
+        r['attempt']['start_source']='live'
+        self.client.put('/api/workspace',json={'map':m,'new_import':True})
+        self.client.put('/api/workspace',json={'planning_mode':'competition','run_draft':r})
+        geometry=self.client.post('/api/run/geometry',json=r)
+        self.assertEqual(geometry.status_code,200,geometry.text)
+        self.assertEqual(set(geometry.json()),{'gate','slalom','channel'})
+        self.assertFalse(self.calls)
+        self.vehicle.update(position=gps(-6,0),position_age_s=4)
+        self.assertEqual(self.client.post('/api/generate').status_code,200)
+        self.assertFalse(self.client.post('/api/generate').json()['success'])
+        self.assertIsNone(self.main.workspace.read()['approval'])
+        self.vehicle['position_age_s']=0
+        result=self.client.post('/api/generate').json();self.assertTrue(result['success'],result)
+        self.assertFalse(any(method!='GET' for _,method,_ in self.calls))
+        self.assertEqual(self.client.post('/api/approve').status_code,200)
+        frozen=deepcopy(self.main.workspace.read()['approval'])
+        self.vehicle['position']=gps(-3,0)
+        self.assertEqual(self.client.post('/api/upload').status_code,409)
+        self.assertEqual(self.main.workspace.read()['approval'],frozen)
+        self.vehicle['position']=gps(-6,0)
+        self.assertEqual(self.client.post('/api/upload').status_code,200)
+        self.assertEqual(self.client.post('/api/start').status_code,200)
+        self.assertEqual(self.client.post('/api/start').status_code,422)
+        self.assertEqual(self.client.post('/api/approve').status_code,422)
+        self.assertTrue(self.client.post('/api/generate').json()['success'])
+        self.assertEqual(self.client.post('/api/approve').status_code,200)
+        self.client.post('/api/stop')
+        self.assertEqual(self.client.post('/api/start').status_code,422)
+
+    def test_stop_is_sent_before_workspace_persistence_even_if_outcome_unknown(self):
+        for unknown in (False,True):
+            events=[]
+            def command(*args):
+                events.append('hold')
+                if unknown:
+                    raise self.main.HTTPException(503,'unknown outcome')
+                return {'operation_id':'stop'}
+            with patch.object(self.main,'boat',command), patch.object(self.main.workspace,'consume_run',lambda:events.append('persist')):
+                response=self.client.post('/api/stop')
+            self.assertEqual(events,['hold','persist'])
+            self.assertEqual(response.status_code,503 if unknown else 200)

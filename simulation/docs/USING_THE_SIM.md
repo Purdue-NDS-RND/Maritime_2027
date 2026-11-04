@@ -242,3 +242,71 @@ Historical measured-profile acceptance used explicit tuning and telemetry; see
 [milestone reproduction](../../docs/milestone1.md#implementation-and-reproduction).
 Radio setup is in the [GCS guide](../../gcs/README.md#live-map-telemetry);
 physical radio operation remains unverified.
+
+## Imperfect-survey and continuous-run developer tools
+
+These tools add no normal GCS controls and leave `make run` unchanged. Run from
+`simulation/`. Inputs/outputs belong under ignored `logs/`. Supply a reviewed
+competition `run_draft` JSON containing explicit task setups, selected tasks,
+common boundary/settings, start, full attempt and execution budget. Do not use
+previously generated waypoints as task setup. For offline planning set
+`attempt.start_source` to `manual`. After reviewing a run in the GCS, capture its
+explicit inputs without sending vehicle commands:
+
+```bash
+curl -fsS http://localhost:8080/api/workspace | python3 -c \
+  'import json,sys; print(json.dumps(json.load(sys.stdin)["run_draft"], indent=2))' \
+  > logs/reviewed-run-input.json
+```
+
+The test fixture must explicitly decide
+whether a channel polygon is fixed surveyed water or derived from its reviewed
+chain IDs (`channel: []`); fixed boundary conflicts are normal rejections.
+
+```bash
+python3 scripts/survey_scenarios.py \
+  --source ../gcs/examples/competition-gps-map.json \
+  --output logs/survey-sweep --sweep
+python3 scripts/survey_runner.py plan \
+  --surveys logs/survey-sweep --run-input logs/reviewed-run-input.json \
+  --output logs/survey-planning
+python3 scripts/survey_runner.py execute \
+  --case logs/survey-planning/offset-0-seed-0 \
+  --output logs/survey-baseline-1 --disconnect-gcs
+```
+
+The sweep covers common offsets and bounded independent errors at 0, 0.25, 0.5,
+1 and 2 m, each with seeds 0–2 (30 cases). Single scenarios support `--seed`,
+`--offset-m`, `--point-error-m`, `--remove-hints`, `--missing ID ...`, and
+`--age-s` with an explicit reproducible `--as-of` ISO timestamp. The generator
+retains the source, fixed geographic reference, capture time and every applied
+change. Missing classification leaves ordinary unknown point obstacles. Missing
+assigned objects fail through normal planner validation, without truth-based
+repair. These are stress inputs, not expected GPS/drone accuracy claims.
+
+Execution refuses active Maritime/operator containers or native simulator
+processes and holds the simulator launcher lock. It starts named private-network
+simulator/boat/GCS containers with isolated workspaces/state; only preview port
+8082 is published on loopback (`--port` changes it). No physical object moves,
+controller parameters, dynamics, source pins or normal workspaces are changed.
+It archives source hashes/diff, image identities, inputs, planning outcome,
+approval, upload/readback and raw physics evidence. It never forces rejected
+planning cases into execution. Use `--interrupt-after-s 20` in a separate run to
+exercise Stop and rejection of a repeated Start. Each run cleans up only its own
+containers. Keep rejected operation/pre-arm evidence separately from movement.
+
+The independent evaluator consumes physical scene snapshots and explicit task
+assignments, including every obstacle footprint and whole-hull passages. It
+checks ≥0.25 m hull clearance, no contacts, ordered passages, channel containment
+and final position within 1 m at ≤0.2 m/s for 5 s. Missing physics or verified
+contact evidence yields **inconclusive**. Unless `--contact-proof` is supplied,
+the runner qualifies the recorder after the mission window using deliberate
+**disarmed** contact and restores the boat pose before cleanup. This has no
+steering role. A map-valid route can fail physical evaluation.
+
+Development acceptance settings are 0.5 m/s; 1.8 m hard / 3 m preferred point
+buffers; tower 1.8 m hard / 10 m soft, strength 10. Operator settings are preserved.
+Three consecutive baseline combined successes, a representative 0.25 m common
+offset and a bounded point-error execution are required for the new movement
+acceptance. Read `docs/milestone1.md` for the actual results; static checks or
+mission upload alone do not establish acceptance.

@@ -6,7 +6,13 @@ from .course import validate_course
 from .avoidance import tower_policy, zones
 
 
-def validate_route(object_map, draft):
+def validate_route(object_map, draft, *, transit_finish=False):
+    if draft.get('planning_mode') == 'competition':
+        from .competition import validate_run
+        return validate_run(object_map, draft)
+    # Only composite block callers authorize a transit endpoint. An ordinary
+    # draft cannot disable its stopped finish by adding a JSON field.
+    draft = {**draft, 'transit_finish': transit_finish}
     validate_map(object_map)
     errors = []
     def reject(reason, location=None):
@@ -49,7 +55,7 @@ def validate_route(object_map, draft):
     for index, (a,b) in enumerate(zip(route, route[1:])):
         for obj in obstacles:
             gap = gap_to_object(obj,a,b)-zones(obj,draft,policy)[0]
-            if gap < 0:
+            if gap < -1e-7:
                 reject(f'leg {index} violates clearance buffer at {obj["id"]} by {-gap:.3f} m', list(to_local(obj['centre'],reference)))
     finish = to_local(draft['finish'], reference)
     if not points or math.dist(points[-1], finish) > 0.001:
@@ -58,7 +64,7 @@ def validate_route(object_map, draft):
     if not 0 < finish_radius <= 1:
         reject('finish radius must be in (0, 1] m')
     for obj in obstacles:
-        if gap_to_object(obj,finish,finish) < zones(obj,draft,policy)[0] + finish_radius:
+        if gap_to_object(obj,finish,finish) < zones(obj,draft,policy)[0] + (0 if draft.get('transit_finish') else finish_radius):
             reject('finish area violates clearance at ' + obj['id'], list(to_local(obj['centre'],reference)))
     course_errors, sections = validate_course(object_map, draft)
     errors.extend(course_errors)
