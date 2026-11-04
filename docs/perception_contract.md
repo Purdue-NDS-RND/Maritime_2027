@@ -1,6 +1,6 @@
 # Perception JSON contract and GCS integration
 
-Last updated: 2026-11-01. Status: proposed semantics for discussion with GCS/boat owners.
+Last updated: 2026-11-04. Status: proposed semantics for discussion with GCS/boat owners.
 This is documentation, not an implemented JSON Schema, ROS message or network endpoint.
 
 ## Three different products
@@ -30,7 +30,7 @@ they do not silently replace approved maps/routes or authorize continuous airbor
 | Processing provenance | Code/model/calibration IDs and configuration identity |
 | Objects | Stable instance ID, class/type estimate, ENU horizontal reference and geometry |
 | Geodetic export | Derived lat/lon, optional explicitly named ellipsoid height; conversion ID |
-| Uncertainty/quality | EN covariance/defined ellipse or explicit unknown, shared-bias/coverage metadata, RTK/timing/geometric and association/estimate status |
+| Uncertainty/quality | EN covariance/defined ellipse or explicit unknown, shared-bias/coverage metadata, GNSS/timing/geometric and association/estimate status |
 | Evidence | Observation count and references to preview/crop/frame/time for review |
 | Survey completeness | Complete/partial/failed status, coverage evidence and unresolved regions |
 | Semantics | Predicted appearance separate from operator color/role and edits |
@@ -131,7 +131,8 @@ so the map is not navigation-approved. Software IDs are illustrative identifiers
       },
       "quality": {
         "status": "unvalidated",
-        "rtk_state": "unknown",
+        "positioning_mode": "standalone_gnss",
+        "gnss_fix_status": "unknown",
         "timing_validated": false,
         "mean_detection_confidence": 0.88
       },
@@ -151,6 +152,69 @@ so the map is not navigation-approved. Software IDs are illustrative identifiers
 The small nonzero geodetic height illustrates that local tangent-plane up=0 is not an
 exact constant-ellipsoid-height surface away from the origin. It is not measured buoy
 freeboard. Production origin heights must come from a documented reference.
+
+## Ordinary-GNSS report additions
+
+Status: proposal, not implemented. Use positioning_mode=standalone_gnss for the
+current no-RTK deployment. Record receiver/estimator health, fix age, covariance
+source/type, clock status, height/heading source, origin provenance and reset epoch.
+RTK correction age is not a requirement.
+
+Each track reports an explicitly defined absolute position covariance (or null) at
+state_at, uncertainty_model_id, coverage_validated, and whether shared anchoring
+uncertainty is included. Optional conditional local covariance and shared_bias_model_id
+support joint map interpretation; marginal ellipses do not make different buoys independent.
+Define component/cross-covariance composition before downstream code sums them.
+
+Illustrative compact envelope, not a complete survey schema. All values are synthetic.
+The 4.01 m^2 per axis models 4.0 m^2 shared error plus 0.01 m^2 conditional local error
+under independence, not receiver performance. WGS84 corresponds to zero ENU at a synthetic
+equator origin. Identical axes imply no unique ellipse angle.
+
+```json
+{
+  "schema": "maritime.track_report",
+  "schema_version": 1,
+  "survey_id": "synthetic_survey",
+  "revision": 1,
+  "origin_id": "synthetic_equator",
+  "origin_wgs84": {"latitude_deg": 0.0, "longitude_deg": 0.0, "ellipsoid_height_m": 0.0},
+  "frame": "survey_enu",
+  "published_at": "2026-11-04T15:00:00.100Z",
+  "tracks": [{
+    "id": "buoy_0001",
+    "class": "buoy",
+    "state_at": "2026-11-04T15:00:00Z",
+    "last_observed_at": "2026-11-04T15:00:00Z",
+    "estimate_kind": "filtered",
+    "association_status": "confirmed",
+    "position_reference": "horizontal_centre_at_water_plane",
+    "position_enu_m": {"east": 0.0, "north": 0.0, "up": 0.0},
+    "position_wgs84": {"latitude_deg": 0.0, "longitude_deg": 0.0},
+    "uncertainty": {
+      "distribution": "gaussian_approximation",
+      "covariance_en_m2": [[4.01, 0.0], [0.0, 4.01]],
+      "includes_modeled_anchor_error": true,
+      "shared_bias_model_id": "synthetic_anchor_01",
+      "uncertainty_model_id": "synthetic_independent_local_plus_shared",
+      "coverage_validated": false,
+      "ellipse_en": {
+        "probability": 0.95,
+        "semi_major_m": 4.902,
+        "semi_minor_m": 4.902,
+        "angle_ccw_from_east_rad": null
+      }
+    },
+    "quality": {"status": "unvalidated", "positioning_mode": "standalone_gnss"}
+  }]
+}
+```
+
+A shared model ID refers to map/session metadata; publish the actual model/covariance
+when consumers need joint geometry. For skewed projection, unresolved association or
+unknown bias, use explicit non-Gaussian/ambiguous/unknown status or withhold a usable point.
+A conditional ellipse is not an unconditional 95% guarantee. Transport and GCS acceptance
+remain unimplemented.
 
 ## Observations retained locally
 

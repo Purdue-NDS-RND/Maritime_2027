@@ -1,6 +1,6 @@
 # ENU geolocation and measurement error
 
-Last updated: 2026-11-01. This is the proposed mathematical and validation contract.
+Last updated: 2026-11-04. This is the proposed mathematical and validation contract.
 Physical transforms, numerical quality gates and accuracy requirements remain to be measured.
 
 ## Implementation reuse
@@ -33,7 +33,7 @@ Raw FCU FRD (forward/right/down) and NED (north/east/down) data require both bod
 world-frame conversions. MAVROS already adapts frames; verify the exact topic contract
 before converting again. Avoid ambiguously named variables such as `body_ned`.
 
-Choose a fixed surveyed geographic origin `(latitude0, longitude0, ellipsoid_height0)`
+Choose a fixed geographic origin `(latitude0, longitude0, ellipsoid_height0)`
 and an immutable `origin_id` for the map. A boat launch point, FCU home and EKF origin
 are not automatically the same position or vertical zero. Detect FCU reset/relocalization.
 Either transform measurements into the same fixed survey frame or begin a new explicit
@@ -100,7 +100,39 @@ Waves, buoy heave and water-level variation perturb this plane. A horizontal app
 is acceptable only if measured residual error is within the budget; do not assume every
 frame needs a complex dynamic surface model.
 
-## What RTK does and does not determine
+## Ordinary GNSS: current requirement and height/heading contract
+
+The user removed RTK on 2026-11-04. Ordinary GNSS is the deployment baseline;
+historical RTK discussion below is not a requirement. Receiver, antenna, covariance
+semantics and FCU interfaces have not been verified.
+
+Camera + raw accelerometer/gyro data cannot yield absolute object GPS coordinates.
+Require GNSS anchoring, earth-referenced attitude/heading and height above the modeled
+water surface. A single antenna position is not a hover heading measurement;
+course-over-ground need not equal body yaw. Prefer validated FCU fusion with an explicit
+heading source and covariance, not open-loop integration or duplicate correlated fusion.
+
+A numerical ENU origin may be selected without surveying, but record whether it is
+surveyed, configured or an uncertain GNSS estimate. Subtracting a launch fix does not
+remove global offset. Track shared position/heading/height error across objects/passes.
+Rotate source covariance into the survey frame; distinguish receiver covariance,
+estimator posterior, unknown covariance and empirical calibration. HDOP is dimensionless,
+not a variance in metres squared.
+
+For height, evaluate the authoritative FCU vertical estimate with measured
+lens/deck/water offsets and barometric drift. GNSS ellipsoid altitude, AMSL and FCU
+relative altitude are not interchangeable with height above water. A boat launch adds
+freeboard and motion. Carry uncertainty; do not set water z=0 because home z=0.
+An optional rangefinder must first pass over-water return-validity tests with tilt and
+lever-arm compensation.
+
+At near nadir, height error has little horizontal effect; off nadir it scales as
+tan(theta). Low altitude cannot remove horizontal GNSS offset. A synthetic
+sigma_GNSS=2 m per axis alone implies about a 4.90 m 95% Gaussian circle; this is not
+a receiver specification or guaranteed bound. Measure this receiver. See the ordinary-GNSS
+correlation model in [uncertainty and tracking](uncertainty_tracking.md).
+
+## Historical RTK considerations (not required)
 
 RTK can improve antenna positioning when corrections/fix quality are good. It does not
 directly calibrate attitude, camera alignment, exposure time or object reference height.
@@ -190,7 +222,7 @@ The two projections must be explicitly reconciled at the GCS map boundary.
    independently verified WGS84 conversions over the course.
 3. Bench/land grid: surveyed flat targets across the image at multiple heights/headings.
    Use manual pixel annotations first to isolate geometry from detector error.
-4. Hover and motion: repeat targets with RTK quality/timing logs; sweep speed/turns to
+4. Hover and motion: repeat targets with GNSS/estimator quality and timing logs; sweep speed/turns to
    identify clock, attitude and rolling-shutter sensitivity.
 5. Water trials: surveyed buoy horizontal centres, reflections, heave, varying sun,
    off-nadir range and elapsed time. Measure reference uncertainty too.
@@ -198,7 +230,7 @@ The two projections must be explicitly reconciled at the GCS map boundary.
    freshness and clearance, with independent truth and no tuning on the final test.
 
 Report mean East/North bias, median/p95/max horizontal error, accepted/rejected counts,
-coverage, per-object recall, geometry/RTK/lighting strata and uncertainty-region coverage.
+coverage, per-object recall, geometry/GNSS/lighting strata and uncertainty-region coverage.
 Agree numeric pass thresholds using boat hull/turn/tracking and buoy-motion margins.
 
 ## Primary references

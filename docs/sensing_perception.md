@@ -1,6 +1,6 @@
 # Sensing and perception architecture
 
-Last updated: 2026-11-01. User direction is recorded below; module boundaries are
+Last updated: 2026-11-04. User direction is recorded below; module boundaries are
 proposed implementation guidance. No new ROS packages or network services exist yet.
 
 ## Responsibility and data flow
@@ -14,7 +14,7 @@ Boat-mounted sensing is a distinct later integration with the boat team.
 ```mermaid
 flowchart TD
     A["Arducam frames"] --> D["Timestamped detections"]
-    B["RTK, attitude and clocks"] --> E["ENU geolocation"]
+    B["GNSS, attitude and clocks"] --> E["ENU geolocation"]
     C["Intrinsics, mount and water plane"] --> E
     D --> E
     E --> F["Object instances and uncertainty"]
@@ -46,7 +46,7 @@ motion/association choices, ellipse semantics and the required timing/status fie
 | Module | Inputs | Outputs | Key requirement |
 | --- | --- | --- | --- |
 | Acquisition | Camera/driver configuration | Frames + exposure-related time + calibration ID | Preserve pixel domain and clock meaning |
-| Pose adapter/history | Position, quaternion, RTK health and time sync | Pose at exposure, origin ID, quality | Explicit frame adaptation and gap rejection |
+| Pose adapter/history | Position, quaternion, GNSS health and time sync | Pose at exposure, origin ID, quality | Explicit frame adaptation and gap rejection |
 | Detector | Frame + model | Object boxes and optional geometry features | Return coordinates in calibrated image domain |
 | Geolocation | Pixel/ray + pose + calibration + water plane | ENU hit + uncertainty/rejection | Pure, independently testable geometry |
 | Association/map builder | Valid observations | Stable object instances and map revision | Same class may represent many instances |
@@ -65,6 +65,151 @@ constant-velocity extrapolation. EKF/UKF is conditional on a nonlinear filter mo
 Do not port the entire CUASC mission framework, MAVROS dependency or launcher scripts
 unless needed by the confirmed drone integration. Boat direct-pymavlink use does not
 automatically choose the drone telemetry adapter.
+
+## Proposed end-to-end class contracts
+
+Status: discussion proposal dated 2026-11-04. The confirmed requirement is ordinary
+GNSS without RTK. Interfaces, ROS topics, process layout and uncertainty strategy below
+are not implemented or accepted as measured performance.
+
+Camera and raw IMU are insufficient for absolute geolocation. Require timestamped GNSS,
+earth-referenced attitude/heading and height above water, plus camera calibration.
+Prefer the flight controller's validated fused state and record raw inputs for diagnosis.
+If that state is unavailable, evaluate robot_localization and a heading source deliberately;
+do not independently fuse correlated FCU outputs and their input IMU/GNSS.
+
+| Class | Narrow responsibility | Main contract |
+| --- | --- | --- |
+| ArducamSource | Acquire frames and camera metadata | read() -> Frame; ID, source clock/exposure metadata, image domain/calibration ID |
+| VehicleStateSource | Adapt the selected FCU/telemetry interface | adapt() -> VehicleState; pose/velocity, covariance or explicit unknown, source epoch, GNSS/estimator health |
+| ClockMapper | Relate source clocks to the processing clock | map_time() -> TimestampEstimate; mapped time, uncertainty, mapping ID; retain raw time |
+| PoseProvider | Retrieve camera pose at measurement time | at() -> PoseEstimate or rejection; tf2 transforms plus separate covariance, brackets/gaps, origin/reset status |
+| CameraGeometry | Apply the calibrated pixel model | pixel_ray() -> optical ray; wrap image_geometry/OpenCV; raw and rectified domains explicit |
+| ObjectDetector | Run YOLO and restore source coordinates | detect() -> DetectionBatch; class/score, boxes, frame ID/time; invert crop/tile/letterbox |
+| TargetReferenceEstimator | Select the physical point to locate | locate() -> PixelReference; point, method, pixel uncertainty, reference-height hypothesis |
+| WaterSurfaceProvider | Supply the modeled surface | at() -> PlaneEstimate; normal/elevation, uncertainty, source/datum/age |
+| PlaneProjector | Intersect rays with the surface | project() -> Hit or rejection; evaluate IPM first; output frame/time and conditioning checks |
+| ProjectionUncertainty | Propagate error through projection | propagate() -> ObservationDistribution; mean, random covariance, shared components and model validity |
+| MapAnchorModel | Preserve common navigation/calibration error | describe() -> anchor/bias model with ID/epoch and covariance/unknown; no independent averaging |
+| ObjectAssociator | Match observations to physical instances | assign() -> matches, unmatched and ambiguous hypotheses; same class can contain many objects |
+| ObjectTracker | Estimate each object's state over time | update()/predict() -> Track; conditional local state/covariance, motion model, age and lifecycle |
+| GeodeticConverter | Convert fixed ENU to/from WGS84 | forward()/reverse(); tested ECEF/ENU implementation and datum |
+| ReportEncoder | Validate and serialize reports | encode() -> snapshot/live envelope; explicit epoch, covariance units and schema version |
+| ReportTransport | Deliver complete versioned reports | send()/acknowledge(); transport deferred; retry/deduplication must preserve revision order |
+| SessionRecorder | Preserve replay evidence asynchronously | record(); bounded queue, raw streams/configs, failures/drops and calibration/model IDs |
+
+Use small immutable Frame, VehicleState, PoseEstimate, PixelReference, PlaneEstimate,
+Observation and Track records with units, frame/origin ID, source epoch and provenance.
+Validity is usable, degraded or rejected with reason; absent covariance is not a zero
+matrix. A rejected hit has no geographic point. Separate helpers such as
+invert_image_transform(), check_pose_gap(), check_intersection(), propagate_covariance()
+and ellipse_from_covariance() from ROS callbacks and file/network operations.
+Use composition; no detector/logger superclass owns the entire pipeline.
+
+### One observation through the system
+
+1. Capture the image and map its source timestamp. Resolve matching calibration and
+   distinguish exposure midpoint from host arrival. Preserve row timing if available.
+2. Run YOLO, retaining the image ID/time. Restore every selected point to calibrated
+   source-image coordinates. Deduplicate tile outputs before object association.
+3. Select the buoy reference point, including uncertainty and any freeboard assumption.
+   Bottom-centre of an overhead box is not generally the water-centre.
+4. Resolve camera pose and water plane at exposure. Enforce clock, heading, height,
+   source-gap, covariance and origin continuity policies.
+5. Project the batch to ENU with IPM or the evaluated fallback. Reject wrong-way,
+   near-horizon, nonfinite or out-of-envelope hits before claiming Gaussian uncertainty.
+6. Propagate the joint error model. Keep shared GNSS/heading/height/calibration terms
+   identifiable across observations and objects. Use an approximate Gaussian only
+   where Monte Carlo/replay supports that approximation.
+7. Associate observations, update the object's motion model, and predict to the explicit
+   reporting epoch. Ambiguity remains visible.
+8. Derive WGS84 centres and optional ellipse boundaries at export; validate and deliver
+   the report. Retain replay evidence and a final consolidated survey snapshot.
+
+### Ordinary-GNSS mapping and accuracy
+
+Keep a fixed numerical ENU origin. It need not be surveyed to run the mathematics, but
+an origin selected from noisy GNSS is not ground truth. Preserve anchoring uncertainty
+without counting the same position error twice.
+
+Keep local object-shape/spacing uncertainty distinct from the uncertain global anchor
+and its time-varying drift. Use a smooth local odometry frame only if the FCU supplies
+a documented continuous estimate; do not interpolate across estimator resets. If map
+anchoring is refined, update affected objects consistently in an explicit map revision
+while retaining the fixed ENU definition.
+
+For a prototype, evaluate correlation-aware batching and a measured common-error floor.
+Do not feed every marginal GNSS covariance to independent object filters and then claim
+absolute precision. If this approximation fails coverage tests, evaluate joint anchor/bias
+states or fixed-lag smoothing. A bias state alone cannot make absolute translation
+observable. See [uncertainty](uncertainty_tracking.md) for composition and correlations.
+
+Prefer near-nadir views, low blur and measured timestamps/mounts over filter complexity.
+Verify height above water and heading. Barometer + measured launch/deck-to-water offset
+is a candidate height baseline, with drift included. Range sensors and VIO/optical flow
+over moving/glinting water require separate evaluation. Measured fixed visual references
+may improve anchoring if their coordinates/geometry are accurate and observable.
+
+No physical accuracy guarantee follows from this architecture. Set operating limits and
+navigation margins from held-out residuals and coverage. Ordinary GNSS may dominate
+absolute error even when the local map is repeatable.
+
+### Proposed ROS 2 and Docker layout
+
+Start with one drone application container and approximately five ROS processes:
+capture; selected telemetry/pose adapter; detector; geolocation plus mapping; and export.
+Run rosbag2/SessionRecorder alongside them with bounded asynchronous queues.
+These are scheduling proposals; each class does not require its own node.
+
+Use sensor_msgs/Image + CameraInfo, sensor_msgs/Imu/NavSatFix when supplied,
+nav_msgs/Odometry or PoseWithCovarianceStamped for the authoritative state,
+vision_msgs/Detection2DArray, TF and diagnostics where suitable. A small proposed Maritime
+observation/track message must additionally preserve frame identity, covariance/bias
+provenance, rejection and track status. JSON is the export boundary, not image transport.
+
+Use sensor-data QoS with shallow bounded image queues. Drop obsolete inference work
+rather than accumulating latency. Retain pose history for measured inference delay and
+a bounded wait for an after-sample. Stale extrapolation must be explicit. TF contains
+transforms, not covariance or GNSS health; retain these alongside TF. Do not linearly
+blend covariance matrices and call that propagation without a stated model.
+
+Host camera/kernel drivers, FCU firmware and NVIDIA runtime stay outside the app.
+Pin a tested JetPack/CUDA/TensorRT/ROS/Arducam matrix; do not copy desktop binaries to
+aarch64 or choose ROS Jazzy solely because the boat uses it. Library-backed Python with
+NumPy/OpenCV, IPM, tf2 and a thin Ultralytics/TensorRT wrapper is a candidate pending
+benchmarks. Build/validate engines on a compatible target stack and compare exported
+pixel accuracy. Optimize copies or move code to C++ after profiling.
+
+### Development slices and acceptance
+
+First replay manually annotated pixels with synthetic/recorded pose into an ENU
+distribution and JSON file. Then add real camera timing/calibration, YOLO and instance
+fusion, followed by GCS import and measured radio delivery. A trained model is not needed
+to test geometry. Detailed acceptance remains in SP-01..SP-40 and SP-41..SP-44.
+
+Require synthetic geometry/geodesy checks; surveyed land targets; hover/moving flights
+with GNSS/height/heading logs; then held-out water surveys. Measure bias/p95 error, recall,
+merge/split rates, ellipse coverage/area, age/latency, drops and sustained Jetson load.
+A 95% ellipse is not a guaranteed bound. Local tape/total-station geometry can validate
+relative mapping without RTK; absolute WGS84 accuracy needs an independently known
+reference with quantified uncertainty.
+
+Discussion checks on 2026-11-04 reproduced the current CUASC centre-ray counterexample
+under the documented ROS frame contract, checked the example proper mount rotation and
+rays at two headings, compared camera-position/ray/water Jacobians with finite differences,
+and checked shared-error averaging and ellipse numerics. Both contract JSON examples
+parsed; the new covariance and rounded ellipse axes agreed. A seeded 100,000-sample
+Gaussian experiment gave 94.951% coverage for the nominal 95% ellipse. These are isolated
+calculations and fixtures, not ROS/IPM integration or physical uncertainty acceptance.
+
+### Sources checked for this discussion
+
+- [ROS NavSatFix: antenna, ellipsoid and ENU covariance](https://github.com/ros2/common_interfaces/blob/jazzy/sensor_msgs/msg/NavSatFix.msg)
+- [ROS Imu: unavailable orientation and unknown covariance](https://github.com/ros2/common_interfaces/blob/jazzy/sensor_msgs/msg/Imu.msg)
+- [ArduPilot EKF overview](https://ardupilot.org/copter/docs/common-apm-navigation-extended-kalman-filter-overview.html)
+- [IPM library tutorial](https://ipm-docs.readthedocs.io/en/latest/tutorial.html)
+- [GPS.gov user accuracy factors](https://www.gps.gov/gps-accuracy)
+- Existing [package research](ros2_geolocation_packages.md) provides pin candidates and limits.
 
 ## CV scope and dataset
 

@@ -1,6 +1,6 @@
 # Maritime sensing and perception: working context
 
-Last updated: 2026-11-01. Owner: Samuel Yoon, Sensing and Perception Lead.
+Last updated: 2026-11-04. Owner: Samuel Yoon, Sensing and Perception Lead.
 Status: source review, ROS 2 package research and development plan committed as shared
 context on `feature/cv-raycast`. No drone implementation or physical accuracy acceptance is claimed.
 
@@ -37,8 +37,9 @@ Markdown pack is a historical starting point; use current repository files for f
 3. Drone camera: fixed Arducam IMX519; downward-looking is the working orientation,
    with exact mounting rotation and lens/focus still to be measured.
 4. Desired survey altitude: below 5 m above water, subject to coverage and accuracy tests.
-5. RTK positioning is planned. Receiver/base, correction transport, vertical datum,
-   attitude accuracy and telemetry interfaces are not yet verified.
+5. Ordinary GNSS replaces RTK by explicit user direction on 2026-11-04. Receiver,
+   antenna, covariance semantics, vertical datum, heading source, attitude accuracy and
+   telemetry interfaces remain unverified. No RTK base/correction link is required.
 6. YOLO26n is the user's selected detector baseline. Automatic aerial buoy-color classification is optional;
    object instance locations are the first deliverable.
 7. Geometry, association and map fusion operate in a fixed local ENU frame.
@@ -66,7 +67,7 @@ universal water-contact reference for an overhead image.
 
 Use a linear KF as the first projected-ENU constant-velocity tracker; nonlinear
 projection upstream does not alone justify EKF/UKF downstream. Evaluate static/random-walk
-and moored-motion alternatives. Preserve shared camera/clock/RTK biases rather than
+and moored-motion alternatives. Preserve shared camera/clock/GNSS biases rather than
 letting repeated frames produce falsely tiny covariances. Association must allow
 unmatched and ambiguous cases. Output state epoch, last-observation time, prediction
 status, EN covariance and explicitly defined ellipse orientation/coverage.
@@ -76,9 +77,28 @@ mathematically sound under their assumptions. Its covariance budget is incomplet
 and its package conclusion misses IPM. See the maintained tracking topic for the
 checked equations, implementation candidates, new tasks and unresolved scope.
 
+## 2026-11-04 end-to-end design discussion
+
+The user explicitly replaces RTK with ordinary GPS and requests small, single-purpose
+classes, ROS 2 in Docker, and structured GPS reports with uncertainty. The proposed
+[class/interface and deployment design](../docs/sensing_perception.md#proposed-end-to-end-class-contracts)
+is for discussion, not an implemented or accuracy-accepted stack.
+
+Camera + raw IMU alone cannot provide absolute GPS object locations. Timestamped GNSS,
+earth-referenced heading and height above water are required. Prefer one validated FCU
+fused pose over duplicate fusion of its outputs and raw inputs. Firmware and available
+covariance remain unknown. Separate local object geometry from shared map anchoring and
+drift uncertainty; repeated frames must not average away a common GNSS offset.
+
+Current source review verified Maritime at
+`dd18759df02303f4202804fa330ef0e7d5004587` and CUASC main at
+`e50d6e2e42e0e6eeac150e8b7c94be0d0474a42d`. Directly inspected CUASC capture,
+detector, logger, launch and parameters. Input-stamp preservation is useful; pose fallback
+and frame/calibration risks remain. No ROS, inference, camera or flight trial ran.
+
 ## Existing repository reality
 
-- `drone/` contains only a README in the supplied snapshot.
+- Current `drone/` contains README/context/task/instruction documents, with no runtime source.
 - `boat/`, `gcs/` and `shared/` have implementations; Gazebo/SITL tools are retained.
 - Existing design describes survey -> GCS review -> approved route -> boat execution.
   Initial survey is consolidated, and the drone lands before boat route execution.
@@ -108,7 +128,8 @@ checked equations, implementation candidates, new tasks and unresolved scope.
 - CameraInfo mixes rectified K/P with original distortion; exported logs can be ambiguous.
 - Legacy hard-distance deduplication prevents useful repeated observations from refining
   a track. Class IDs cannot be object IDs when many buoys share a class.
-- RTK position does not establish yaw, camera-to-body alignment, water height or timing.
+- GNSS position (including RTK in historical notes) does not establish yaw,
+  camera-to-body alignment, water height or timing.
 - A bounding-box centre on an elevated buoy is not necessarily its water-plane centre.
 - Reflections are prominent in supplied buoy images. Label actual bodies separately.
 - A 100-frame 4K BGR ring alone uses about 2.32 GiB, before ROS, model or other copies.
@@ -118,7 +139,7 @@ checked equations, implementation candidates, new tasks and unresolved scope.
 
 ## Open inputs with highest value
 
-- RTK models/base coordinates/correction link; attitude/yaw source; autopilot firmware;
+- Ordinary GNSS model/antenna/covariance and temporal drift; attitude/yaw source; autopilot firmware;
   local/global message contracts, time synchronization and origin-reset behavior.
 - Actual Arducam lens, camera mode, focus control, exposure metadata and mount survey.
 - Camera optical centre, FCU body reference and GNSS antenna lever arms.
@@ -134,7 +155,7 @@ checked equations, implementation candidates, new tasks and unresolved scope.
 - Its inspected implementation reads K rather than rectified P; adapt rectified CameraInfo
   explicitly. Water at ENU z=h uses shape_msgs/Plane coefficients [0,0,1,-h].
 - tf2 supplies buffered transforms and interpolation. It does not validate clock domains,
-  RTK health or acceptable sample gaps; keep those checks in our adapter.
+  GNSS health or acceptable sample gaps; keep those checks in our adapter.
 - Prefer the authoritative FCU fused pose if available; robot_localization is conditional,
   not an additional mandatory estimator.
 - yolo_ros currently lists YOLO26 but its prebuilt GPU runtime is x64; Jetson/aarch64 GPU

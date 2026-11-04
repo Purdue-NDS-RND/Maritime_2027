@@ -1,9 +1,16 @@
 # CUASC vision pipeline review and reuse plan
 
-Last updated: 2026-11-01. Paths below are relative to the supplied `CUASC_2026-main/`
+Last updated: 2026-11-04. Paths below are relative to the supplied `CUASC_2026-main/`
 snapshot. Line numbers refer to that snapshot and may shift after edits.
 Review type: static source inspection plus one extracted-function geometry check.
 No model, ROS graph, camera, Jetson or flight was executed.
+
+Direct GitHub source reinspection on 2026-11-04 used CUASC_2026 main commit
+`e50d6e2e42e0e6eeac150e8b7c94be0d0474a42d`, including the active capture, YOLO,
+mission logger, launch and parameters. The detector preserves the input image stamp;
+the logger still substitutes latest pose on failed bracketing/gaps and retains the
+frame/calibration risks described below. Historical RTK references are error-budget
+context; the current Maritime user requirement is ordinary GNSS without RTK.
 
 ## Execution path and reusable ideas
 

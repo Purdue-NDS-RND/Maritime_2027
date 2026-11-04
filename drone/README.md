@@ -14,7 +14,7 @@ recommends evaluating IPM + tf2 for projection before rebuilding custom raycasti
 Detailed topics are linked from that index, including calibration/error
 measurement, reusable CUASC code and the proposed JSON contract.
 
-Target hardware is an Orin Nano 8GB, fixed Arducam and planned RTK, with a
+Target hardware is an Orin Nano 8GB, fixed Arducam and ordinary GNSS (no RTK), with a
 desired survey height below 5 m above water. Exact hardware integration,
 timing, mounts, water datum and usable operating envelope need measurement.
 
@@ -23,7 +23,7 @@ Its Pixhawk controls the vehicle; firmware and host drivers stay outside
 the application. Flight control and boat launch/recovery belong to their
 respective owners. A direct boat-drone perception link is not initially required.
 
-Status as of 2026-11-01: design/review documents only; no drone algorithms,
+Status as of 2026-11-04: design/review documents only; no drone algorithms,
 survey controller or communication protocol are implemented here yet.
 Validate maps independently against measured object locations before claiming
 physical accuracy or navigation readiness.

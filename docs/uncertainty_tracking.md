@@ -1,6 +1,6 @@
 # Uncertainty and persistent buoy tracking
 
-Last updated: 2026-11-01. Status: reviewed design and evaluation plan, not implemented.
+Last updated: 2026-11-04. Status: reviewed design and evaluation plan, not implemented.
 This extends the ENU geometry and library-reuse references after review of a
 user-supplied Gemini research brief. Formulas were checked independently; package
 capabilities were checked against primary documentation.
@@ -19,8 +19,8 @@ are not established by the brief; decide those with the flight/GCS/boat owners.
 
 The camera remains a fixed Arducam IMX519 and the detector baseline remains YOLO26n.
 Generic gimbal encoders and alternative YOLO versions in Gemini's text do not override
-those decisions. RTK supplies an antenna/reference position, not automatically the lens
-origin. A calibrated camera/antenna/body transform and a valid attitude/heading estimate
+those decisions. Ordinary GNSS is the user's 2026-11-04 baseline, replacing RTK. It supplies
+an antenna/reference position, not automatically the lens origin. A calibrated camera/antenna/body transform and a valid attitude/heading estimate
 are still required.
 
 ## Assessment of the proposed stages
@@ -119,7 +119,7 @@ measure skew and mean shift; this does not require choosing a UKF for the track 
 
 ## 2. Random error and shared bias are different
 
-Repeated measurements can share RTK base error, clock offset, camera alignment error,
+Repeated measurements can share persistent GNSS offset, clock offset, camera alignment error,
 water-level bias or persistent pixel-reference bias. Adding each one's marginal variance
 to R and then treating frames as independent can still underestimate final uncertainty.
 
@@ -143,6 +143,38 @@ independent reference data can make some bias parameters observable.
 One camera pose/water-plane error also correlates different buoy locations in the same
 frame. Preserve observation/frame provenance rather than claiming their absolute
 uncertainties are independent.
+
+### Ordinary-GNSS anchoring and correlated drift
+
+A proposed model is z_ik = p_i + b_k + epsilon_ik: target position, time-correlated
+common navigation offset and independent residual error. Heading, height and mount
+errors produce geometry-dependent correlations too; translation alone is incomplete.
+Preserve source-frame/epoch IDs and component provenance across objects and updates.
+
+For illustrative per-axis sigma_b=2 m, sigma_epsilon=0.1 m and 100 observations, the
+mean's sigma is sqrt(4 + 0.01/100), approximately 2.000025 m. It is not
+sqrt((4 + 0.01)/100), approximately 0.20025 m. These are synthetic calculations.
+Measure drift and temporal residuals rather than assuming one bias for an entire day.
+
+Keep conditional local track uncertainty separate from absolute anchoring uncertainty.
+Only for an independent local/anchor split is P_absolute approximately P_local+P_anchor,
+after frame transformation. Include cross terms when dependent; do not add a GNSS floor
+to a posterior that already includes it and count it twice.
+
+Compare correlation-aware batches plus a measured shared-error floor against a joint
+anchor/bias model on replay. A floor is an approximation, not calibration or a guarantee.
+Per-track floors alone do not encode cross-object correlations. Retain shared model ID,
+epoch and sufficient components for downstream joint geometry. TF stores none of these.
+
+If neither calibrated covariance nor a defensible conservative model exists, report
+uncertainty unknown/unvalidated. Do not derive it from YOLO score or HDOP alone.
+Scatter omits possible absolute bias. Name whether a reported ellipse includes modeled
+GNSS/map anchoring error.
+
+Repeated unknown buoy sightings alone cannot resolve absolute translation. Independent
+measured references may help; a bias state or smoother alone cannot remove this ambiguity.
+Boat-relative uncertainty also needs the boat's GPS error and any measured correlation;
+nearby standalone receivers must not be assumed to cancel each other's errors.
 
 ## 3. Tracking baseline: linear KF with a tested motion model
 
@@ -260,16 +292,16 @@ false detections require separate quality fields.
 
 Keep covariance/ellipse axes in ENU meters. Convert the geographic centre, or sampled
 ellipse boundary points, through the established WGS84 transform. A local ENU origin
-is not automatically the RTK base location; both horizontal and height datums must agree.
+is not automatically a launch fix or GNSS reference location; horizontal and height datums must agree.
 Do not mix meter-squared covariance with latitude/longitude degrees.
 
 ## 6. Additional ideas to evaluate
 
 1. **Separate map-wide error from individual motion.** If several apparently stable buoys
    shift together between passes, test a common pose/origin/heading-bias explanation.
-   Robust geometric registration with RTK priors can help diagnose the cause. Repeated
+   Robust geometric registration with appropriately uncertain GNSS priors may help diagnose the cause. Repeated
    course layouts can make registration ambiguous; do not use the rough diagram as
-   surveyed truth or conceal absolute RTK/base bias.
+   surveyed truth or conceal absolute GNSS bias.
 2. **Choose revisits for information.** Request views of stale tracks or long ellipses,
    ideally with improved geometry or different viewing direction. Repeated identical
    views may mostly repeat the same bias. Survey requests remain flight-team ownership.
@@ -277,15 +309,17 @@ Do not mix meter-squared covariance with latitude/longitude degrees.
    when the boat reaches that buoy later. Export state/age/model information so planning
    can use a time-appropriate location region plus hull, tracking and movement margins.
 4. **Calibrate uncertainty from residuals.** Compare analytic geometry with empirical
-   errors by image position, angle, brightness, blur and RTK state. Learn or fit missing
+   errors by image position, angle, brightness, blur and GNSS/estimator state. Learn or fit missing
    residual variance/bias terms from training/calibration sessions, and evaluate on
    held-out flights. Report both coverage and ellipse size, not just how tight it looks.
 5. **Joint offline calibration and smoothing.** A factor graph can estimate some mount,
    timing or water-height biases together with buoy trajectories if reference data and
    view diversity make them observable. This is a later experiment, not a reason to
    start with a large new optimization stack.
-6. **Separate absolute and boat-relative error.** If drone and boat share an RTK base and
-   compatible datums, some common error may cancel in their relative geometry.
+6. **Separate absolute and boat-relative error.** If drone and boat have measured common position error and
+   compatible datums, some of it may cancel in their relative geometry. Sharing an RTK
+   base was a historical example; RTK is no longer planned. Nearby ordinary-GNSS
+   receivers must not be presumed to have that correlation.
    For d=p_buoy-p_boat, the covariance is P_buoy+P_boat-C-C^T, where
    C=Cov(p_buoy,p_boat). Measure the shared component and time dependence; do not assume
    cancellation or reduce the absolute GPS ellipse without evidence. This can make

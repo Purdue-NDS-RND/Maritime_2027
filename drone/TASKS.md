@@ -1,6 +1,6 @@
 # Sensing and perception tasks
 
-Last updated: 2026-11-01. Status: planned except the completed reviews and context publication.
+Last updated: 2026-11-04. Status: planned except the completed reviews and context publication.
 Owners below identify responsibility areas, not assigned teammates. Numerical acceptance
 limits must be set with boat/GCS owners before declaring deployment readiness.
 
@@ -21,13 +21,13 @@ limits must be set with boat/GCS owners before declaring deployment readiness.
 
 | ID | Task | Done when | Depends on |
 | --- | --- | --- | --- |
-| SP-01 | Inventory flight controller/firmware, JetPack, ROS, Arducam lens/mode/focus, RTK receiver/base/radio, camera serials and storage | Hardware table has observed versions, interfaces and unresolved fields; target runtime matrix is recorded | Hardware access |
+| SP-01 | Inventory flight controller/firmware, JetPack, ROS, Arducam lens/mode/focus, ordinary GNSS receiver/antenna and telemetry link, camera serials and storage | Hardware table has observed versions, interfaces and unresolved fields; target runtime matrix is recorded | Hardware access |
 | SP-02 | Define ENU origin, global datum, vertical datum, body reference, quaternion direction/order, heading convention and reset policy | A frame contract names every transform, units, source and authority; camera/antenna lever arms are measured | SP-01 |
 | SP-03 | Agree location/coverage/freshness requirements from boat geometry and course clearances | Numeric limits for horizontal p95, bias, map completeness, false objects, age and latency are recorded with rationale | Boat/GCS input |
-| SP-04 | Build a recording/replay specification and first dataset | Frames, capture times, raw pose/attitude samples, RTK health, origins, calibration and versions can be replayed deterministically | SP-01, SP-02 |
+| SP-04 | Build a recording/replay specification and first dataset | Frames, capture times, raw pose/attitude samples, GNSS/estimator health, origins, calibration and versions can be replayed deterministically | SP-01, SP-02 |
 | SP-05 | Establish camera intrinsics/extrinsics and water elevation | Held-out reprojection/ground-target residuals are measured across the image; calibrated mode/focus is fixed; water and camera use one vertical reference | SP-01, SP-02 |
 | SP-06 | Measure camera-FCU clock relationship and capture delay | Offset, drift, jitter, timestamp meaning and allowed interpolation gaps are quantified; invalid timing is observable | SP-04 |
-| SP-07 | Obtain surveyed object ground truth | Repeated reference measurements have uncertainty; stationary targets and buoy water-centres are distinguishable | RTK/reference setup |
+| SP-07 | Obtain surveyed object ground truth | Repeated reference measurements have uncertainty; stationary targets and buoy water-centres are distinguishable | Independent measured reference; RTK is not a deployment dependency |
 
 These proceed alongside model dataset collection. Do not wait for a final trained model
 to test geolocation: measured pixels or manual annotations isolate geometry first.
@@ -81,7 +81,7 @@ SP-09 through SP-12 requires SP-02, SP-04 through SP-07.
   Acceptance: sustained measured end-to-end latency/rate, RAM, GPU use, power/thermal
   behavior, frame drops and timestamps under simultaneous recording.
 - [ ] SP-19: Add startup/configuration diagnostics and observable health states.
-  Acceptance: missing weights, bad intrinsics/resolution, stale pose/RTK corrections,
+  Acceptance: missing weights, bad intrinsics/resolution, stale pose/GNSS fixes,
   failed writes, full disk, camera stalls and overload are reported without plausible
   fabricated locations. Explicit policies determine whether degraded observations remain usable.
 
@@ -182,9 +182,37 @@ camera acceptance, not assumed transfer from aerial detector metrics.
   transforms, missing/stale TF, nonfinite/horizon rejection and replay comparison pass
   agreed tolerances. Upstream NumPy kernel checks alone do not complete this task.
 
+## Ordinary-GNSS design follow-up (2026-11-04)
+
+The user removed RTK. A receiver/base/correction link for RTK is not a deployment
+requirement. The [class and ROS proposal](../docs/sensing_perception.md#proposed-end-to-end-class-contracts)
+is for discussion; no runtime code or physical accuracy is accepted by this work.
+
+- [x] Record ordinary-GNSS requirement and end-to-end class/interface proposal.
+- [ ] SP-41: Establish ordinary-GNSS error and temporal correlation on the actual receiver.
+  Acceptance: stationary/moving residuals against independent quantified reference,
+  covariance/HDOP semantics, dropout/reacquisition, resets and cross-pass drift recorded;
+  uncertainty is not inferred from scatter or detector score alone.
+- [ ] SP-42: Verify earth-referenced heading and camera height above water without RTK.
+  Acceptance: FCU source/frame/covariance contracts, compass interference under flight
+  power, deck/water/camera offsets and height drift meet SP-03; optional range/VIO inputs
+  pass separate over-water validity tests.
+- [ ] SP-43: Evaluate shared anchor/correlation treatment and local versus absolute maps.
+  Acceptance: common GNSS/heading/height errors do not vanish under repeated updates;
+  a conservative batch/floor baseline or joint estimator passes held-out coverage checks.
+  Shared components and cross-object provenance export without double counting.
+- [ ] SP-44: Agree and implement small class contracts, ROS adapters and report envelope.
+  Acceptance: annotated frame + time-aligned pose/plane yields validated ENU distribution
+  and WGS84 report on replay; unknown covariance, resets, missing heading/height, delayed
+  measurements, ambiguity and stale/reordered reports have explicit outcomes.
+  Set numerical rate/gap/accuracy limits through SP-03/SP-35 rather than guessing.
+
+SP-41/SP-42 refine SP-01..SP-07; SP-43 extends SP-11/SP-36/SP-40; SP-44 decomposes
+SP-08..SP-10/SP-18/SP-20/SP-22/SP-39 rather than creating a competing architecture.
+
 ## Recommended next development slice
 
-Start SP-02/SP-04 definitions and SP-34's IPM evaluation, then SP-08's thin ENU adapter
+Start SP-01/SP-02/SP-04 and SP-41/SP-42 definitions and SP-34's IPM evaluation, then SP-08's thin ENU adapter
 with synthetic frame tests and manually annotated reference pixels. In parallel collect SP-14.
 Then add timing, calibrated real data and instance fusion before full GCS/radio integration.
 This order isolates detector, geometry and telemetry errors instead of confounding them.

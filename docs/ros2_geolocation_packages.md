@@ -1,8 +1,12 @@
 # ROS 2 packages for camera-to-water geolocation
 
 Researched: 2026-11-01. Scope: fixed monocular Arducam IMX519, YOLO26n detections,
-IMU/flight-estimator attitude and RTK position, with ENU processing and WGS84 export.
+IMU/flight-estimator attitude and ordinary GNSS position, with ENU processing and WGS84 export.
 This is a source-backed recommendation and evaluation plan, not an installed stack.
+The user's 2026-11-04 no-RTK requirement supersedes the initial RTK assumption;
+projection package choices are unchanged, but GNSS drift/height/heading uncertainty is
+central. See the proposed class contracts in sensing_perception.md. TF supplies no
+covariance; preserve state/correlation metadata in the Maritime pose/uncertainty adapter.
 
 For live uncertainty and cross-pass identity targets added by the forwarded research
 brief, read [uncertainty and tracking](uncertainty_tracking.md). Its voxel/mesh-package
@@ -12,7 +16,7 @@ discussion does not invalidate the IPM candidate: IPM is specifically a plane pr
 
 Evaluate ROS Sports `ipm_library` first for pixel-to-water-plane projection. Pair it
 with tf2 for timestamped camera poses and a tested geodetic conversion library.
-Keep a thin Maritime adapter for calibrated image coordinates, timing/fix checks,
+Keep a thin Maritime adapter for calibrated image coordinates, timing/GNSS-fix checks,
 water-height assumptions, uncertainty, instance fusion and map export.
 
 If IPM's dependencies or image contract are awkward on the selected Jetson stack, use
@@ -126,7 +130,7 @@ Proposed minimal TF chain: survey_enu -> drone_base_link -> arducam_optical_fram
   reference exactly once. Never also apply mount rotations manually after TF did so.
 - Use original image times after clock-domain conversion. Keep TF history long enough
   for measured detector latency; handle missing transforms without a 'latest' fallback.
-- If an FCU already fuses RTK and IMU, begin by consuming its validated estimate. Adding
+- If an FCU already fuses GNSS and IMU, begin by consuming its validated estimate. Adding
   robot_localization is not inherently an improvement, and fusing correlated outputs
   as independent measurements can create misleading confidence.
 
@@ -165,7 +169,7 @@ of the chosen projection library.
 | --- | --- |
 | Pixel model and plane intersections | Correct selected point on a buoy, reflection/height bias |
 | TF storage, interpolation and transforms | Exposure time/clock mapping, frame/datum/reset contract and telemetry quality |
-| Geodetic conversion | Fixed surveyed origin, water elevation, RTK base and antenna reference |
+| Geodetic conversion | Fixed origin/provenance, water elevation and GNSS antenna reference |
 | ROS detection interfaces | Training data, correct YOLO26n artifact, calibration-aware pixels and actual Jetson performance |
 | Generic message timing utilities | Measured maximum gaps and rejection/degradation policy |
 | Optional state estimation | Appropriate source selection and avoidance of correlated double fusion |

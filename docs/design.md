@@ -130,8 +130,9 @@ command. Detailed takeover mechanics are a small integration requirement,
 not the focus of initial development. Positioning/vehicle faults are separate
 from GCS link loss; their responses remain to be decided.
 
-For drone mapping, the user's 2026-11-01 direction is a fixed Arducam IMX519,
-planned RTK and YOLO water-object detection on an Orin Nano 8GB, ideally below
+For drone mapping, the user's direction is a fixed Arducam IMX519,
+ordinary GNSS (RTK explicitly removed on 2026-11-04) and YOLO water-object detection
+on an Orin Nano 8GB, ideally below
 5 m above water. Downward orientation is the working assumption; actual mount,
 lens/focus, usable altitude range, timing and water/position datums need measurement.
 Keep geolocation and instance fusion in a fixed ENU frame and derive WGS84
@@ -186,7 +187,7 @@ the vehicle-GCS protocol or final clearance/acceptance settings.
 
 - First-milestone mission input, progress and completion semantics.
 - Route geometry, turning behavior, operating speed and clearance validation.
-- Error measurements, numeric margins and GPS/RTK hardware availability.
+- Error measurements, numeric margins and ordinary-GNSS performance (no RTK planned).
 - Drone camera, geolocation, survey settings and map quality evaluation.
 - Map freshness limits and when an additional survey is necessary.
 - Mission transfer/acknowledgement and vehicle-GCS transport.
