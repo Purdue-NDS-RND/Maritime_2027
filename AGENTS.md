@@ -6,7 +6,9 @@ map export, minimal web GCS with manual route editing, and boat/ArduPilot slalom
 execution. Automatic route generation and drone mapping were deferred from that
 milestone. The 2026-11-01 sensing/perception planning workstream is documented in
 `drone/LLM.md` and `drone/TASKS.md`; read both for drone/perception requests.
-The current additions are design/backlog documentation, not implemented mapping.
+The drone now has a portable pixel/state-to-GPS processing core and deterministic
+synthetic replay milestone (2026-11-04); real sensor and physical mapping acceptance
+remain open. See `drone/README.md` for executable commands and validation limits.
 Keep the boat independently testable with manually supplied routes. Implementation is
 complete for the selected Milestone 1 simulator acceptance; physical-boat
 performance remains unverified. Documentation alone is not an instruction to
@@ -18,7 +20,8 @@ route generation, mission upload and monitoring. `shared/` is common code/data,
 not a service. Object coordinates and route waypoints are different concepts.
 
 This is a clean restart around the retained simulator. Boat execution, the web
-GCS and shared clearance code are implemented; drone remains a scaffold. Develop
+GCS and shared clearance code are implemented; drone has a standalone synthetic-tested
+processing core, with hardware/ROS integration still unverified. Develop
 the high level design with the user before introducing new algorithms, ROS
 packages, networking or schemas beyond the accepted design.
 Do not restore the old adapter, mapping, navigation or monitoring architecture.

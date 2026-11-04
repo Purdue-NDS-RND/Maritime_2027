@@ -1,7 +1,53 @@
 # Perception JSON contract and GCS integration
 
-Last updated: 2026-11-04. Status: proposed semantics for discussion with GCS/boat owners.
-This is documentation, not an implemented JSON Schema, ROS message or network endpoint.
+Last updated: 2026-11-04. Status: a standalone track-report JSON Schema and encoder are
+implemented. GCS integration, survey completeness/review semantics and transport remain
+proposals. Earlier illustrative fixtures below are design history, not current valid reports.
+
+## Implemented file/report contract
+
+The authoritative first executable report contract is
+[track_report_v1.schema.json](../drone/maritime_perception/schemas/track_report_v1.schema.json).
+The encoder enforces structure, finite values, covariance PSD/component consistency,
+ellipse derivation, duplicate IDs, canonical nanosecond UTC timestamps, epochs/age and
+ENU/WGS84 agreement. Frame axes are East/North/Up; covariance is EN ordered in m^2.
+Ellipse angles are radians CCW from East modulo pi, lengths are semi-axes, and isotropic
+orientation is null. Probability is .95 with coverage_validated=false. Reports expose
+independent/shared covariance and the 2xd factors needed to recover modeled cross-object
+covariance. These marginals are conditional on the selected association.
+
+The envelope includes survey/revision/source/synthetic provenance, fixed origin/frame,
+state_at/published_at, tracks, processing IDs and explicit diagnostic decisions. Tracks
+include class/instance ID, water-plane centre, geographic position, first/last observation,
+age, observation count, motion model, association state and observed/predicted/stale status.
+Age is state_at minus last observation; published_at minus state_at is separate report lag.
+The replay publishes measurement-epoch states, not a claim to predict to wall-clock now.
+
+Required unknown covariance/calibration rejects the observation with a reason; this
+initial implementation does not export a plausible fresh point with zero/null uncertainty.
+Previously supported tracks may coast and become stale when input is rejected. Malformed
+or unmapped time events go to replay_errors.jsonl rather than receiving a fabricated epoch.
+The final report is an immutable snapshot of the last declared state, not route approval.
+
+Source-neutral recording consists of config.json and measurements.jsonl. Config explicitly
+selects source mode and supplies origin, camera/mount/antenna calibration, water model,
+clock mapping/uncertainty and processing limits. Events are {kind,data}, with vehicle_state
+or frame kinds. States name origin/epoch, ENU/FLU, body/antenna reference, quaternion xyzw,
+velocity/angular velocity, residual sample covariance, shared covariance/model ID, clock
+and position/heading/height quality. Frames name exposure midpoint, original and publish
+times, clock, origin/calibration, image domains/sizes, source-from-input affine map and
+detections with ID/class, pixel, pixel covariance and verified reference method.
+All units and assumptions are recorded in generated config/scenario and README.
+
+Truth is not in either processing input. It lives in a separate evaluator file. Replay
+records config/measurement/code/output checksums and package versions and refuses to
+overwrite nonempty output directories. See [commands and replacement checklist](../drone/README.md).
+
+The optional ROS replay node publishes this exact JSON on std_msgs/String. Typed ROS
+Odometry/Detection2D conversions exist but a live subscription/health/clock bridge is
+not implemented. Odometry covariance requires a verified total/shared decomposition;
+unknown/all-zero totals are rejected. Real YOLO box centres default to an unvalidated
+reference policy. No GCS validator/importer or radio endpoint has been changed.
 
 ## Three different products
 
@@ -155,7 +201,8 @@ freeboard. Production origin heights must come from a documented reference.
 
 ## Ordinary-GNSS report additions
 
-Status: proposal, not implemented. Use positioning_mode=standalone_gnss for the
+Historical illustrative proposal; use the implemented schema above for runnable output.
+Use positioning_mode=standalone_gnss for the
 current no-RTK deployment. Record receiver/estimator health, fix age, covariance
 source/type, clock status, height/heading source, origin provenance and reset epoch.
 RTK correction age is not a requirement.

@@ -30,8 +30,12 @@ as the expected SHA; if it changes, reread and preserve concurrent edits.
 
 ## Evidence and maintenance
 
-Current state is documentation/planning; do not claim drone mapping or physical
-accuracy is implemented. Update the relevant living reference and task IDs when
+Current state includes a runnable, synthetically tested standalone processing/replay
+core. Do not claim real sensor mapping, ROS/Docker/Jetson integration or physical
+accuracy acceptance. Synthetic adapters/scenarios/evaluation live in
+`perception_synthetic/`; production processing must not import scene truth.
+Keep adapter selection explicit and never substitute synthetic calibration or inputs
+after a hardware failure. Update the relevant living reference and task IDs when
 behavior or decisions change. Avoid per-chat handoff reports. Keep recordings,
 weights, generated engines and scratch results out of source commits.
 

@@ -1,7 +1,37 @@
 # ENU geolocation and measurement error
 
-Last updated: 2026-11-04. This is the proposed mathematical and validation contract.
+Last updated: 2026-11-04. The portable subset of this mathematical contract is implemented.
 Physical transforms, numerical quality gates and accuracy requirements remain to be measured.
+
+## Current implementation and evidence
+
+`drone/maritime_perception/geometry.py` uses OpenCV inverse distortion for raw plumb_bob
+pixels and explicit effective intrinsics for rectified pixels. The source/input affine
+map restores crop/resize/letterbox coordinates and their pixel covariance. Only the
+horizontal water plane is implemented; arbitrary-plane notation below remains reference.
+The synthetic minimum down-cosine .25 and maximum range 30 m are declared test settings,
+not approved flight limits. Camera/antenna lever arms are applied once.
+
+`timing.py` uses SciPy SLERP and position interpolation only between valid bracketing
+samples, with source-clock mapping, maximum gap, origin, epoch and quality checks.
+Endpoint uncertainty is propagated through the interpolation Jacobian with persistent
+sample factors, not silently replaced by latest pose or naive covariance interpolation.
+Source timestamps must already have a verified UTC mapping for vehicle-state input.
+This is the non-ROS path; tf2 remains an unexecuted integration target.
+
+`geodesy.py` uses PROJ WGS84 cartesian/topocentric conversion. Independent tests use
+the equatorial radius and PROJ's published topocentric example, plus course round trips.
+At origin 40 deg N, 86 deg W, ellipsoid height 200 m, comparison with unchanged
+`shared.geometry.to_gps` gives horizontal disagreements 0.144663 m at (50,50),
+0.145114 m at (-50,-50), 0.141723 m at (100,0), and 0.252749 m at (0,100).
+These characterize different projection formulas, not GNSS accuracy. Reconcile at the
+future GCS import boundary; the boat/simulator projection was not replaced.
+
+Analytical tests cover centre/edge pixels, heading, roll/pitch, measured mount examples,
+lever arms, raw/rectified equivalence and invalid geometry. Synthetic forward projection
+uses OpenCV separately from the inverse pipeline; known analytical cases prevent reliance
+on round trips alone. Real mounting, exposure timing, water datum and object freeboard
+are unmeasured. See README for commands and uncertainty_tracking.md for covariance limits.
 
 ## Implementation reuse
 

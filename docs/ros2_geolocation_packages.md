@@ -14,6 +14,29 @@ discussion does not invalidate the IPM candidate: IPM is specifically a plane pr
 
 ## Recommendation
 
+### Implemented portable choice (2026-11-04)
+
+This environment lacks rclpy, image_geometry, tf2, ROS/colcon and Docker. IPM's ROS
+dependencies prevent evaluating its full API here. The runnable core therefore uses
+OpenCV 4.12.0.88, SciPy 1.17.0 and a small horizontal ray/plane intersection, with pyproj
+3.7.2/PROJ WGS84 cartesian/topocentric conversion. NumPy is pinned to 2.2.6 for OpenCV
+compatibility. These dependencies installed and ran on Python 3.12/Linux x86_64. SciPy
+and pyproj pins require Python >=3.11; this is not a supported Jetson/Humble matrix.
+
+SciPy supplies quaternion rotation/SLERP, linear solves, chi-square scaling and assignment.
+The small static correlated-factor estimator is application code because its common
+error sensitivities must survive updates; independent-noise FilterPy defaults would not
+provide that treatment. No general state-estimation framework was introduced.
+
+Optional ROS conversion/replay-node/launch source and Dockerfiles are provided, but neither
+ROS build/launch nor Docker execution occurred. SP-34 remains open. Evaluate IPM and tf2
+against the same analytical and replay cases once a ROS/Jetson environment is selected;
+do not silently change numerical behavior or discard covariance/provenance at that boundary.
+
+Primary APIs used: [SciPy SLERP](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Slerp.html),
+[PROJ topocentric](https://proj.org/en/stable/operations/conversions/topocentric.html), and
+[OpenCV calibration](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html).
+
 Evaluate ROS Sports `ipm_library` first for pixel-to-water-plane projection. Pair it
 with tf2 for timestamped camera poses and a tested geodetic conversion library.
 Keep a thin Maritime adapter for calibrated image coordinates, timing/GNSS-fix checks,
@@ -216,7 +239,8 @@ TF runtime, package build, Jetson inference, camera or physical accuracy trial r
 
 If IPM meets these checks, use it behind our adapter. Otherwise use image_geometry/tf2
 with the same acceptance suite and record the specific mismatch. No package dependency
-or runtime code is introduced by this documentation update.
+or runtime code was introduced by that 2026-11-01 research-only update; the separate
+portable implementation and current dependency choices are described above.
 
 ## Primary references
 

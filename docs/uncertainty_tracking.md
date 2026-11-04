@@ -1,9 +1,55 @@
 # Uncertainty and persistent buoy tracking
 
-Last updated: 2026-11-04. Status: reviewed design and evaluation plan, not implemented.
+Last updated: 2026-11-04. Status: portable first-order correlated-error propagation and
+static/random-walk tracking implemented and synthetically tested. CV/nonlinear models,
+real priors, physical coverage, long-session drift and deployment remain unvalidated.
 This extends the ENU geometry and library-reuse references after review of a
 user-supplied Gemini research brief. Formulas were checked independently; package
 capabilities were checked against primary documentation.
+
+## Implemented correlated-factor baseline
+
+The source contract separates independent pixel/reference/timing residuals from named
+pose-sample, navigation, calibration, water and clock errors. Every named source is a
+common unit-normal vector b_s; a measurement error is epsilon + sum(B_s b_s), so
+P = R_independent + sum(B_s B_s^T). Full 6x6 pose covariance includes position/orientation
+cross terms; perturbations are [ENU metres, left small-angle ENU radians]. Intrinsics
+use [fx,fy,cx,cy] pixels; mount errors use body translation metres and body rotation
+radians. Water height is metres and clock offset is seconds. Different named groups
+are assumed independent; adapters must not manufacture independence by renaming sources.
+
+The pose provider numerically differentiates SciPy SLERP for endpoint error propagation.
+Reused pose samples retain their IDs/factors across frames/objects. Shared navigation,
+calibration, water and clock factors persist across the session. Projection numerically
+differentiates the validated OpenCV/plane adapter. Distortion-coefficient uncertainty,
+unmodeled freeboard/reflection bias and rolling shutter are not calibrated by this model.
+
+For a track and observation at the same epoch, define D_s=B_track,s-B_observation,s.
+The innovation covariance is S=P_independent+R_independent+sum(D_s D_s^T).
+The gain numerator is P_independent+sum(B_track,s D_s^T), and K=numerator S^-1.
+After the mean update, propagate independent covariance with the Joseph expression,
+and each factor with B'_s=(I-K)B_track,s+K B_observation,s. SciPy supplies stable linear
+solves; this small static estimator carries correlations a generic independent-error KF
+would omit. It does not estimate b_s or promise to recover an unobservable GPS offset.
+For a common translation B, B'=B exactly, regardless of observation count.
+
+The default state is [E,N] with optional random-walk spectral density in m^2/s. A gap
+keeps the mean constant and increases covariance; observed/predicted/stale status and
+last-observation time remain explicit. No constant-velocity implementation is claimed.
+Association uses S above, a declared chi-square gate, Gaussian cost, unmatched dummies
+and an ambiguity margin. Ambiguous hypotheses do not update/create a falsely confirmed
+identity. Unmatched detections create tentative tracks; confirmation requires repeat hits.
+False-object rejection is not guaranteed, and association-selected distributions can
+have different coverage from the unconditioned Gaussian model.
+
+Tests check analytical covariance, Monte Carlo projection and correlated-filter residuals,
+ellipse probability/orientation, repeated common errors and shared sample interpolation.
+The noisy demonstration retains at least 2.25 m^2 shared EN variance while independent
+terms shrink. Its fixed +0.7/-0.4 m offset remains in estimated positions. Single-run
+containment is not 95% statistical validation: samples are correlated and the offset is
+fixed. Real GNSS drift requires measured correlations/epochs; current sources are
+constant over declared sample/session IDs. Factor storage grows with survey length;
+long-running deployment and model reduction have not been accepted.
 
 ## New targets and unresolved operational scope
 

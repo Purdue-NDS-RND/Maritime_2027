@@ -1,8 +1,9 @@
 # Maritime sensing and perception: working context
 
 Last updated: 2026-11-04. Owner: Samuel Yoon, Sensing and Perception Lead.
-Status: source review, ROS 2 package research and development plan committed as shared
-context on `feature/cv-raycast`. No drone implementation or physical accuracy acceptance is claimed.
+Status: a runnable standalone pixel/state-to-GPS core and deterministic synthetic survey
+are implemented on `feature/cv-raycast`. Sensor, ROS/Docker/Jetson integration and physical
+accuracy remain unverified. [README.md](README.md) contains exact setup/demo/test commands.
 
 ## Read this first
 
@@ -30,6 +31,32 @@ handoff report for each chat. New chats should read this index rather than the f
 The current GitHub feature branch is the canonical shared context. The earlier exported
 Markdown pack is a historical starting point; use current repository files for future work.
 
+## Implemented portable milestone (2026-11-04)
+
+`maritime_perception/` contains validated source-neutral records, explicit clock mapping,
+bounded SciPy SLERP pose resolution, OpenCV camera geometry, analytic horizontal-water
+intersection, first-order covariance propagation, named shared-error factors, static/
+random-walk association/tracking, PROJ WGS84 geodesy and validated versioned JSON reports.
+`perception_synthetic/` separately generates raw pixels and antenna states using a forward
+camera model. Only its evaluator reads withheld target truth; pure replay works without it.
+
+The analytic scenario recovers three known points exactly. The seeded noisy survey
+includes a moving/turning camera, same-class objects, GNSS offset, misses, ambiguity and
+invalid inputs. It retains three identities and the shared GNSS uncertainty. Tests cover
+geometry, uncertainty, association, validity, reports and process-independent replay.
+Current results and limits are maintained in the topic docs; do not infer real accuracy.
+
+The implementation uses the narrow OpenCV/SciPy fallback because ROS/IPM/tf2 are unavailable
+in this environment. Optional ROS conversions/recorded-event node/launch and CPU/desktop-ROS
+Dockerfiles are present but not runtime-verified. Local Ultralytics weights are required
+for the optional detector adapter; inference/trained water detection were not exercised.
+No camera/FCU driver, GCS importer, radio infrastructure or flight control was added.
+
+Do not treat a new covariance source ID as evidence of independence. Input adapters must
+establish residual versus common covariance, clock validity and frame/reset contracts.
+Current named common sources are constant over their declared session/sample; real drift
+models and empirical calibration remain open. Real hardware mode forbids synthetic config.
+
 ## User-established direction
 
 1. A drone launches from the boat and surveys buoys/objects in the water.
@@ -55,7 +82,8 @@ Markdown pack is a historical starting point; use current repository files for f
 
 The user's Gemini brief adds real-time location/uncertainty reports, dynamically
 computed Gaussian position ellipses, persistent identities across passes and prediction
-through observation gaps. Treat these as development targets, not implemented features.
+through observation gaps. The portable static baseline now implements these report/state
+semantics on synthetic input; real motion, transport and cross-pass performance remain targets.
 Clarify report cadence/latency/maximum age and whether updates are only during a survey
 or must continue while the boat navigates. The existing survey-then-land workflow and
 operator route approval remain until explicitly changed.
@@ -82,7 +110,8 @@ checked equations, implementation candidates, new tasks and unresolved scope.
 The user explicitly replaces RTK with ordinary GPS and requests small, single-purpose
 classes, ROS 2 in Docker, and structured GPS reports with uncertainty. The proposed
 [class/interface and deployment design](../docs/sensing_perception.md#proposed-end-to-end-class-contracts)
-is for discussion, not an implemented or accuracy-accepted stack.
+was the discussion proposal. The portable subset above is now implemented; hardware
+accuracy and the remaining deployment/transport choices are not accepted.
 
 Camera + raw IMU alone cannot provide absolute GPS object locations. Timestamped GNSS,
 earth-referenced heading and height above water are required. Prefer one validated FCU
@@ -98,7 +127,8 @@ and frame/calibration risks remain. No ROS, inference, camera or flight trial ra
 
 ## Existing repository reality
 
-- Current `drone/` contains README/context/task/instruction documents, with no runtime source.
+- Current `drone/` includes the standalone processing core, synthetic source/evaluator,
+  tests, optional ROS adapters and deployment candidates alongside context documents.
 - `boat/`, `gcs/` and `shared/` have implementations; Gazebo/SITL tools are retained.
 - Existing design describes survey -> GCS review -> approved route -> boat execution.
   Initial survey is consolidated, and the drone lands before boat route execution.
@@ -110,11 +140,12 @@ and frame/calibration risks remain. No ROS, inference, camera or flight trial ra
   its simulator compatibility while evaluating a WGS84 ECEF/ENU geodetic path.
 - Evaluate ROS Sports ipm_library for pixel-to-water-plane projection with tf2 at image
   time. The fallback is image_geometry + tf2 + a narrow analytic intersection function.
-  Reuse libraries before reproducing the old monolithic logger. Dependencies are not yet installed.
+  The current non-ROS core uses OpenCV/SciPy/PROJ. Full ROS projection/history dependencies
+  are not installed/evaluated on the target stack; SP-34 remains open.
 - Automatic route generation, real radio mission delivery, drone survey implementation
   and boat mission-specific camera behaviors are not established by the supplied code.
-- User's current request authorizes this perception design and task definition. Historical
-  milestone deferral does not prohibit planning it, but does not imply that its code exists.
+- The user's implementation request authorizes this standalone milestone. Historical
+  boat milestone deferral preserves boat-only testability and does not block drone development.
 - Preserve independently testable boat routes; keep navigation decisions out of geolocation.
 
 ## Findings that must not be forgotten

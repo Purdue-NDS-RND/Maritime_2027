@@ -1,6 +1,7 @@
 # Sensing and perception tasks
 
-Last updated: 2026-11-04. Status: planned except the completed reviews and context publication.
+Last updated: 2026-11-04. Status: standalone synthetic milestone implemented; hardware,
+ROS/Docker/Jetson and physical acceptance tasks remain open. See the portable results below.
 Owners below identify responsibility areas, not assigned teammates. Numerical acceptance
 limits must be set with boat/GCS owners before declaring deployment readiness.
 
@@ -34,7 +35,7 @@ to test geolocation: measured pixels or manual annotations isolate geometry firs
 
 ## P1: hardware-independent ENU geolocation core
 
-- [ ] SP-08: Implement a thin geometry adapter around an evaluated library, returning
+- [x] SP-08: Implement a thin geometry adapter around an evaluated library, returning
   ENU hit + quality/rejection reason. Prefer IPM after SP-34; use image_geometry/tf2
   with a narrow analytic intersection fallback if a concrete mismatch warrants it.
   Acceptance: known centre/edge pixels, 90-degree headings, roll/pitch, lever arms,
@@ -43,7 +44,7 @@ to test geolocation: measured pixels or manual annotations isolate geometry firs
   source-gap and quality checks rather than rewriting SLERP/history arithmetic.
   Acceptance: missing brackets, excessive gaps, origin resets and invalid quaternions
   produce explicit invalid/degraded results; no silent latest-pose substitution.
-- [ ] SP-10: Implement WGS84 geodetic/ECEF/ENU conversion at the export boundary.
+- [x] SP-10: Implement WGS84 geodetic/ECEF/ENU conversion at the export boundary.
   Acceptance: independent reference and round-trip tests across the course extent;
   quantify disagreement with existing simulator/GCS projection.
 - [ ] SP-11: Add quality propagation and sensitivity analysis for pixel, position,
@@ -210,12 +211,36 @@ is for discussion; no runtime code or physical accuracy is accepted by this work
 SP-41/SP-42 refine SP-01..SP-07; SP-43 extends SP-11/SP-36/SP-40; SP-44 decomposes
 SP-08..SP-10/SP-18/SP-20/SP-22/SP-39 rather than creating a competing architecture.
 
+## Completed standalone synthetic milestone (2026-11-04)
+
+The user explicitly authorized runnable implementation. SP-08 uses the narrow OpenCV
+analytic-plane fallback; SP-10 uses PROJ. Their checkmarks describe portable numerical
+acceptance, not calibration, ROS/IPM or physical acceptance. GCS projection remains
+unchanged; its discrepancy is quantified in geolocation.md and reconciliation is SP-23.
+
+- [x] Implement real clock/pose/pixel/geolocation/uncertainty/association/static-tracking/
+  WGS84/report algorithms behind common source-neutral input records.
+- [x] Separate seeded forward-model sources/scenarios and withheld evaluator from production.
+- [x] Demonstrate three analytic targets and a noisy moving-camera survey with shared GNSS
+  offset, temporary misses, ambiguity, invalid inputs and stable same-class identities.
+- [x] Record/replay config and measurement events; verify byte-identical outputs in another
+  process without truth. Preserve checksums and runtime versions; raw evidence is ignored.
+- [x] Add meaningful core tests, structural ROS conversion tests and packaged JSON Schema.
+- [x] Add optional local-weights detector adapter, recorded ROS node/launch, and Docker
+  build candidates. This checkmark means source/config exists, not integration acceptance.
+
+SP-09/SP-34 still require tf2/IPM on a selected ROS/Jetson stack. SP-04/SP-11/SP-20/
+SP-36/SP-38/SP-39/SP-43/SP-44 have implemented portable portions; their real recording,
+calibrated uncertainty, GCS/display and deployment acceptance is not completed by synthetic
+tests. SP-15/SP-18/SP-19 remain open for trained inference/full onboard runtime and diagnostics.
+SP-41/SP-42/SP-40 require actual sensors/reference trials. No camera, FCU or radio is assumed.
+
 ## Recommended next development slice
 
-Start SP-01/SP-02/SP-04 and SP-41/SP-42 definitions and SP-34's IPM evaluation, then SP-08's thin ENU adapter
-with synthetic frame tests and manually annotated reference pixels. In parallel collect SP-14.
-Then add timing, calibrated real data and instance fusion before full GCS/radio integration.
-This order isolates detector, geometry and telemetry errors instead of confounding them.
+Run the README demonstration first. Then establish SP-01/SP-02/SP-04 and SP-41/SP-42
+hardware/frame/clock/covariance contracts, replace synthetic sources with annotated real
+recordings and evaluate SP-34. Collect SP-14 in parallel. Keep the deterministic replay
+suite while adding calibration, real detector references and actual ROS/Jetson integration.
 
 ## Status maintenance
 

@@ -1,7 +1,37 @@
 # Sensing and perception architecture
 
-Last updated: 2026-11-04. User direction is recorded below; module boundaries are
-proposed implementation guidance. No new ROS packages or network services exist yet.
+Last updated: 2026-11-04. A portable numerical implementation and synthetic demonstration
+now exist under `drone/`; see [commands](../drone/README.md). Optional ROS package/launch
+source exists but has not run. Hardware and physical accuracy remain unverified.
+
+## Implemented standalone milestone
+
+The actual entry point is `perception_synthetic.demo`: it generates explicit measurement
+events, invokes `maritime_perception.replay` and then evaluates against separate truth.
+Production modules do not read scene targets or truth. Shared config/state/frame contracts
+also accept recorded or future hardware/Gazebo data; hardware failure never selects
+synthetic data. `PerceptionPipeline` connects small numerical/source adapters rather than
+one ROS node per class. The concrete file layout and replacement checklist are in README.
+
+Implemented: raw/rectified camera rays and pixel-coordinate restoration; camera/antenna
+lever arms; exposure-time pose resolution with gaps/reset checks; horizontal water
+projection; correlated uncertainty; gated assignment with unmatched/ambiguous outcomes;
+static/random-walk tracks; WGS84 and validated report files. Unknown required uncertainty
+or calibration rejects observations rather than reporting zero uncertainty. Predictions
+remain separately labeled when a frame is rejected. There is no CV/moving-object model.
+
+The projector uses the research document's narrow non-ROS fallback: OpenCV plus a small
+analytic intersection, SciPy SLERP/rotations and PROJ geodesy. Full IPM/tf2 evaluation is
+still SP-34. Optional Ultralytics code requires local weights and leaves default box
+centres unvalidated. Structural ROS conversions are tested; actual ROS/DDS/launch,
+Docker, GPU/Jetson, camera/FCU and trained detection have not run.
+
+Numerical/fixture evidence is in the test suite, not a physical acceptance claim.
+The analytic scenario recovers three points exactly. The noisy survey retains three
+same-class identities through misses, with no switches or mixed tracks, and retains
+the configured 2.25 m^2 shared horizontal GNSS variance. Timestamp-derived 150 ms lag
+is synthetic configuration, not measured runtime latency. Raw runs belong under ignored
+`simulation/logs/perception/`; GCS behavior and boat/simulator sources are unchanged.
 
 ## Responsibility and data flow
 
@@ -68,9 +98,9 @@ automatically choose the drone telemetry adapter.
 
 ## Proposed end-to-end class contracts
 
-Status: discussion proposal dated 2026-11-04. The confirmed requirement is ordinary
-GNSS without RTK. Interfaces, ROS topics, process layout and uncertainty strategy below
-are not implemented or accepted as measured performance.
+Status: the original discussion contracts remain design guidance. The portable subset
+described above is implemented; real acquisition, deployment, transport and performance
+acceptance remain proposals. Ordinary GNSS without RTK is the confirmed sensor direction.
 
 Camera and raw IMU are insufficient for absolute geolocation. Require timestamped GNSS,
 earth-referenced attitude/heading and height above water, plus camera calibration.

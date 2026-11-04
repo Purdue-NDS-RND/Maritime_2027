@@ -139,8 +139,11 @@ Keep geolocation and instance fusion in a fixed ENU frame and derive WGS84
 coordinates at export. Aerial color classification is optional; the operator
 assigns colors/course roles at the GCS. See [sensing context](../drone/LLM.md),
 [architecture](sensing_perception.md) and [geolocation](geolocation.md).
-These additions define a planning workstream, not implemented drone mapping or
-an accepted physical accuracy claim. Boat camera support for later missions
+The 2026-11-04 portable milestone now implements pixel/state geolocation, correlated
+uncertainty, static object identities and WGS84 reports on deterministic synthetic input.
+See drone/README.md for runnable commands. Real sensor/ROS/Jetson integration and physical
+accuracy remain unverified; these reports are not yet consumed by the GCS importer.
+Boat camera support for later missions
 remains separate; exact ZED model and two-camera compatibility are unresolved.
 A homemade gimbal is not assumed to improve geolocation accuracy.
 

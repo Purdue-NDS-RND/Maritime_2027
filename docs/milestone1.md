@@ -152,6 +152,17 @@ per-run evidence in the ignored logs rather than creating task handoffs.
 
 ## Deferred work and limits
 
+The separate 2026-11-04 drone portable milestone now supplies a tested synthetic
+pixel/state-to-GPS demonstration with uncertainty and identities; see
+[drone commands](../drone/README.md). It does not change this historical boat milestone,
+its perfect simulator-map assumption or its acceptance results. No boat motion/simulator
+trial was rerun for the drone implementation. Real sensing and GCS map import remain open.
+Portable evidence: 74 drone tests and 11 unchanged GCS workspace tests passed; both
+demonstrations and independent recorded replay ran. Three same-class identities persisted
+with zero synthetic identity errors, and configured shared GNSS variance was retained.
+Python package build/install and a packaged analytic demo passed. ROS/Docker/Jetson,
+trained inference and physical acceptance were not exercised.
+
 No drone application, detection model, geolocation from images, marker landing,
 automatic route generation, Evade detector strategy, stitched aerial imagery,
 or other competition task mechanisms are required here.
