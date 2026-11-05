@@ -31,6 +31,14 @@ handoff report for each chat. New chats should read this index rather than the f
 The current GitHub feature branch is the canonical shared context. The earlier exported
 Markdown pack is a historical starting point; use current repository files for future work.
 
+## Python tooling requirement
+
+The user requires uv exclusively for Python setup and execution. The README uses
+`uv venv --python 3.12`, `uv pip install` against the existing pinned requirements and
+`uv run --no-project --python .venv/bin/python python ...`. No uv project/lockfile
+migration or Jetson compatibility is implied. The pipeline report's command page and
+both Docker build candidates follow this workflow; ROS/Docker runtime remains unexecuted.
+
 ## Readable reports and first bench test
 
 The user-requested [pipeline report](../docs/perception_reports/Maritime_Pipeline_Report.docx)

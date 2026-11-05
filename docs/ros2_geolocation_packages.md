@@ -28,6 +28,12 @@ The small static correlated-factor estimator is application code because its com
 error sensitivities must survive updates; independent-noise FilterPy defaults would not
 provide that treatment. No general state-estimation framework was introduced.
 
+Python setup and execution use uv exclusively by user requirement. The maintained
+README selects a Python 3.12 virtual environment, installs the existing pinned requirements
+with `uv pip install`, and runs via `uv run --no-project --python <venv>/bin/python`.
+This command conversion retains ROS packaging; it does not select a Jetson runtime or
+introduce a uv project lockfile. Both Docker build candidates also use uv for Python.
+
 Optional ROS conversion/replay-node/launch source and Dockerfiles are provided, but neither
 ROS build/launch nor Docker execution occurred. SP-34 remains open. Evaluate IPM and tf2
 against the same analytical and replay cases once a ROS/Jetson environment is selected;

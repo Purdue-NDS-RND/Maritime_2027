@@ -28,6 +28,15 @@ as the expected SHA; if it changes, reread and preserve concurrent edits.
 - Preserve independently testable boat/GCS routes and existing simulator acceptance.
   Boat ZED perception is a later, separate integration.
 
+## Python workflow
+
+The user requires uv exclusively for Python environment creation, dependency installation
+and command execution in this workstream. Follow drone/README.md: `uv venv`, `uv pip
+install` and `uv run --no-project --python <venv>/bin/python python ...`. Preserve the
+pinned requirements and ROS packaging. Do not replace this with direct pip or Python
+venv setup instructions, or assume a uv project/lockfile exists. Native ROS, Docker,
+Git and shell commands remain applicable.
+
 ## Evidence and maintenance
 
 Current state includes a runnable, synthetically tested standalone processing/replay

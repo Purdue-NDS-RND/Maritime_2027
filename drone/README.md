@@ -16,27 +16,34 @@ Run from the repository root. Python 3.12 on Linux x86_64 was exercised; pinned 
 and pyproj require Python >=3.11. This dependency set is not a claim of compatibility
 with the Jetson's eventual JetPack/ROS/Python combination.
 
+Use **uv exclusively** to create environments, install Python packages and run Python
+commands for this workstream. Run every command below from the repository root. Use an
+unused environment path if `.venv` already belongs to other work, and substitute that
+path consistently. No environment activation is needed.
+
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r drone/requirements-test.txt ./drone
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r drone/requirements-test.txt -e ./drone
 ```
 
-For development, install editable instead: `.venv/bin/python -m pip install -e ./drone`.
-An alternative exercised setup is `uv venv --python python .venv`, then
-`uv pip install --python .venv/bin/python -r drone/requirements-test.txt -e ./drone`.
-Use a new virtual environment rather than overwriting an existing project environment.
+For a non-editable package installation, omit `-e` in the install command. The repository
+retains its pinned requirements and ROS `setup.py` packaging. There is no uv project or
+lockfile here, so use `uv pip install` and the explicit interpreter with `uv run
+--no-project`; do not assume `uv sync` is configured. The explicit interpreter prevents
+an unrelated active environment from being selected. `git`, `docker`, `ros2`, `colcon`
+and shell utilities retain their native commands; uv manages the Python environment.
 
 One command generates measurements, executes the actual production pipeline and evaluates
 its reports against a separate truth file:
 
 ```bash
-.venv/bin/python -m perception_synthetic.demo --adapter synthetic --scenario stationary --output simulation/logs/perception/stationary-demo
+uv run --no-project --python .venv/bin/python python -m perception_synthetic.demo --adapter synthetic --scenario stationary --output simulation/logs/perception/stationary-demo
 ```
 
 The independent analytic case has a nadir camera and targets at ENU (0,0), (1,0), (0,1):
 
 ```bash
-.venv/bin/python -m perception_synthetic.demo --adapter synthetic --scenario analytic --output simulation/logs/perception/analytic-demo
+uv run --no-project --python .venv/bin/python python -m perception_synthetic.demo --adapter synthetic --scenario analytic --output simulation/logs/perception/analytic-demo
 ```
 
 Output directories must be new or empty. Choose a new path on subsequent runs; the tool
@@ -68,7 +75,7 @@ Processing imports neither synthetic scene code nor truth. Replay needs only con
 measurements, and works after removing truth:
 
 ```bash
-.venv/bin/python -m maritime_perception.replay --session simulation/logs/perception/stationary-demo/session --output simulation/logs/perception/stationary-replay
+uv run --no-project --python .venv/bin/python python -m maritime_perception.replay --session simulation/logs/perception/stationary-demo/session --output simulation/logs/perception/stationary-replay
 ```
 
 `--adapter synthetic` is mandatory for generation. Replay is explicitly a recorded-input
@@ -98,7 +105,7 @@ calibration unchanged, excludes truth, and refuses to overwrite an existing sess
 Run from the repository root:
 
 ```bash
-.venv/bin/python - <<'PYTHON'
+uv run --no-project --python .venv/bin/python python - <<'PYTHON'
 import json
 from pathlib import Path
 
@@ -121,7 +128,7 @@ with (target / "measurements.jsonl").open("w") as output:
             }]
         output.write(json.dumps(event, allow_nan=False) + "\n")
 PYTHON
-.venv/bin/python -m maritime_perception.replay --session simulation/logs/perception/manual-pixel-session --output simulation/logs/perception/manual-pixel-result
+uv run --no-project --python .venv/bin/python python -m maritime_perception.replay --session simulation/logs/perception/manual-pixel-session --output simulation/logs/perception/manual-pixel-result
 ```
 
 In this specific synthetic calibration, the camera is at ENU `(0,0,4)`, attitude is
@@ -193,18 +200,23 @@ with the configured GNSS offset. Minimum final shared covariance eigenvalue exce
 Predicted/stale states appeared during gaps; all 3 final tracks were stale after the
 deliberately unbracketed exposure. Error statistics use pure confirmed tracks.
 
-A separate non-editable pip build/install and packaged analytic demo passed outside
+A separate non-editable package build/install and packaged analytic demo passed outside
 the checkout. Recorded replay was byte-identical, including in a different process/hash
 seed; truth was absent in one replay test. Python/XML parsing, maintained Markdown file
 links and strict-shell syntax passed. ROS's unavailable-runtime failure was exercised;
 Docker/ROS/colcon/DDS/Jetson, actual detector inference and physical trials did not run.
 
 ```bash
-.venv/bin/python -m pytest drone/tests -q
-.venv/bin/python -m unittest discover -s gcs/tests -p test_workspace.py -v
-.venv/bin/python -m compileall -q drone/maritime_perception drone/perception_synthetic drone/launch
+uv run --no-project --python .venv/bin/python python -m pytest drone/tests -q
+uv run --no-project --python .venv/bin/python python -m unittest discover -s gcs/tests -p test_workspace.py -v
+uv run --no-project --python .venv/bin/python python -m compileall -q drone/maritime_perception drone/perception_synthetic drone/launch
 bash -n drone/container/entrypoint.sh
 ```
+
+The uv-only commands were also exercised with uv 0.13.5 and a fresh Python 3.12.14
+virtual environment: both demos, manual-pixel replay, byte-identical stationary replay,
+74 drone tests, 11 GCS workspace tests, compileall and shell syntax checks passed.
+The Docker/ROS candidates were updated for uv but were not built or executed here.
 
 Tests include analytical geometry (not only matching forward/inverse round trips),
 frames/mounts/lever arms/preprocessing, distortion, bounded SLERP pose lookup, resets,
@@ -267,7 +279,7 @@ CPU image, from repository root:
 
 ```bash
 docker build -f drone/container/Dockerfile -t maritime-perception:cpu drone
-docker run --rm --network none maritime-perception:cpu python -m pytest tests -q
+docker run --rm --network none maritime-perception:cpu uv run --no-project --python /opt/perception-venv/bin/python python -m pytest tests -q
 mkdir -p simulation/logs/perception/docker
 docker run --rm --network none -v "$PWD/simulation/logs/perception/docker:/output" maritime-perception:cpu
 ```
@@ -279,6 +291,8 @@ docker build -f drone/container/Dockerfile.ros -t maritime-perception:ros-deskto
 docker run --rm --network none -v "$PWD/simulation/logs/perception/stationary-demo/session:/session:ro" -v "$PWD/simulation/logs/perception/new-ros-output:/output" maritime-perception:ros-desktop ros2 launch maritime_perception replay.launch.py session:=/session output:=/output
 ```
 
+Both Dockerfiles copy pinned uv 0.13.5 from the official Astral image and use uv for
+Python environment/dependency installation. ROS system packages still use apt and colcon.
 Create an empty host output directory first. These images are build candidates, not
 executed evidence or a selected Jetson combination. Host drivers/firmware stay outside
 the app. No GCS importer, radio transport, flight control or boat routing was changed.

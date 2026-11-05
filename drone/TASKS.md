@@ -254,6 +254,16 @@ hardware/frame/clock/covariance contracts, replace synthetic sources with annota
 recordings and evaluate SP-34. Collect SP-14 in parallel. Keep the deterministic replay
 suite while adding calibration, real detector references and actual ROS/Jetson integration.
 
+## Python tooling maintenance
+
+Use uv exclusively for setup, installs and Python commands, per the user. README demo,
+manual-pixel replay, test and static-check commands use the explicitly selected uv
+virtual environment. Requirements and ROS packaging are retained; a project lockfile
+migration is not part of this command conversion. A fresh uv environment passed both
+demos, manual-pixel replay, identical recorded replay, 74 drone tests, 11 GCS workspace
+tests and static checks. Dockerfiles use uv but still require
+actual image builds and ROS/Jetson execution before integration acceptance.
+
 ## Status maintenance
 
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
