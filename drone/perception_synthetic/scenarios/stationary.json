@@ -1,0 +1,47 @@
+{
+  "seed": 20261104,
+  "name": "stationary",
+  "analytic": false,
+  "frames": 60,
+  "frame_period_s": 0.4,
+  "pixel_sigma_px": 0.8,
+  "sample_position_sigma_m": 0.02,
+  "sample_attitude_sigma_deg": 0.08,
+  "shared_offset_m": [
+    0.7,
+    -0.4,
+    0
+  ],
+  "shared_heading_bias_deg": 0.4,
+  "shared_position_sigma_m": 1.5,
+  "shared_heading_sigma_deg": 0.6,
+  "assumed_water_up_m": 0.02,
+  "water_sigma_m": 0.04,
+  "random_walk_m2_s": 0.00002,
+  "targets": [
+    {
+      "id": "truth_a",
+      "position_enu_m": [
+        -0.6,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "truth_b",
+      "position_enu_m": [
+        0.6,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "truth_c",
+      "position_enu_m": [
+        0,
+        1.2,
+        0
+      ]
+    }
+  ]
+}

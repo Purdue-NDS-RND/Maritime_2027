@@ -1,0 +1,47 @@
+{
+  "seed": 20261104,
+  "name": "analytic",
+  "analytic": true,
+  "frames": 4,
+  "frame_period_s": 0.4,
+  "pixel_sigma_px": 0.5,
+  "sample_position_sigma_m": 0.02,
+  "sample_attitude_sigma_deg": 0.08,
+  "shared_offset_m": [
+    0,
+    0,
+    0
+  ],
+  "shared_heading_bias_deg": 0,
+  "shared_position_sigma_m": 1.5,
+  "shared_heading_sigma_deg": 0.6,
+  "assumed_water_up_m": 0,
+  "water_sigma_m": 0,
+  "random_walk_m2_s": 0,
+  "targets": [
+    {
+      "id": "truth_centre",
+      "position_enu_m": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "truth_east",
+      "position_enu_m": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "truth_north",
+      "position_enu_m": [
+        0,
+        1,
+        0
+      ]
+    }
+  ]
+}
