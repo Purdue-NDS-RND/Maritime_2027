@@ -15,7 +15,9 @@ export function Readiness({checks,onResolve,busy,failed=false}) {
     </section>;
 }
 export default function Feedback({notice,busy,label,elapsed,onDismiss,onReview,onFocus}) {
-    if(!notice&&!busy)return null;
+    // Routine updates already appear in the status bar. Reserve the message
+    // dock for work in progress and errors that need an operator response.
+    if(!busy&&notice?.kind!=='error')return null;
     const error=notice?.kind==='error';
     const info=error?{...explainFailure(notice),...(notice.title?{title:notice.title}:{}),...(notice.next?{next:notice.next}:{}),...(notice.step?{step:notice.step}:{})}:null;
     return <section className={`workspace-notice ${error?'notice-error':''} ${busy?'notice-busy':''}`} role={error?'alert':'status'} aria-label="Workspace feedback">

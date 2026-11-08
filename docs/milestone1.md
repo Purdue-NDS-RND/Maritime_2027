@@ -1031,3 +1031,199 @@ sent. Browser automation again failed before page inspection, so this establishe
 API/persistence/render behavior, without an interactive-browser or new movement
 acceptance claim. Raw checks, generated GPS route and a plotted finish comparison
 are under ignored `simulation/logs/channel-finish-enforcement/`.
+
+### Competition mode selection in Chrome (2026-11-08)
+
+Live Chrome inspection reproduced a mode selector that reverted to Single task
+after saving: the handler read the controlled select value after awaiting the
+save. It now captures the requested mode before saving. Frontend tests/render
+checks and production build passed, and the normal GCS was rebuilt/restarted.
+The operator workspace was backed up before run setup; boat/simulator services
+were retained and no vehicle command was sent.
+
+In a separate Chrome tab, the full-map Gate → Slalom → Channel run was selected,
+given one four-corner boundary and reviewed assignments, and generated with the
+operator-confirmed shared entrance. Generate → Validate passed for **18 GPS
+waypoints / 96.3 m**, retaining the operator's **2 m/s / 1.5 m hard buffer**
+settings and 300 s execution budget. Fourteen preferred-clearance notes remain
+for review. The route was left unapproved, unuploaded and unstarted. This is
+interactive planning evidence, not new movement acceptance at those settings.
+The screenshot and saved run are under ignored
+`simulation/logs/competition-ui-help/`.
+
+### Fresh-session Run builder and reviewed return (2026-11-08)
+
+Run builder replaces the Single task / Competition run selector with ordered,
+independent Gate, Slalom, Channel and Manual waypoint cards, including repeats.
+One-card runs cover individual tasks. Shared settings/boundary/start precede the
+cards; duplicate/reorder/remove revoke generated results and sharing. Manual
+waypoints remain exact inputs. Only adjacent compatible Gate → Slalom instances
+can share a crossing after explicit instance-bound confirmation. Generation
+retains one 60-second deadline, atomic publication, exact final segment checks,
+500-waypoint limit and one ordinary boat upload/start with a final stopped finish.
+
+Planner state is now page-session memory only. New run, reload, tabs and backend
+restart start empty; imports reset assignments and shipped defaults even with
+reused object IDs. Existing workspace files, approval journals and local data
+are untouched and never restored as planner inputs. Revision/interruption checks
+discard delayed results. Reset never commands or clears an uploaded boat mission.
+The independent boat-only supplied-waypoint interface remains unchanged.
+
+Return now freezes the approved run's captured start only after successful Start.
+It sends priority Stop, consumes outbound authority, requires confirmed HOLD,
+fresh telemetry and reported speed ≤0.20 m/s, then independently plans from the
+sampled actual position. Reviewed channel water constrains escape through its
+beginning opening. Return target and current reviewed inputs are approval-bound.
+Validate → Approve, explicit Disarm, Upload/readback and Start remain separate.
+The return finishes within 1 m at ≤0.20 m/s for at least 5 s and remains in HOLD.
+No interrupted task resumes automatically. Repeated Return uses current explicit
+builder inputs, including later boundary/settings/map review changes.
+
+Verification passes **112 backend test executions**, **25 boat tests**, frontend
+request/workflow/render checks, production builds and simulator static/evaluator
+checks. Planner fixtures cover all six Gate/Slalom/Channel permutations, repeats,
+manual-only/mixed runs, Channel before another card, sharing invalidation, blocked
+joins, deadlines and overflow. Session/API checks include reused IDs, reset/restart,
+late generation, stale telemetry, HOLD failure/timeout, unsafe targets, failed
+replacement readback, actual-position changes and interrupted Start rejection.
+Chrome exercises the full competition map, one-card Generate/Validate/Approve,
+duplicated/reordered Gate generation/validation and empty reload. An altered,
+unlabeled course requires explicit pair, direction, finish and boundary assignment
+before Generate/Validate. These preview interactions sent no vehicle commands.
+
+Two private simulator stacks additionally exercise Gate → Manual completion and
+Return after completion, and interruption safely inside Channel followed by
+Return through its beginning. The interrupted outbound Channel run is **not**
+counted as task completion. The interrupted mission's repeated Start is rejected.
+Fresh deliberate-disarmed contact proof qualifies each runtime's recorder.
+Independent physics checks all true physical objects, projected whole hull,
+contacts, instance passages, reviewed water and final settling:
+
+| Mission window | Minimum hull clearance | Maximum settling error | Peak settling speed |
+| --- | ---: | ---: | ---: |
+| Gate → Manual | 1.292857 m | 0.338607 m | 0.199486 m/s |
+| Return after Gate → Manual | 1.280413 m | 0.307590 m | 0.199964 m/s |
+| Return from inside Channel | 0.785137 m | 0.427885 m | 0.199481 m/s |
+
+All three windows pass without contacts or boundary violations. The initial
+Channel-return evaluation window ended at GPS-reported completion, leaving only
+4.431 s of independently measured settling and correctly failing that check.
+Six additional seconds of continuous recorded HOLD, before the contact probe,
+establish the required interval. The initial result is retained separately;
+the harness now records that extra observation window without changing control
+or thresholds. Final-source regeneration reproduces the exact outbound/return
+waypoints for both runtimes and passes final validation; subsequent state/UI
+refinements have regression coverage.
+
+Movement settings were 0.5 m/s, 1.5 m required / 3 m preferred point buffers,
+tower 1.8 m hard / 10 m soft / strength 10, and a 1500 s execution budget.
+This is evidence for these cases and settings, not physical qualification of
+arbitrary orders, repeats, speeds or errors. Simulator pins, dynamics, parameters,
+calibration and direct MAVLink ports are unchanged. Operator GCS/boat/simulator
+services and their files were retained; movement stacks cleaned up only their
+own containers. The separate `maritime-gcs:mission-run-builder` image and isolated
+preview on port 8082 leave the normal operator runtime unchanged. No commit or
+push was performed. Physical boat/radio operation, per-card speeds, saved presets,
+partial recovery, controller tuning and drone automation remain outside scope.
+
+Raw evidence: `simulation/logs/mission-run-builder/verification-summary.json`,
+`backend-final.log`, `boat-tests.log`, `frontend-final.log`,
+`simulator-static-final.log`, `permutations.json`, `final-source-revalidation.json`,
+and the `movement-gate-return/` and `movement-channel-return/` inputs, operations,
+source/image identities, physics, fresh contact proofs and evaluation windows.
+
+#### Dedicated configuration and task workspaces (2026-11-08)
+
+The operator workflow now uses Map → Configure → Build run → Review & execute.
+Configure has full-width, color-coded obstacle/tower settings and shared
+start/boundary/budget controls. Build run replaces the task dropdown with four
+direct add buttons and separates the ordered sequence from the selected task's
+editor. A collapsible map preview opens for drawing and geometry review; task
+accents match selected geometry while actual buoy colors and purple tower zones
+retain their meanings. Settings and task selection survive navigation within
+the page session. Configuration file save/load remains deferred.
+
+Frontend request/workflow/render checks and the production build passed. Chrome
+on the isolated localhost:8082 preview loaded the full 23-buoy/6-prop competition
+map and exercised all four task buttons, duplicate instances, reordering,
+geometry preview, manual waypoint placement and settings navigation with retained
+inputs. The observed desktop layout had no horizontal overflow and provided a
+1214 px selected-task editor with the map collapsed. Raw build/test output and
+screenshots are under `simulation/logs/mission-run-builder/`. These are UI
+checks; no new boat commands or movement acceptance runs were performed for this
+presentation change. The normal 8080 runtime was not replaced.
+
+
+#### Persistent builder map and gate inspection (2026-11-08)
+
+Build run now keeps a roughly 60/40 map/editor workspace with an expanded-map
+mode and a compact horizontal task sequence above it. Task selection frames
+geometry; gate rows focus their named pair and crossing arrow. Explicit endpoint
+replacement uses map clicks, rejects duplicate endpoints and towers/polygons,
+and clears task review, derived geometry, sharing and generated authority.
+
+Frontend checks include instance-isolated endpoint replacement and authority
+invalidation; request/workflow/render checks and the production build passed.
+Chrome on the isolated 8082 preview verified the full competition map, named gate
+pairs, row focusing, expanded-map mode, replacing an endpoint with Dodge Turn 1,
+restoring the original pair and geometry review becoming required again. Raw
+logs and `gate-map-workspace.png` are under `simulation/logs/mission-run-builder/`.
+These are UI checks; no boat commands or new movement acceptance runs were
+performed, and the normal 8080 runtime was not replaced.
+
+#### Fixed-window operator workspace (2026-11-08)
+
+The application now occupies the browser viewport without document scrolling.
+Compact vehicle/navigation bars and a neutral gray presentation leave the map
+and workflow editor in the remaining space. Long settings/forms scroll inside
+their panel, the task sequence scrolls horizontally, and Generate remains pinned
+below the task editor. Phone layouts divide the available height between map and
+editor. Routine updates use the status bar; progress/errors use a bounded message
+dock instead of covering controls. Connection details open above the status bar.
+
+Frontend request/workflow/render checks, the production frontend build and full
+GCS image build passed. Chrome verified the full competition map, all four task
+buttons, configuration/map preview, expanded task forms and offline Gate route
+review. At 1640×750, 1024×768, 800×600 and 390×844, document dimensions equaled
+the viewport and Generate stayed inside it. Scrolling the expanded editor from
+0 to 270.5 px left page position, map bounds and Generate bounds unchanged.
+
+The running 8080 and isolated 8082 frontends were updated without backend/boat/
+simulator restart. The normal image was repackaged using its exact previous
+backend plus compiled UI; the previous image is retained as
+`maritime-gcs:before-fixed-shell-20261108`. A separate new Chrome tab on 8080
+shows the updated workspace; existing operator tabs/sessions were retained.
+No vehicle commands were sent and movement was not requalified. Raw build/test
+logs, layout measurements and `fixed-window-workspace.png` are under ignored
+`simulation/logs/mission-run-builder/`.
+
+#### Compact configuration and task editing (2026-11-08)
+
+Configure now places speed/clearance, tower avoidance and navigation limits in
+three compact columns. Narrow panels switch to explicit categories, including
+when the map preview is open; selecting a tower opens its category. Context help
+is collapsible, validation remains visible and Continue stays below the content.
+The builder uses short task chips and one toolbar for the selected instance.
+Assignments, finish/water and advanced controls occupy separate views, with local
+headings in Advanced. Passage names, sides and endpoint actions share compact
+rows. Geometry review, task confirmation and Generate stay outside the content
+scroller. Vehicle readiness help moves into its compact toolbar.
+
+Frontend request/workflow/render checks and production frontend/full-image builds
+passed. Chrome exercised setting validation, tower overrides and map preview,
+local headings, passing sides, duplicate/reorder, manual waypoint placement and
+Channel geometry review. Default Configure fits without internal scrolling at
+1640×750, 1280×720, 1024×768 and 800×600 (categories at the smallest size).
+All six Slalom passage rows fit without scrolling at the first three sizes.
+Channel chains/sections also fit at 1280×720 on the connected runtime. At
+1640×750 the map gains about 72 px of height over the first fixed-window layout.
+Small windows and expanded advanced/manual content retain internal scrolling;
+the page stays fixed and review/generation controls remain reachable.
+
+The 8080/8082 frontend assets and normal/full image tags were updated without
+backend, boat or simulator restart. The preceding normal image is retained as
+`maritime-gcs:before-compact-workspace-20261108`. Existing operator tabs/sessions
+were preserved. No vehicle commands or new movement acceptance were performed.
+Evidence: `compact-workspace-tests.log`, `compact-workspace-build.log`, image
+build logs, `compact-layout-checks.json`, `compact-configuration.png` and
+`compact-builder.png` under ignored `simulation/logs/mission-run-builder/`.

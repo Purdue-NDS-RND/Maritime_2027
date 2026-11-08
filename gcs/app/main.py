@@ -1,8 +1,12 @@
-"""Boat HTTP owns commands; passive MAVLink supplies map telemetry."""
+"""Page-session planning; boat-owned commands and passive live telemetry."""
 import asyncio
 from contextlib import asynccontextmanager
+from copy import deepcopy
 import json
+import math
 import os
+import threading
+import time
 import uuid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -11,19 +15,21 @@ from urllib.request import Request, urlopen
 from fastapi import FastAPI, HTTPException, Request as IncomingRequest
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
-from .workspace import Workspace, sha
+from .sessions import SessionWorkspace, return_inputs
 from .imports import import_points
-from .planner import suggest, generate
+from .planner import generate
 from .course_setup import prepare_task
-from .settings import effective_settings
-from .attempts import capture_start, check_remaining_snapshot, suggest_remaining
-from .competition import generate_run, new_run, review_geometry
-from shared.competition import shared_gate
+from .attempts import capture_start
+from .run_builder import generate_run
 from .telemetry import Telemetry, TelemetryConfig
 from shared.clearance import validate_route
+from shared.run_builder import digest, relationships, task_input, validate_run
+from shared.task_geometry import resolve_geometry
 
-workspace = Workspace(os.getenv('GCS_DATA', '/data'))
 GCS_SESSION_ID = str(uuid.uuid4())
+sessions = {}
+operations = {}
+registry_lock = threading.RLock()
 
 
 @asynccontextmanager
@@ -43,7 +49,7 @@ app = FastAPI(lifespan=lifespan)
 @app.middleware('http')
 async def same_origin(request: IncomingRequest, call_next):
     origin = request.headers.get('origin')
-    if origin and origin not in (os.getenv('GCS_ORIGIN','http://localhost:8080'), 'http://127.0.0.1:8080'):
+    if origin and origin not in (os.getenv('GCS_ORIGIN', 'http://localhost:8080'), 'http://127.0.0.1:8080'):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=403, content={'detail': 'cross-origin request rejected'})
     return await call_next(request)
@@ -51,8 +57,7 @@ async def same_origin(request: IncomingRequest, call_next):
 
 def boat(path, method='GET', body=None):
     data = None if body is None else json.dumps(body, allow_nan=False).encode()
-    request = Request('http://127.0.0.1:8091' + path, data=data, method=method,
-                      headers={'Content-Type': 'application/json'})
+    request = Request('http://127.0.0.1:8091'+path, data=data, method=method, headers={'Content-Type': 'application/json'})
     try:
         with urlopen(request, timeout=5) as response:
             return json.load(response)
@@ -62,174 +67,273 @@ def boat(path, method='GET', body=None):
         raise HTTPException(503, 'boat request outcome unknown; query status/operations before retrying start') from error
 
 
-def checked(function, *args):
+def checked(function, *args, **kwargs):
     try:
-        return function(*args)
-    except (ValueError, KeyError, TypeError, OSError) as error:
+        return function(*args, **kwargs)
+    except (ValueError, KeyError, TypeError, OSError, IndexError) as error:
         raise HTTPException(422, str(error)) from error
 
 
+def session(request):
+    value = sessions.get(request.headers.get('x-planner-session'))
+    if value is None:
+        raise HTTPException(409, 'Planner session expired: start a new empty session')
+    return value
+
+
+@app.post('/api/session')
+def create_session():
+    key = str(uuid.uuid4())
+    with registry_lock:
+        sessions[key] = SessionWorkspace()
+    return {'session_id': key, 'backend_id': GCS_SESSION_ID, 'workspace': sessions[key].read()}
+
+
+@app.post('/api/reset')
+def reset(request: IncomingRequest):
+    return session(request).reset()
+
+
 @app.get('/api/workspace')
-def read():
-    return workspace.read()
+def read(request: IncomingRequest):
+    return session(request).read()
 
 
 @app.put('/api/workspace')
-def edit(data: dict):
-    return checked(workspace.edit, data)
+def edit(request: IncomingRequest, data: dict):
+    return checked(session(request).edit, data)
 
 
 @app.post('/api/import')
-def import_map(data: dict):
+def import_map(request: IncomingRequest, data: dict):
+    w = session(request)
     object_map = checked(import_points, data['content'], data.get('format', 'json'))
-    return checked(workspace.edit, {'map': object_map, 'new_import': True, 'course': {}})
+    return checked(w.edit, {'map': object_map, 'new_import': True, 'revision': data.get('revision')})
 
 
 @app.get('/api/examples/competition')
 def competition_example():
-    path=Path(os.getenv('GCS_EXAMPLES',str(Path(__file__).resolve().parents[1]/'examples')))/'competition-gps-map.json'
+    path = Path(os.getenv('GCS_EXAMPLES', str(Path(__file__).resolve().parents[1]/'examples')))/'competition-gps-map.json'
     return checked(lambda: json.loads(path.read_text()))
 
 
 @app.post('/api/course/prepare')
-def prepare(data: dict):
-    state=workspace.read()
-    if not state.get('map'):
-        raise HTTPException(422,'Load a map first')
-    settings = {**(data.get('settings') or state.get('draft') or {})}
-    if state.get('settings_configured'):
-        settings.update(effective_settings(state['game_settings'], data['task']))
-    return checked(prepare_task,state['map'],data['task'],settings)
-
-
-@app.post('/api/course/suggest')
-def suggestions(data: dict):
-    return checked(suggest, workspace.read()['map'], data['direction'])
+def prepare(request: IncomingRequest, data: dict):
+    state = session(request).read()
+    if not state['map']:
+        raise HTTPException(422, 'Load a map first')
+    return checked(prepare_task, state['map'], data['task'], {**state['run_draft']['settings'], **data.get('settings', {})})
 
 
 @app.post('/api/course/geometry')
-def geometry():
-    from shared.task_geometry import resolve_geometry
-    state=workspace.read()
-    draft={**state['draft'],'attempt':{'mode':'full'}}
-    resolved=checked(resolve_geometry,state['map'],draft)
-    return {key:resolved.get(key) for key in ('derived_sections','channel') if key in resolved}
-
-
-@app.post('/api/course/remaining')
-def remaining():
-    state=workspace.read()
-    draft=state['draft']
-    status=boat('/status') if draft.get('attempt',{}).get('start_source','live')=='live' else None
-    draft=checked(capture_start,draft,status)
-    return checked(suggest_remaining,state['map'],draft)
-
-
-@app.post('/api/run/prepare')
-def prepare_run():
-    state = workspace.read()
-    return checked(new_run, state)
-
-
-@app.post('/api/run/geometry')
-def run_geometry(data: dict):
-    return checked(review_geometry, workspace.read()['map'], data)
+def geometry(request: IncomingRequest, data: dict):
+    state = session(request).read()
+    step = next((s for s in state['run_draft']['steps'] if s['id'] == data.get('instance_id')), None)
+    if not step:
+        raise HTTPException(422, 'Select a card instance first')
+    d = checked(task_input, state['run_draft'], step, state['run_draft']['start'], True)
+    resolved = checked(resolve_geometry, state['map'], d)
+    return {k: resolved[k] for k in ('derived_sections', 'channel') if k in resolved}
 
 
 @app.post('/api/run/relationship')
-def run_relationship(data: dict):
-    return checked(shared_gate, workspace.read()['map'], data)
+def run_relationship(request: IncomingRequest):
+    state = session(request).read()
+    return checked(relationships, state['map'], state['run_draft'])
 
 
 @app.post('/api/generate')
-def generate_route():
-    with workspace.lock:
-        state = workspace.read()
-        if state.get('planning_mode') == 'competition':
-            draft = state.get('run_draft')
-            if not draft or not state.get('map'):
-                raise HTTPException(422, 'Load a map and review the run setup first')
-            # Revoke the prior executable attempt before any fallible work.
-            workspace.state['approval'] = None
-            workspace.state['run_draft'].pop('generation_identity', None)
-            workspace.state['run_draft']['waypoints'] = []
-            workspace.save()
-            status = boat('/status') if draft.get('attempt', {}).get('start_source', 'live') == 'live' else None
-            result = checked(generate_run, state['map'], draft, status)
-            if result['success']:
-                result['workspace'] = workspace.publish_run(result['draft'])
-            return result
-        if not state.get('map') or not state.get('draft'):
-            raise HTTPException(422, 'import map and select a task first')
-        state=checked(workspace.edit, {'draft': state['draft']})
-        draft=state['draft']
-        if draft.get('geometry_version')==2:
-            status=boat('/status') if draft.get('attempt',{}).get('start_source','live')=='live' else None
-            draft=checked(capture_start,draft,status)
-            checked(check_remaining_snapshot,state['map'],draft)
-        result = checked(generate, state['map'], draft)
-        if result['success']:
-            result['workspace'] = checked(workspace.edit, {'draft': result['draft']})
-        return result
+def generate_route(request: IncomingRequest):
+    w = session(request)
+    state, token = w.begin_generation()
+    draft = state['run_draft']
+    if not state['map'] or draft.get('planning_mode') != 'run':
+        raise HTTPException(422, 'Load a map and build a run first; returns use Return now')
+    status = boat('/status') if draft.get('attempt', {}).get('start_source', 'live') == 'live' else None
+    result = checked(generate_run, state['map'], draft, status)
+    if result['success']:
+        result['workspace'] = checked(w.publish, result['draft'], token)
+    else:
+        result['workspace'] = w.read()
+    return result
 
 
 @app.post('/api/validate')
-def validate():
-    return checked(workspace.validate)
+def validate(request: IncomingRequest):
+    return checked(session(request).validate)
 
 
 @app.post('/api/approve')
-def approve():
-    return checked(workspace.approve)
+def approve(request: IncomingRequest):
+    return checked(session(request).approve)
+
+
+def fresh_vehicle():
+    status = boat('/status')
+    if not status.get('position') or any(not isinstance(status.get(k), (int,float)) or not math.isfinite(status[k]) or not 0 <= status[k] <= 3 for k in ('position_age_s', 'heartbeat_age_s')):
+        raise HTTPException(409, 'Fresh vehicle position and heartbeat required (at most three seconds)')
+    return status
 
 
 def validate_actual_start(approval):
-    status = boat('/status')
-    import math
-    if not status.get('position') or any(not isinstance(status.get(k),(int,float)) or not math.isfinite(status[k]) or not 0<=status[k]<=3 for k in ('position_age_s','heartbeat_age_s')):
-        raise HTTPException(409, 'fresh vehicle position/heartbeat required')
-    # Validate the actual start connection as well as the frozen planned start.
-    draft = {**approval['inputs']['draft'], 'start': status['position'], 'start_heading_deg': status.get('heading_deg')}
-    try:
-        if draft.get('planning_mode') == 'competition':
-            from shared.competition import validate_run
-            result = validate_run(approval['inputs']['map'], approval['inputs']['draft'], status['position'])
-        else:
-            result = validate_route(approval['inputs']['map'], draft)
-    except (ValueError,KeyError,TypeError) as error:
-        raise HTTPException(409, str(error)) from error
+    status = fresh_vehicle()
+    d = approval['inputs']['draft']
+    if d.get('planning_mode') == 'run':
+        result = checked(validate_run, approval['inputs']['map'], d, status['position'])
+    else:
+        from shared.geometry import to_local
+        ref = approval['inputs']['map']['geographic_reference']
+        if math.dist(to_local(d['start'], ref), to_local(status['position'], ref)) > 1:
+            raise HTTPException(409, 'Boat moved more than 1 m from approved return start: prepare again')
+        result = checked(validate_route, approval['inputs']['map'], {**d, 'start': status['position']})
     if not result['valid']:
         raise HTTPException(409, result)
+    return status
+
+
+def record(value, w, command, approval=None):
+    if value.get('operation_id'):
+        operations[value['operation_id']] = (w, command, deepcopy(approval), w.authority_epoch)
+    if value.get('state') == 'succeeded' and value.get('operation_id'):
+        reconcile(value['operation_id'], value)
+    return value
+
+
+def reconcile(operation_id, value):
+    entry = operations.get(operation_id)
+    if entry and value.get('state') == 'succeeded':
+        w, command, approval, epoch = entry
+        if command == 'start':
+            w.start_succeeded(approval)
+        elif command == 'upload' and epoch == w.authority_epoch:
+            w.uploaded_id = approval['envelope']['approval_id']
+        elif command == 'disarm' and epoch == w.authority_epoch:
+            w.disarm_epoch = epoch
+        operations.pop(operation_id, None)
+    elif value.get('state') in ('failed', 'cancelled', 'unknown'):
+        operations.pop(operation_id, None)
+    return value
 
 
 @app.post('/api/upload')
-def upload():
-    approval = checked(workspace.approved)
-    validate_actual_start(approval)
+def upload(request: IncomingRequest):
+    w = session(request)
+    approval = checked(w.approved)
+    status = validate_actual_start(approval)
+    if status.get('armed') is not False or status.get('mode') == 10:
+        raise HTTPException(409, 'Explicitly disarm outside AUTO before replacement upload')
+    if approval['inputs']['draft'].get('planning_mode') == 'return' and getattr(w, 'disarm_epoch', None) != w.authority_epoch:
+        raise HTTPException(409, 'Explicit Disarm confirmation required after preparing this return')
     envelope = approval['envelope']
-    return boat('/missions/' + quote(envelope['mission']['mission_id'], safe=''), 'PUT', envelope)
+    return record(boat('/missions/'+quote(envelope['mission']['mission_id'], safe=''), 'PUT', envelope), w, 'upload', approval)
 
 
 @app.post('/api/start')
-def start():
-    approval = checked(workspace.approved)
-    validate_actual_start(approval)
-    workspace.consume_run()
-    return boat('/missions/' + quote(approval['envelope']['mission']['mission_id'], safe='') + '/start', 'POST')
+def start(request: IncomingRequest):
+    w = session(request)
+    with w.lock:
+        approval = checked(w.approved)
+        status = validate_actual_start(approval)
+        mission_id = approval['envelope']['approval_id']
+        if getattr(w, 'uploaded_id', None) != mission_id or status.get('mission_id') != mission_id or status.get('state') != 'uploaded':
+            raise HTTPException(409, 'Confirmed upload/readback of this approval required before Start')
+        if w.cancelled.is_set():
+            raise HTTPException(409, 'Start interrupted by Stop; generate and approve again')
+        w.state.update(run_consumed=True, approval=None, execution={'mission_id':mission_id, 'generation_identity':approval['inputs']['draft'].get('generation_identity')})
+        w.authority_epoch += 1
+        epoch = w.authority_epoch
+        w.started_approval = mission_id
+    if w.cancelled.is_set() or epoch != w.authority_epoch:
+        raise HTTPException(409, 'Start interrupted by Stop')
+    try:
+        value = boat('/missions/'+quote(mission_id, safe='')+'/start', 'POST')
+    finally:
+        if w.cancelled.is_set() or epoch != w.authority_epoch:
+            boat('/stop', 'POST')
+    return record(value, w, 'start', approval)
 
 
 @app.post('/api/stop')
-def stop():
-    # Send HOLD before waiting for workspace persistence or a planner lock.
+def stop(request: IncomingRequest):
+    # Priority command never waits for a planner lock or valid page session.
+    w = sessions.get(request.headers.get('x-planner-session'))
+    if w:
+        w.cancelled.set()
     try:
         return boat('/stop', 'POST')
     finally:
-        workspace.consume_run()
+        w = sessions.get(request.headers.get('x-planner-session'))
+        if w:
+            w.consume_run()
 
 
 @app.post('/api/disarm')
-def disarm():
-    return boat('/disarm', 'POST')
+def disarm(request: IncomingRequest):
+    value = boat('/disarm', 'POST')
+    w = sessions.get(request.headers.get('x-planner-session'))
+    return record(value, w, 'disarm') if w else value
+
+
+def return_water(object_map, run):
+    waters = []
+    for step in run.get('steps', []):
+        if step['type'] == 'channel':
+            if not step['setup'].get('course_confirmed'):
+                raise ValueError('Confirm current channel water restrictions before preparing return')
+            d = task_input(run, step, run['start'], True)
+            resolved = resolve_geometry(object_map, d)
+            first = resolved['derived_sections'][0]
+            water = {'polygon': resolved['channel'], 'opening': [first['a'], first['b']], 'direction': first['direction']}
+            if water not in waters:
+                waters.append(water)
+    return waters
+
+
+@app.post('/api/return/prepare')
+def prepare_return(request: IncomingRequest, data: dict | None = None):
+    w = session(request)
+    if not w.read()['return_target']:
+        raise HTTPException(409, 'Return now needs a successfully started run in this page session')
+    w.cancelled.set()
+    try:
+        receipt = boat('/stop', 'POST')
+    finally:
+        w.consume_run()
+    if data:
+        checked(w.edit, data)
+    # Clear prior geometry before waiting for HOLD, even on later failure.
+    state, token = w.begin_generation()
+    target = deepcopy(state['return_target'])
+    stop_id = receipt.get('operation_id')
+    deadline = time.monotonic()+15
+    while True:
+        operation = boat('/operations/'+quote(stop_id, safe='')) if stop_id else receipt
+        if operation.get('state') in ('failed', 'unknown', 'cancelled'):
+            raise HTTPException(409, 'Return HOLD failed: '+operation.get('detail', operation['state']))
+        status = fresh_vehicle()
+        speed = status.get('speed_m_s')
+        if operation.get('state') == 'succeeded' and status.get('mode') == 4 and isinstance(speed, (int,float)) and math.isfinite(speed) and 0 <= speed <= .2:
+            break
+        if time.monotonic() >= deadline:
+            raise HTTPException(409, 'Return requires confirmed HOLD and reported speed ≤0.20 m/s; timed out without movement')
+        time.sleep(.1)
+    run = checked(return_inputs, state)
+    if not state['map'] or not run.get('sizes_confirmed'):
+        raise HTTPException(422, 'Review the current map before preparing return')
+    water = checked(return_water, state['map'], run)
+    draft = {**deepcopy(run['settings']), 'settings': deepcopy(run['settings']), 'planning_mode': 'return', 'task': 'custom',
+             'start': deepcopy(status['position']), 'finish': target, 'return_target': target, 'waypoints': [],
+             'finish_radius_m': 1, 'sizes_confirmed': True, 'course_confirmed': True,
+             'planning_area': deepcopy(run['planning_area']), 'navigation_water': water, 'execution_budget_s': run['execution_budget_s'],
+             'attempt': {'mode': 'full', 'start_source': 'live'}}
+    draft = capture_start(draft, status)
+    result = checked(generate, state['map'], draft, navigation=True)
+    if not result['success']:
+        return {**result, 'workspace': w.read()}
+    generated = result['draft']
+    generated['generation_identity'] = digest(generated)
+    result['workspace'] = checked(w.publish, generated, token)
+    return result
 
 
 @app.get('/api/status')
@@ -243,22 +347,20 @@ def telemetry_snapshot(request: IncomingRequest):
 
 
 async def telemetry_events(telemetry):
-    # One latest snapshot per tick. No client queue can accumulate an old track.
     while True:
-        yield 'data: ' + json.dumps({**telemetry.snapshot(), 'gcs_session_id': GCS_SESSION_ID}, allow_nan=False) + '\n\n'
-        await asyncio.sleep(0.2)
+        yield 'data: '+json.dumps({**telemetry.snapshot(), 'gcs_session_id': GCS_SESSION_ID}, allow_nan=False)+'\n\n'
+        await asyncio.sleep(.2)
 
 
 @app.get('/api/telemetry/events')
 async def live_telemetry(request: IncomingRequest):
-    return StreamingResponse(telemetry_events(request.app.state.telemetry),
-                             media_type='text/event-stream',
+    return StreamingResponse(telemetry_events(request.app.state.telemetry), media_type='text/event-stream',
                              headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.get('/api/operations/{operation_id}')
 def operation(operation_id: str):
-    return boat('/operations/' + quote(operation_id, safe=''))
+    return reconcile(operation_id, boat('/operations/'+quote(operation_id, safe='')))
 
 
 static = Path(os.getenv('GCS_STATIC', '/app/static'))

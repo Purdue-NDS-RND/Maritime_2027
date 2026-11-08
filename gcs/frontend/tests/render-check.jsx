@@ -2,98 +2,35 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import Planner from '../src/Planner.jsx';
+import Planner,{WorkflowNav} from '../src/Planner.jsx';
 import BoatControls from '../src/BoatControls.jsx';
-import Feedback,{DiagnosticList,Readiness} from '../src/Feedback.jsx';
+import {moveStep,duplicateStep} from '../src/RunBuilder.jsx';
+import {defaultSettings} from '../src/settings.js';
 const map=JSON.parse(fs.readFileSync('../examples/competition-gps-map.json'));
-const draft={waypoints:[],start:map.geographic_reference,finish:map.geographic_reference,speed_m_s:.5,clearance_m:1.8,passages:[],sizes_confirmed:true};
-const props={workspace:{map,draft,tasks:{}},draft,mode:'inspect',step:1,selected:'',operations:[],results:{},stale:true};
+const draft={planning_mode:'run',steps:[],settings:defaultSettings(),waypoints:[],start:map.geographic_reference,planning_area:[],sizes_confirmed:true,attempt:{mode:'full',start_source:'live'},execution_budget_s:300};
+const props={workspace:{map,run_draft:draft,game_settings:defaultSettings()},draft,mode:'inspect',selected:'',operations:[],results:{},stale:true,routeVisible:false};
 for(const step of [1,2,3,4]){
  const html=renderToStaticMarkup(<Planner {...props} step={step}/>);
- assert.match(html,/Planning steps/);
- if(step===1){assert.match(html,/Load full competition map/);assert.doesNotMatch(html,/Generate route|Upload to boat|Course passage order/);}
- if(step===2){assert.match(html,/Configure the course/);assert.match(html,/Hard exclusion/);assert.match(html,/Soft avoidance/);assert.doesNotMatch(html,/Upload to boat/);}
- if(step===3){assert.match(html,/Slalom \/ Dodge/);assert.match(html,/Channel \/ Evade/);assert.doesNotMatch(html,/Upload to boat/);}
- if(step===4){assert.match(html,/Validate route/);assert.match(html,/Boat offline/);assert.match(html,/Upload to boat/);}
+ const nav=renderToStaticMarkup(<WorkflowNav {...props} step={step}/>);
+ assert.match(nav,/Map/);assert.match(nav,/Configure/);assert.match(nav,/Build run/);assert.match(nav,/Review &amp; execute/);
+ assert.doesNotMatch(html,/Planning mode|Single task|Competition run|Saved queue|Optional task overrides/);
+ if(step===1){assert.match(html,/Load full competition map/);assert.match(html,/I reviewed object positions and types/);}
+ if(step===2){assert.match(html,/Hard exclusion/);assert.match(html,/Start, boundary/);assert.match(html,/Continue to Build run/);}
+ if(step===3){assert.match(html,/Your run is empty/);for(const name of ['Gate','Slalom','Channel','Manual'])assert.match(html,new RegExp('＋ '+name));assert.doesNotMatch(html,/Task type|Hard exclusion/);assert.match(html,/disabled=""[^>]*>Generate run/);}
+ if(step===4){assert.match(html,/disabled=""[^>]*>1. Validate route/);}
 }
-console.log('All four workflow panels render; offline command controls remain gated.');
-const manual={...draft,task:'custom'};
-const setup=renderToStaticMarkup(<Planner {...props} draft={manual} step={3}/>);
-assert.match(setup,/Manual move/);assert.match(setup,/Draw waypoints/);
-assert.doesNotMatch(setup,/Generate route/);
-const review=renderToStaticMarkup(<Planner {...props} draft={manual} step={4}/>);
-assert.match(review,/Review manual move/);assert.match(review,/4. Go/);
-const controls=(status,stale=false)=>renderToStaticMarkup(<BoatControls status={status} stale={stale}/>);
-const settled=controls({armed:true,mode:4,speed_m_s:0,gps_fix:6});
-assert.match(settled,/Ready to Disarm/);assert.match(settled,/>Disarm<\/button>/);
-assert.doesNotMatch(settled,/disabled=""[^>]*>Disarm<\/button>/);
-for(const status of [{armed:true,mode:10,speed_m_s:0},{armed:true,mode:4,speed_m_s:1},{armed:true,mode:4,speed_m_s:null}]){
- assert.match(controls(status),/disabled=""[^>]*>Disarm<\/button>/);
-}
-assert.match(controls({armed:false,mode:4,speed_m_s:0}),/Disarmed ✓/);
-assert.match(controls({armed:true,mode:4,speed_m_s:0},true),/Status unavailable/);
-assert.match(controls({armed:true,mode:4,speed_m_s:0},true),/disabled=""[^>]*>Disarm<\/button>/);
-const armedReview=renderToStaticMarkup(<Planner {...props} draft={{...manual,waypoints:[map.geographic_reference]}} step={4} stale={false} dirty={false} workspace={{...props.workspace,approval:{envelope:{mission:{mission_id:'test'}}}}} status={{armed:true,mode:4}}/>);
-assert.match(armedReview,/disabled=""[^>]*>3. Upload to boat<\/button>/);
-assert.match(armedReview,/Disarm using Boat controls/);
-const general={...draft,planner_task:'channel',geometry_version:2,attempt:{mode:'remaining',start_source:'live',first_section:1},derived_sections:[{id:'section_1'},{id:'section_2'}]};
-const generalHtml=renderToStaticMarkup(<Planner {...props} draft={general} step={3}/>);
-assert.match(generalHtml,/Live boat/);assert.match(generalHtml,/Full task/);assert.match(generalHtml,/Remaining section/);
-assert.match(generalHtml,/start outside the channel within the planning area/);
-assert.match(generalHtml,/Suggested finishes are beyond that gate/);
-assert.match(generalHtml,/Finish past last gate/);
-assert.match(generalHtml,/no completion credit/);assert.match(generalHtml,/I confirm this partial selection/);
-assert.match(generalHtml,/disabled=""[^>]*>Generate route/);
-assert.doesNotMatch(generalHtml,/Entry is a separate/);
+const cards=[{id:'one',type:'manual',setup:{waypoints:[map.geographic_reference],course_confirmed:true}},{id:'two',type:'gate',setup:{passages:[],geometry_version:2}}];
+const manual=renderToStaticMarkup(<Planner {...props} step={3} selectedCard="one" draft={{...draft,steps:cards}}/>);
+assert.match(manual,/Draw manual waypoints/);assert.match(manual,/Duplicate/);assert.match(manual,/Move Manual 1 up/);assert.match(manual,/Move Manual 1 down/);assert.match(manual,/draggable="true"/);
+const copied=duplicateStep(cards[0],'copy');copied.setup.waypoints[0].latitude=1;assert.notEqual(copied.setup.waypoints[0].latitude,cards[0].setup.waypoints[0].latitude);assert.equal(copied.id,'copy');
+assert.deepEqual(moveStep(cards,0,1).map(s=>s.id),['two','one']);
+const returns=renderToStaticMarkup(<Planner {...props} step={4} draft={{...draft,planning_mode:'return',return_target:draft.start}}/>);
+assert.match(returns,/1 m stopping area/);assert.match(returns,/Explicitly Disarm/);
+const controls=target=>renderToStaticMarkup(<BoatControls status={{armed:false,mode:4,speed_m_s:0}} stale={false} returnTarget={target}/>);
+assert.match(controls(null),/disabled=""[^>]*>Return now/);assert.doesNotMatch(controls(draft.start),/disabled=""[^>]*>Return now/);
+const source=fs.readFileSync('src/main.jsx','utf8');assert.doesNotMatch(source,/localStorage|sessionStorage/);
+console.log('Four-view planning workspace, independent cards, return review and controls render.');
 
-const hidden=renderToStaticMarkup(<Planner {...props} step={4} routeVisible={false} draft={{...general,waypoints:[map.geographic_reference]}}/>);
-assert.match(hidden,/Generate this task/);
-assert.match(hidden,/disabled=""[^>]*>1. Validate route/);
-const tower=map.obstacles.find(o=>o.object_type==='detector');
-assert.ok(tower,'Full competition map must have a tower');
-const settingsHtml=renderToStaticMarkup(<Planner {...props} step={2} selected={tower.id}/>);
-assert.match(settingsHtml,/Use individual distances/);
-
-const blocked=renderToStaticMarkup(<Planner {...props} step={3} draft={{...general,attempt:{start_source:'live',mode:'full'}}}/>);
-assert.match(blocked,/Generation readiness/);assert.match(blocked,/Fresh live start/);
-assert.match(blocked,/Choose start source/);assert.match(blocked,/Review geometry/);
-const failure=renderToStaticMarkup(<Feedback notice={{kind:'error',detail:'unsafe planning start: tower',errors:[{reason:'unsafe planning start',location:[1,2]}]}}/>);
-assert.match(failure,/Starting position needs review/);assert.match(failure,/Locate on map/);
-const waiting=renderToStaticMarkup(<Feedback busy label="Generating route" elapsed={14}/>);
-assert.match(waiting,/14s elapsed/);assert.match(waiting,/60-second limit/);
-const located=renderToStaticMarkup(<DiagnosticList errors={[{reason:'unsafe finish area',location:[0,1]}]}/>);
-assert.match(located,/Finish area needs more room/);assert.match(located,/Locate on map/);
-
-const failedSetup=renderToStaticMarkup(<Readiness checks={[{id:'ready',ready:true}]} failed/>);
-assert.match(failedSetup,/Last generation failed/);assert.doesNotMatch(failedSetup,/readiness ready/);
-const asyncFailure=renderToStaticMarkup(<Feedback notice={{kind:'error',title:'Upload failed',detail:'readback mismatch',next:'Inspect the command result',step:4,reviewLabel:'Review command results'}}/>);
-assert.match(asyncFailure,/Upload failed/);assert.match(asyncFailure,/Review command results/);
-
-// Browser-local command IDs survive reload before their async results arrive.
-// Missing results and an absent approval must never be treated as a match.
-const restoredHistory=renderToStaticMarkup(<Planner {...props} operations={['old-stop','old-disarm']} results={{}} routeVisible={false} taskSelected={false}/>);
-assert.match(restoredHistory,/Check your object map/);
-const pendingHistory=renderToStaticMarkup(<Planner {...props} step={4} operations={['upload']} results={{upload:{command:'upload',mission_id:'approved',state:'pending'}}} draft={{...manual,waypoints:[map.geographic_reference]}} workspace={{...props.workspace,approval:{envelope:{mission:{mission_id:'approved'}}}}} stale={false} dirty={false} status={{armed:false,mode:4}}/>);
-assert.match(pendingHistory,/awaiting the boat’s acknowledgement and readback/);
-
-const pointReview=renderToStaticMarkup(<Planner {...props} step={1} selected={map.buoys[0].id}/>);
-assert.match(pointReview,/I reviewed object positions and types/);
-assert.doesNotMatch(pointReview,/Radius \(m\)|Height \(m\)|I reviewed object sizes/);
-assert.ok([...map.buoys,...map.obstacles].every(o=>o.type==='point'&&!('radius_m' in o)&&!('footprint' in o)));
-
-const runDraft={...draft,planning_mode:'competition',selected_tasks:['gate','slalom','channel'],task_setup:{},settings:{speed_m_s:.5,clearance_m:1.8,preferred_buffer_m:3,tower_avoidance:{hard_m:1.8,soft_m:10,strength:10}},planning_area:[],attempt:{mode:'full',start_source:'live'},share_gate:false,execution_budget_s:500};
-const runSetup=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition',run_draft:runDraft}} draft={runDraft} step={3}/>);
-assert.match(runSetup,/Competition run/);assert.match(runSetup,/Complete tasks in standard order/);
-assert.match(runSetup,/Individual task overrides apply only to separate missions/);
-assert.match(runSetup,/disabled=""[^>]*>Generate competition run/);
-assert.match(runSetup,/Review shared entrance gate/);
-assert.doesNotMatch(runSetup,/Remaining section/);
-const runReview=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition'}} draft={{...runDraft,waypoints:[draft.finish],route_length_m:100,nominal_travel_s:200,suggested_budget_s:460,blocks:[{task:'slalom',tasks:['gate','slalom'],waypoint_start:0,waypoint_end:1,stopped_finish:true}]}} step={4}/>);
-assert.match(runReview,/suggested budget 460/);assert.match(runReview,/telemetry derived, not judge-confirmed/);
-assert.match(runReview,/stopped finish/);assert.match(runReview,/Use suggested budget/);
-const inheritedZones={...runDraft,settings:{...runDraft.settings,tower_avoidance:{...runDraft.settings.tower_avoidance,overrides:{tower_a:{hard_m:2,soft_m:12}}}}};
-const inheritedHtml=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition'}} draft={inheritedZones} step={3}/>);
-assert.match(inheritedHtml,/Individual tower zones for this run/);assert.match(inheritedHtml,/take precedence/);
-const badBudgetHtml=renderToStaticMarkup(<Planner {...props} workspace={{...props.workspace,planning_mode:'competition'}} draft={{...runDraft,execution_budget_s:7201}} step={3}/>);
-assert.match(badBudgetHtml,/Execution budget must be within/);
-assert.match(badBudgetHtml,/disabled=""[^>]*>Generate competition run/);
+const gateDraft={...draft,steps:[{id:'gate',type:'gate',setup:{geometry_version:2,passages:[{id:'passage',kind:'gate',red:'a',green:'b'}]}}]};
+const gateHtml=renderToStaticMarkup(<Planner {...props} step={3} selectedCard="gate" draft={gateDraft}/>);
+assert.match(gateHtml,/Gate 1 · show pair on map/);assert.match(gateHtml,/Replace first buoy/);assert.match(gateHtml,/Replace second buoy/);

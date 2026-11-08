@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function BoatControls({status,stale,action,operations=[],results={}}) {
+export default function BoatControls({status,stale,action,returnTarget,onReturn,operations=[],results={}}) {
     const armed=!stale&&status?.armed===true;
     const hold=!stale&&status?.mode===4;
     const stopped=Number.isFinite(status?.speed_m_s)&&status.speed_m_s<=0.2;
@@ -17,9 +17,9 @@ export default function BoatControls({status,stale,action,operations=[],results=
         <div className="boat-controls-main">
             <div className="boat-controls-title"><span className="eyebrow">VEHICLE</span><h2>Boat controls</h2><span className={`arm-state ${stale?'unknown':armed?'armed':'disarmed'}`}><span aria-hidden="true">●</span> {stale?'Status unavailable':armed?'Armed':'Disarmed'}</span></div>
             <dl className="boat-metrics"><div><dt>Mode</dt><dd>{mode}</dd></div><div><dt>Speed</dt><dd>{stale||!Number.isFinite(status?.speed_m_s)?'—':`${status.speed_m_s.toFixed(2)} m/s`}</dd></div><div><dt>GPS fix</dt><dd>{stale?'—':status?.gps_fix??'—'}</dd></div></dl>
-            <div className="boat-control-actions"><button className="quiet" disabled={stale} onClick={()=>action('stop')}>Hold / Stop</button><button className="disarm-button" disabled={!canDisarm} onClick={()=>action('disarm')}>{!stale&&status?.armed===false?'Disarmed ✓':'Disarm'}</button></div>
+            <div className="boat-control-actions"><button className="quiet" disabled={stale} onClick={()=>action('stop')}>Hold / Stop</button><button disabled={!returnTarget} onClick={onReturn} title={returnTarget?"Stop and prepare a reviewed return to the frozen run start":"Start a run successfully in this page session to establish a target"}>Return now</button><button className="disarm-button" disabled={!canDisarm&&!(returnTarget&&!stale&&status?.armed===false&&hold&&stopped)} onClick={()=>action('disarm')}>{!stale&&status?.armed===false?'Disarmed ✓':'Disarm'}</button><details className="boat-help"><summary>Help</summary><div><p>{guidance}</p><p>Upload requires a disarmed boat outside Auto. Disarm requires Hold and reported speed ≤ 0.20 m/s. Start checks the mission, selects Auto and requests arming. A completed route ends in Hold and may remain armed.</p></div></details></div>
         </div>
-        <div className="boat-guidance"><p>{guidance}</p><details><summary>Arming &amp; mission readiness</summary><p>Upload requires a disarmed boat outside Auto. Disarm requires Hold and reported speed ≤ 0.20 m/s. Go / Start checks the mission, selects Auto and requests arming through the boat controller. A completed route ends in Hold and may remain armed.</p></details></div>
+
         {latest&&<p className={`boat-command ${latest.state==='failed'?'command-failed':''}`} role="status">Previous command result: {latest.command==='stop'?'Hold / Stop':'Disarm'} · {latest.state}{latest.detail?` · ${latest.detail}`:''}</p>}
     </section>;
 }

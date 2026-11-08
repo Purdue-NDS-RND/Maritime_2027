@@ -20,7 +20,7 @@ python_sources=(
     scripts/render_water.py tests/test_water_rendering.py tests/test_run_menu.py
     scripts/scene_snapshot.py scripts/export_map.py scripts/export_competition.py scripts/export_active.py scripts/alignment_probe.py
     scripts/alignment_report.py scripts/footprint.py scripts/evaluate_run.py scripts/calibrate.py
-    scripts/calibration_report.py scripts/make_course.py tests/test_scene_export.py tests/test_evaluator.py
+    scripts/calibration_report.py scripts/make_course.py scripts/survey_runner.py scripts/survey_evaluation.py tests/test_scene_export.py tests/test_evaluator.py tests/test_ordered_requirements.py
     scripts/calibration_result.py tests/test_calibration.py
     tests/test_scenario_rendering.py tests/test_competition.py
 )
@@ -164,6 +164,7 @@ python3 -m unittest discover -s tests -p test_camera_rate.py -q
 
 python3 -m unittest discover -s tests -p test_scene_export.py -q
 python3 -m unittest discover -s tests -p test_evaluator.py -q
+PYTHONPATH=..:../gcs/tests python3 -m unittest discover -s tests -p test_ordered_requirements.py -q
 python3 -m unittest discover -s tests -p test_survey_scenarios.py -q
 python3 -m unittest discover -s tests -p test_calibration.py -q
 

@@ -27,6 +27,8 @@ def evaluation_course(truth, run, contact_proof=None):
     if contact_proof:
         import hashlib
         c.update(contact_verification_evidence=str(contact_proof.resolve()),contact_verification_sha256=hashlib.sha256(contact_proof.read_bytes()).hexdigest())
+    if run.get('planning_mode') in ('run', 'return'):
+        return ordered_course(truth, run, c, contact_proof)
     for block in run['blocks']:
         task = block['task'];d = run['task_setup'][task]
         if task == 'channel':
@@ -85,3 +87,56 @@ def evaluation_course(truth, run, contact_proof=None):
     x,y=to_local(run['finish'],ref)
     c['finish']={'x':x,'y':y,'radius_m':1,'speed_m_s':.2,'settle_s':5}
     return c
+
+
+def ordered_course(truth, run, course, contact_proof=None):
+    """Independent requirements retain instance order and each channel lifetime."""
+    from copy import deepcopy
+    from shared.course import inside
+    ref = truth['geographic_reference']
+    objects = {o['id']:o for o in [*truth['buoys'], *truth.get('obstacles', [])]}
+    pos = lambda key: to_local(objects[key]['centre'], ref)
+    course['channels'] = []
+    if run['planning_mode'] == 'return':
+        for i, water in enumerate(run.get('navigation_water', [])):
+            polygon = [to_local(p,ref) for p in water['polygon']]
+            if not inside(to_local(run['start'],ref), polygon):
+                continue
+            a,b = [to_local(p,ref) for p in water['opening']]
+            course['channels'].append({'instance_id':f'return-water-{i}', 'polygon':polygon,
+                                       'entry':None, 'exit':{'origin':[(a[j]+b[j])/2 for j in (0,1)], 'direction':[-v for v in water['direction']]},
+                                       'begin_passage':0,'end_passage':0,'return_escape':True})
+    else:
+        by_id = {s['id']:s for s in run['steps']}
+        for block in run['blocks']:
+            step = by_id[block['instance_id']]
+            task = step['type']
+            if task == 'manual':
+                continue
+            # Reuse the independent physical-object derivation for one block,
+            # then namespace every event by this card's unique instance ID.
+            d = deepcopy(step['setup'])
+            d['finish_radius_m'] = d.get('finish_radius_m',1)
+            one = {**run, 'planning_mode':'legacy', 'task_setup':{task:d}, 'blocks':[{'task':task,'waypoint_start':block['waypoint_start']}]}
+            part = evaluation_course(truth,one,contact_proof)
+            first = len(course['passages'])
+            for p in part['passages']:
+                p['id'] = step['id']+':'+p['id'].split(':',1)[-1]
+                p['block'] = step['id']
+            if task == 'channel':
+                left,right = [d['channel_chains'][side] for side in ('left','right')]
+                a,b = pos(left[0]),pos(right[0])
+                start = [(a[j]+b[j])/2 for j in (0,1)]
+                a,b = pos(left[-1]),pos(right[-1])
+                end = [(a[j]+b[j])/2 for j in (0,1)]
+                # Final physical crossing is the actual last pair, not an inset.
+                part['passages'][-1]['origin'] = end
+                polygon = [to_local(p,ref) for p in d.get('channel', [])] or [*[pos(k) for k in left],*[pos(k) for k in reversed(right)]]
+                course['channels'].append({'instance_id':step['id'],'polygon':polygon,
+                                           'entry':{'origin':start,'direction':part['passages'][0]['direction']},
+                                           'exit':{'origin':end,'direction':part['passages'][-1]['direction']},
+                                           'begin_passage':first,'end_passage':first+len(part['passages'])})
+            course['passages'].extend(part['passages'])
+    x,y = to_local(run['finish'],ref)
+    course['finish'] = {'x':x,'y':y,'radius_m':run['finish_radius_m'],'speed_m_s':.2,'settle_s':5}
+    return course

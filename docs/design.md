@@ -203,7 +203,7 @@ documents provide design context rather than a guarantee of final event rules.
 ## GPS assisted planning extension
 
 The accepted next scope adds backend planning for separate gate, slalom and
-channel missions, using one persistent reviewed GPS object map and task-specific
+channel missions, using one page-session reviewed GPS object map and task-specific
 course roles/drafts. Live point imports require no simulator identity and are
 never simulator verified. Original observations are retained separately from
 operator corrections. Live objects are points, with total hard/soft distances
@@ -409,35 +409,76 @@ before conversion; original observations and saved routes/manual queues remain,
 while approval and map/task review are invalidated. Regenerate planner routes
 and revalidate manual routes after reviewing total centre-based allowances.
 
-## Continuous competition runs and imperfect surveys
+## Fresh-session Run builder and reviewed return
 
-The optional Competition run mode composes any nonempty selection in Gate →
-Slalom → Channel order from reviewed complete task setups. Single task remains
-the default for existing workspaces; manual queues and individual drafts remain
-separate. A run has its own common planning boundary, point-buffer/tower settings,
-speed, execution budget and fresh Live boat start (position and heartbeat ≤3 s).
-Manual start is explicitly offline. Individual task overrides apply only to
-separate missions. All blocks share one 60-second generation/simplification
-budget. Every emitted segment is validated with its task and global waypoint
-range; joins remain intact. Connecting approaches obey the common boundary and
-all hard zones. Only the final waypoint has stopped-finish semantics in the
-unchanged ordinary boat mission format. Channel is last and retains containment
-from its reviewed entrance through its final gate. The exit leg retains common boundary
-and obstacle checks.
+Run builder is the primary Map → Configure → Build run → Review & execute workflow. All
+planner state is in memory under an ephemeral page-session ID. New run, reload,
+new tab and backend restart start empty. Imports reset course-specific inputs
+and shipped settings, including when object IDs are reused. Existing files and
+logs are retained outside planner inputs. Reset never commands or clears an
+uploaded boat mission; actual boat status and priority Hold / Stop remain live.
+Earlier persistent-workspace and fixed-order workflow descriptions in this
+design are historical and superseded by this section.
 
-Matching Gate/Slalom entrance pairs with matching forward crossing and connection
-requirements may share one event only after explicit confirmation. The resulting
-block contains the full Slalom progression. Otherwise both crossing requirements
-remain and the operator reviews the return approach. Opposite directions cannot
-share. This relationship records planned semantics, not official scoring credit.
+A run contains ordered `steps` with unique instance IDs, type and independent
+setup. Complete Gate, Slalom, Channel and exact Manual waypoint cards may appear
+in any order, including repeats. Shared speed, obstacle/tower settings, common
+boundary and start selection live in a dedicated Configure workspace. Build run
+uses direct task buttons and a compact sequence above a persistent map and
+selected-task editor. Configure uses three compact settings columns, switching
+to category selection in narrower panels; its map preview remains optional.
+The task strip holds compact instance chips and one selected-instance action
+toolbar. Assignments, finish/water and advanced settings occupy separate editor
+views; local heading overrides remain in Advanced. Geometry review and task
+confirmation stay below the content pane. The application
+uses a viewport-sized shell with compact toolbars and a status bar.
+Only the editor and task strip scroll; the map and vehicle controls stay in place,
+and Generate remains below the scrolling task editor. Errors and planning progress
+use a message dock without covering controls. Task selection
+frames geometry; gate rows focus an explicit named pair and crossing arrow.
+Map-click endpoint replacement revokes task review and generated authority.
+Blue/purple/amber configuration sections distinguish obstacle clearance, towers
+and navigation limits; task colors match selected geometry without recoloring
+physical buoy symbols. Editors expose assignments,
+local directions, order/sides, channel chains, permitted water and endpoints.
+Duplication copies one configuration into a new instance. Partial-task recovery,
+saved presets, setup copying and per-card speeds are outside this workflow.
 
-Generation publishes a complete run atomically. Approval freezes map, setups,
-settings, start, sharing and complete path. Relevant edits revoke authority;
-Upload/Start recheck the initial connection and start displacement (≤1 m).
-Start consumes run execution authority even if its outcome is unknown. Stop or
-GCS restart requires fresh generation/approval of complete tasks. Uploaded boat
-execution remains independent of GCS connectivity. No automatic resume,
-regeneration, upload or next-task command is introduced.
+Generation captures a fresh start and plans each complete task from its preceding
+endpoint. Manual waypoints are retained exactly and all joins checked. One shared
+60-second deadline covers search, simplification and final segment validation;
+no partial or previous executable route survives failure. Adjacent compatible
+Gate → Slalom instances may share only after instance-bound confirmation. Changes
+to those inputs or their order revoke sharing. Channel entry, ordered sections,
+containment and actual final-gate exit are retained wherever its card appears.
+
+The complete run uses one ordinary ≤500-waypoint boat mission, one speed and
+one editable 10–7200 s execution budget. Intermediate endpoints are transit;
+only the final endpoint settles and HOLDs. Review shows route/connectors, instance
+progress, clearance findings and time budget. Validate → Approve → Upload/readback
+→ Start remain explicit. Start consumes authority and rechecks actual position;
+interrupted runs require fresh generation and approval. Asynchronous results
+must match session, input revision and interruption epoch before publication.
+
+A successfully acknowledged run Start freezes its captured start as this
+session's Return now target, displayed as a 1 m stopping area. It remains after
+completion/Stop and is never overwritten by return generation or return Start.
+Return now immediately sends priority Stop independently of planner locks and
+consumes the interrupted run's authority. Preparation requires confirmed HOLD,
+fresh position/heartbeat and speed ≤0.20 m/s. Task-free bounded navigation then
+plans independently from the sampled current position against the current
+reviewed map, boundary and shared settings. Inside reviewed channel water,
+retain side buffers/containment until exiting through the beginning opening.
+Unsafe targets, telemetry/HOLD failures, search failures and transfer failures
+initiate no return movement and report a specific cause.
+
+Return is opened for review and requires Validate → Approve, explicit Disarm
+before replacement Upload/readback, then explicit Start. It uses the existing
+boat waypoint executor, with finish radius 1 m, speed ≤0.20 m/s for at least 5 s,
+then HOLD. There is no automatic return card or interrupted task resume. Reset
+and restart remove the target. Boat-only manual mission operation is unchanged.
+Physical-boat/radio qualification, controller tuning and continuous replanning
+remain outside this revamp. See the GCS guide and milestone for evidence limits.
 
 Survey developer tools perturb the imported point list while keeping the map
 reference and physical scene fixed. Reviewed assignment IDs are explicit inputs;
