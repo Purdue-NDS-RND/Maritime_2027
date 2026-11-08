@@ -76,19 +76,27 @@ def prepare_task(object_map, task, settings=None):
         polygon=[points[o['id']] for o in chains[0]]+[points[o['id']] for o in reversed(chains[1])]
         draft.update(direction=list(direction),channel=[gps(p) for p in polygon],
                      channel_chains={name:[o['id'] for o in c] for name,c in zip(('left','right'),chains)})
-    left=(-direction[1],direction[0]);finish=None
-    for distance in (4.5,6.5,8.5):
+    finish_direction=direction
+    if task=='channel':
+        # Stop beyond the actual last pair, along its local forward normal.
+        a,b=[points[c[-1]['id']] for c in chains]
+        tangent=(b[0]-a[0],b[1]-a[1]);width=math.hypot(*tangent)
+        if width<1e-6:
+            raise ValueError('final channel gate needs two distinct boundary points')
+        finish_direction=(tangent[1]/width,-tangent[0]/width)
+        delta=tuple(midpoint(-1)[i]-midpoint(-2)[i] for i in (0,1))
+        if sum(delta[i]*finish_direction[i] for i in (0,1))<0:
+            finish_direction=tuple(-v for v in finish_direction)
+    left=(-finish_direction[1],finish_direction[0]);finish=None
+    base=max(4.5,required+finish_radius+.2) if task=='channel' else 4.5
+    for distance in (base,base+2,base+4):
         for lateral in (0,required+finish_radius+1,-required-finish_radius-1):
-            candidate=tuple(end[i]+distance*direction[i]+lateral*left[i]for i in (0,1))
-            if min(gap(o,candidate,candidate,ref)for o in objects)>=required+finish_radius+.05:
+            candidate=tuple(end[i]+distance*finish_direction[i]+lateral*left[i]for i in (0,1))
+            if all(gap(o,candidate,candidate,ref)>=(zones(o,draft)[0] if task=='channel' else required)+finish_radius+.05 for o in objects):
                 finish=candidate;break
         if finish is not None:break
     if finish is None:
-        finish=tuple(end[i]+4.5*direction[i]for i in (0,1));notes.append('Choose a clear finish area; nearby objects block the suggested finish.')
-    if task=='channel':
-        delta=tuple(midpoint(-1)[i]-midpoint(-2)[i] for i in (0,1))
-        length=math.hypot(*delta); final_direction=tuple(v/length for v in delta)
-        finish=tuple(end[i]-(required+finish_radius+.2)*final_direction[i] for i in (0,1))
+        finish=tuple(end[i]+base*finish_direction[i]for i in (0,1));notes.append('Choose a clear finish area; nearby objects block the suggested finish.')
     all_points=[*points.values(),to_local(draft['start'],ref),entry,exit,finish]
     padding=required+finish_radius+5
     xmin=min(p[0]for p in all_points)-padding;xmax=max(p[0]for p in all_points)+padding

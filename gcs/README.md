@@ -339,8 +339,26 @@ connections require correction. Permitted water is an operator assertion, not a
 boundary proved by buoy observations. Outside starts enter through the selected
 beginning opening; inside starts enforce containment immediately. Starts inside
 an obstacle/boundary exclusion buffer are rejected. Required side-boundary and
-obstacle room is preserved while traversing the entrance cap. The finish disk
-must remain fully inside permitted water with required clearance.
+obstacle room is preserved while traversing the entrance cap. New channel
+suggestions place the finish beyond the final buoy pair (4.5 m by default,
+farther when its required buffer/stopping radius or obstacles need more room).
+The route crosses the actual final opening before leaving the channel. Its
+exit leg and stopping disk obey the overall planning boundary and all obstacle
+buffers; channel containment applies through the exit crossing. The stopping
+disk must also be beyond that gate with the selected required allowance.
+Inside-channel finishes are rejected for GPS channel tasks, including drafts
+submitted by older tabs. In Task setup, **Finish past last gate** suggests a
+point from the reviewed final pair without changing chains, boundaries or
+buffers. Review the stopping region, confirm and Generate; ordinary finish
+editing remains available farther beyond the gate.
+
+Channel generation can start anywhere safe inside the overall planning area;
+the boat does not need to be inside the channel overlay first. When reviewed
+water extends before the first buoy pair, its upstream cap and sides allow the
+approach to reach that pair. Side crossings downstream of the selected entrance
+remain forbidden until the ordered final gate has been crossed. All physical-object and overall planning-boundary
+buffers still apply, and the complete task remains selected unless the operator
+explicitly confirms Remaining section.
 
 **Remaining section** is an explicit partial attempt. Click **Suggest remaining
 section**; an ambiguous position leaves the choice empty. Choose or correct the
@@ -361,6 +379,10 @@ A* remains deterministic, metric and 8-connected, carrying passage progress and
 incoming direction. It tries 0.25, 0.10 and 0.05 m, with at most 250,000 expansions
 per resolution, with a shared 60-second search/simplification time budget.
 Time exhaustion returns an error without a generated draft or a blockage claim.
+The browser also ends a generation request after 75 seconds, including response
+reading, so an interrupted connection cannot leave Generate spinning indefinitely.
+It displays a planning-response timeout and releases the busy controls; it does
+not retry or command the boat.
 An admissible lower bound through remaining finite openings guides search;
 precomputed local obstacle geometry and conservative distance bounds avoid
 repeated geographic/polygon work without dropping obstacles. Each edge enforces

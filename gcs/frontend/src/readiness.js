@@ -40,9 +40,11 @@ export function errorText(detail) {
 export function explainFailure(error) {
     const text=errorText(error?.detail??error?.message??error);
     let title='Action needs attention',next='Review the message below and correct the highlighted setup before trying again.',step=3;
-    if(/time limit|search exhaust|bounded|search budget/i.test(text)){title='No route found within the search budget';next='This does not prove the course is blocked. Check the approach, boundaries and assignments before trying again.';}
+    if(/Planning request time limit/i.test(text)){title='Planning response timed out';next='Check the GCS connection, then generate a fresh route. Planning does not command the boat.';}
+    else if(/time limit|search exhaust|bounded|search budget/i.test(text)){title='No route found within the search budget';next='This does not prove the course is blocked. Check the approach, boundaries and assignments before trying again.';}
     else if(/insufficient gate|opening.*blocked|entry window.*blocked/i.test(text)){title='Opening blocked at required clearance';next='Review the assigned objects and clearance in Configure. Hard clearance has not been reduced.';step=2;}
     else if(/unsafe.*start|unsafe planning start|actual position|task progress|start connection/i.test(text)){title='Starting position needs review';next='Inspect the marked start conflict. Correct the start or task setup, then generate and review a fresh attempt.';}
+    else if(/Channel finish must be beyond/i.test(text)){title='Finish is before the final channel gate';next='Reload if this is an older tab. In Task setup, click Finish past last gate, review the finish, confirm and Generate again.';}
     else if(/unsafe finish|finish area|finish.*clearance/i.test(text)){title='Finish area needs more room';next='Move the finish to clear water, including space for its stopping radius, then regenerate.';}
     else if(/age|heartbeat|fresh|stale/i.test(text)){title='Fresh boat position required';next='Reconnect the boat, or explicitly select Manual start in Task setup for offline planning.';}
     else if(/soft.*hard|preferred.*required|settings|nonnegative|positive speed/i.test(text)){title='Check the course settings';next='Correct the speed or distance values in Configure.';step=2;}

@@ -1,8 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {heading,missingSetup,gateWarnings,configuration} from '../src/workflow.js';
+import {heading,missingSetup,gateWarnings,configuration,channelExitFinish} from '../src/workflow.js';
+import {local} from '../src/buffers.js';
 const map=JSON.parse(fs.readFileSync(new URL('../../examples/competition-gps-map.json',import.meta.url)));
+test('channel finish suggestion is beyond the last actual pair, with settings retained',()=>{
+ const d={clearance_m:2,finish_radius_m:1,channel_chains:{left:['evade_left_0','evade_left_1','evade_left_2'],right:['evade_right_0','evade_right_1','evade_right_2']}};
+ const finish=local(channelExitFinish(map,d),map.geographic_reference);
+ const pair=['evade_left_2','evade_right_2'].map(id=>local(map.buoys.find(o=>o.id===id).centre,map.geographic_reference));
+ assert.ok(Math.abs(finish[1]-(pair[0][1]+pair[1][1])/2+4.5)<1e-6);
+ assert.equal(d.clearance_m,2);
+ assert.equal(channelExitFinish(map,{...d,channel_chains:{}}),null);
+});
 test('competition directions have useful labels',()=>{assert.equal(heading([-1,0]),'West · 270°');assert.equal(heading([0,-1]),'South · 180°');});
 test('setup checklist explains what is absent',()=>{assert.deepEqual(missingSetup({planner_task:'channel',finish:{}}),['Task entry','Task exit','Travel direction','Planning boundary','Channel boundary']);});
 test('gate opening warning explains blocked opening and clears for feasible setting',()=>{

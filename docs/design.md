@@ -325,14 +325,31 @@ with instructions to review the first included section.
 Channel boundaries connect all ordered chain points, with operator correction.
 Progress connections pair the union of normalized chain-vertex distances.
 Crossing chains, self-intersections and sections outside permitted water require
-correction. Start/finish crossing stations use end-cap allowances where needed. Short
-first intervals retain the finite beginning opening; dense end observations
-require explicitly reviewed water and a finish beyond the last section.
+correction. The entrance uses an end-cap allowance where needed; short first
+intervals retain the finite beginning opening. The final crossing lies on the
+actual last buoy pair, followed by the reviewed stopping region beyond it.
 The permitted polygon is never expanded automatically. Outside connections enter through
 the selected beginning opening. Its entrance cap is traversable during connection;
 side boundary and physical obstacle buffers remain mandatory. Inside starts
 already in any boundary exclusion band are rejected. Finish clearance includes
-the entire stopping disk. An advanced connection crossing remains available.
+the entire stopping disk. New channel suggestions place that disk beyond the
+actual final buoy pair, with required room beyond the gate plane. The route
+crosses that finite opening in order before channel containment ends; its exit
+leg and stopping disk retain overall planning-boundary and obstacle checks.
+The reviewed polygon is not expanded. GPS channel task finishes before that
+gate are invalid, including legacy drafts submitted from older browser tabs.
+An explicit Finish past last gate suggestion updates only the finish and revokes
+the prior route/approval for review. An advanced connection crossing remains available.
+
+An outside channel attempt may start anywhere safe in the overall planning
+area. For reviewed water extended upstream of the selected beginning buoy pair,
+approach boundary checks use channel edges clipped to the downstream side of
+that opening. This keeps the upstream extension accessible while preventing
+side/exit entry farther along the task. After the first crossing, the complete
+reviewed channel containment checks apply through the final gate.
+Generation retains the shared
+60-second budget; a separate 75-second browser request timeout ends stalled
+response waits with a visible error and releases the busy state.
 
 Workspace version 2 archives legacy state before migration, keeps saved routes,
 manual queues and assignment candidates, and revokes affected planner approvals.
@@ -405,7 +422,8 @@ budget. Every emitted segment is validated with its task and global waypoint
 range; joins remain intact. Connecting approaches obey the common boundary and
 all hard zones. Only the final waypoint has stopped-finish semantics in the
 unchanged ordinary boat mission format. Channel is last and retains containment
-from its reviewed entrance through its finish.
+from its reviewed entrance through its final gate. The exit leg retains common boundary
+and obstacle checks.
 
 Matching Gate/Slalom entrance pairs with matching forward crossing and connection
 requirements may share one event only after explicit confirmation. The resulting

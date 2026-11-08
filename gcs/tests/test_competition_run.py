@@ -25,7 +25,7 @@ class CompetitionRunTests(unittest.TestCase):
         gate = {'id':'entrance','kind':'gate','red':'a','green':'b'}
         setup = {'gate':{**common,'planner_task':'gate','passages':[gate],'finish':gps(4,0)},
                  'slalom':{**common,'planner_task':'slalom','passages':[gate,{'id':'turn','kind':'turn','buoy':'t','side':'right'},{'id':'exit','kind':'gate','red':'c','green':'d'}],'finish':gps(20,0)},
-                 'channel':{**common,'planner_task':'channel','passages':[],'channel_chains':{'left':['l0','l1'],'right':['r0','r1']},'finish':gps(43,0)}}
+                 'channel':{**common,'planner_task':'channel','passages':[],'channel_chains':{'left':['l0','l1'],'right':['r0','r1']},'finish':gps(48.5,0)}}
         run = {'planning_mode':'competition','selected_tasks':['gate','slalom','channel'],'task_setup':setup,
                'settings':{k:common[k] for k in ('speed_m_s','clearance_m','preferred_buffer_m')},'start':common['start'],
                'attempt':deepcopy(common['attempt']),'planning_area':common['planning_area'],'share_gate':True,'execution_budget_s':500}

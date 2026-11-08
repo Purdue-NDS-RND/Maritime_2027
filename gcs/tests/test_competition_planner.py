@@ -10,7 +10,7 @@ from gcs.app.course_setup import prepare_task
 from gcs.app.planner import generate
 from gcs.app.workspace import Workspace
 from shared.clearance import validate_route
-from shared.course import Course, gap
+from shared.course import Course, gap, dot, sub, inside
 from shared.geometry import to_gps,to_local
 
 
@@ -44,6 +44,11 @@ class CompetitionPlannerTests(unittest.TestCase):
                 self.assertTrue(validate_route(self.map,result['draft'])['valid'])
                 if task=='channel':
                     self.assertNotEqual(to_local(d['start'],self.map['geographic_reference']),to_local(result['draft']['derived_sections'][0]['centre'],self.map['geographic_reference']))
+                    c=Course(self.map,result['draft'])
+                    finish=to_local(result['draft']['finish'],c.reference)
+                    centre=to_local(c.draft['derived_sections'][-1]['centre'],c.reference)
+                    self.assertGreater(dot(sub(finish,centre),c.planes[-1][1]),required+d['finish_radius_m'])
+                    self.assertFalse(inside(finish,c.channel))
 
     def test_point_gate_hard_buffer_failure_without_reduction(self):
         proposal=prepare_task(self.map,'gate',{'clearance_m':2.1})
@@ -62,6 +67,31 @@ class CompetitionPlannerTests(unittest.TestCase):
         self.assertFalse(result['success'])
         self.assertIn('boundary exclusion',result['diagnostics'][0])
         self.assertEqual(d['clearance_m'],2)
+
+    def test_extended_full_map_channel_accepts_starts_around_course(self):
+        ref=self.map['geographic_reference']
+        d=prepare_task(self.map,'channel',{'clearance_m':2})['draft']
+        d.update(sizes_confirmed=True,course_confirmed=True)
+        points=[to_local(p,ref) for p in d['channel']]
+        xmin,xmax=min(p[0] for p in points),max(p[0] for p in points)
+        end=min(p[1] for p in points)
+        # Match the operator-reviewed extension beyond both end buoy pairs.
+        d['channel']=[to_gps(x,y,ref) for x,y in [(xmin,8),(xmin,end-8),(xmax,end-8),(xmax,8)]]
+        d['planning_area']=[to_gps(x,max(y,14) if y>0 else y,ref) for x,y in
+                            (to_local(p,ref) for p in d['planning_area'])]
+        d['finish']=to_gps((xmin+xmax)/2,end-4.5,ref)
+        d['tower_avoidance']={'hard_m':1.5,'soft_m':10,'strength':25,'overrides':{}}
+        for start in ((0,0),(-78,-10),(-55,-23),(-67,9)):
+            with self.subTest(start=start):
+                d['start']=to_gps(*start,ref)
+                result=generate(self.map,d,max_seconds=15)
+                self.assertTrue(result['success'],result)
+                generated=result['draft']
+                self.assertTrue(validate_route(self.map,generated)['valid'])
+                self.assertEqual(generated['attempt']['initial_progress'],0)
+                self.assertEqual(generated['clearance_m'],2)
+                self.assertEqual(generated['channel'],d['channel'])
+                self.assertTrue(any(section['kind']=='approach' for section in generated['route_sections']))
 
     def test_planning_deadline_reports_exhaustion_without_claiming_blockage(self):
         d=prepare_task(self.map,'channel')['draft']

@@ -941,3 +941,93 @@ and each run's inputs, change records, source/image identities, approval,
 acknowledgements, physics recording, contact proof and evaluation. The accepted
 baseline artifacts are `baseline-4` through `baseline-6`; `offset-025` and
 `point-025` are the error cases. No commit or push was performed.
+
+### Channel approaches from outside permitted water (2026-11-08)
+
+Fixed a channel approach failure when reviewed permitted water extends upstream
+of the beginning buoy pair. The old approach checks sealed off that extension
+at its outer boundary, leaving an otherwise valid outside start to exhaust the
+search. Upstream approach edges now allow access to the selected beginning;
+downstream side/exit entry, physical obstacles, overall planning-boundary buffers
+and subsequent channel containment remain enforced. No margins are reduced.
+The browser also aborts stalled generation response waits after 75 seconds and
+releases the busy controls with an explicit error, without retrying or issuing
+vehicle commands. The shared backend search/validation budget remains 60 seconds.
+
+All **94 backend tests**, frontend request/workflow/render checks and the
+production image build passed. New coverage includes extended and rotated
+channels, starts around the full competition map, forbidden downstream side
+entry, and stalled request/response bodies. A copy of the operator's actual
+reviewed setup generated a validated ten-waypoint route from the boat's sampled
+position outside the channel in **2.08 s**, preserving 2 m required/preferred
+buffers and tower settings. The packaged application independently passed HTTP
+Generate → Validate → Approve in **2.12 s**, using copied data and no container
+network access to the boat.
+
+The local GCS was updated after these checks. Its previous image is retained as
+`maritime-gcs:before-channel-planning-20261108`; a byte-exact workspace backup
+and comparison confirm every pre-existing field was preserved. Existing
+competition-run initialization added only its three default state fields, with
+Single task selected. No vehicle command was sent; boat and simulator containers
+were retained. Interactive browser verification was unavailable because browser
+automation failed before page inspection. These are planning/API/render checks,
+without new actual-motion, whole-hull or physical-boat acceptance.
+Evidence is under ignored `simulation/logs/channel-planning-approach/`.
+
+### Channel finish beyond the final gate (2026-11-08)
+
+New channel suggestions stop beyond the final buoy pair, starting at a 4.5 m
+offset along its local forward normal and retaining room for the required
+buffer/stopping radius. An exit finish uses the actual final finite opening,
+rather than an inset crossing. Channel containment applies through that ordered
+crossing; the subsequent exit leg and stopping disk retain overall course and
+physical-object checks. No permitted polygon is enlarged. This first version
+still accepted legacy inside-channel finishes; the enforcement correction below
+removes that fallback.
+
+All **96 backend tests** and frontend request/workflow/render/build checks
+passed. Bent/rotated exit routes, outside stopping regions, too-close finish
+rejection, forbidden early side exits and a final-section partial attempt are
+covered. A final preparation guard also rejects coincident exit-pair points.
+The operator's copied full-map setup generated a six-waypoint validated route
+in **2.16 s**, ending **4.5 m beyond the third gate**, outside its channel polygon.
+The final packaged image passed HTTP Generate → Validate → Approve in **2.23 s**
+with copied data and no network access to the boat.
+
+The local GCS image and saved Channel finish were updated. Its former image is
+retained as `maritime-gcs:before-channel-exit-20261108`, with a byte-exact workspace
+backup. The changed channel route/approval were cleared and task confirmation
+revoked for fresh operator review; maps, configuration and other saved waypoint
+queues were preserved. Restart preserved the updated workspace exactly. Boat
+mission/state/mode/armed status were unchanged and no vehicle command was sent.
+These are planning/API/render checks; no new interactive-browser or actual-motion
+acceptance is claimed. Evidence is under ignored `simulation/logs/channel-exit/`.
+
+### Enforce the channel exit finish across saved browser drafts (2026-11-08)
+
+An operator screenshot and live workspace exposed an approved finish **3.2 m
+before** the actual third gate after the prior update. Supporting legacy inside
+finishes let an older draft be saved and generated again. GPS channel task
+geometry now requires the stopping region beyond the actual final gate; workspace
+saves also reject that old finish, even when its setup is unconfirmed. Failed
+stale saves preserve the current workspace exactly. Manual routes retain their
+independent behavior. The Task setup button **Finish past last gate** suggests
+the finish from the reviewed final pair without replacing course assignments,
+boundaries or buffers; it requires renewed setup confirmation and generation.
+
+All **97 backend tests**, frontend workflow/render/request checks and production
+build passed. The exact screenshot workspace was checked in a packaged GCS with
+no boat network access: its old route could not be approved, the corrected route
+generated/validated, and both confirmed and unconfirmed stale saves returned
+HTTP 422 without restoring the old finish. The updated normal GCS independently
+rejected the actual old browser payload with HTTP 422 and preserved its saved
+state exactly. Its finish is **4.5 m past gate 3**, outside the channel polygon;
+the old route/approval were cleared for operator review.
+
+Workspace backups and the preceding image
+`maritime-gcs:before-channel-finish-enforcement-20261108` were retained. Maps,
+settings and other saved waypoint queues were preserved; no boat commands were
+sent. Browser automation again failed before page inspection, so this establishes
+API/persistence/render behavior, without an interactive-browser or new movement
+acceptance claim. Raw checks, generated GPS route and a plotted finish comparison
+are under ignored `simulation/logs/channel-finish-enforcement/`.

@@ -1,9 +1,28 @@
+import {local,gps} from './buffers.js';
+
 export const TASKS = [
     {id:'gate', title:'Gate', detail:'Pass the entrance gate and stop.'},
     {id:'slalom', title:'Slalom / Dodge', detail:'Weave through the turn buoys and exit gate.'},
-    {id:'channel', title:'Channel / Evade', detail:'Stay in the channel and stop at its finish.'},
+    {id:'channel', title:'Channel / Evade', detail:'Cross every channel gate and finish beyond the last pair.'},
     {id:'manual', title:'Manual move', detail:'Queue your own waypoints and stop at the last one.'},
 ];
+export function channelExitFinish(map,draft) {
+    if(!map||!draft.channel_chains)return null;
+    const objects=new Map(map.buoys.map(o=>[o.id,o]));
+    const chains=['left','right'].map(side=>(draft.channel_chains[side]||[]).map(id=>objects.get(id)));
+    if(chains.some(chain=>chain.length<2||chain.some(o=>!o)))return null;
+    const ref=map.geographic_reference;
+    const [a,b]=chains.map(chain=>local(chain.at(-1).centre,ref));
+    const previous=chains.map(chain=>local(chain.at(-2).centre,ref));
+    const width=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    if(width<1e-6)return null;
+    const centre=a.map((v,i)=>(v+b[i])/2);
+    let forward=[(b[1]-a[1])/width,-(b[0]-a[0])/width];
+    if(forward.reduce((sum,v,i)=>sum+v*(centre[i]-(previous[0][i]+previous[1][i])/2),0)<0)forward=forward.map(v=>-v);
+    const distance=Math.max(4.5,draft.clearance_m+draft.finish_radius_m+.2);
+    const [latitude,longitude]=gps(centre.map((v,i)=>v+distance*forward[i]),ref);
+    return {latitude,longitude};
+}
 export function manualDraft(settings, position) {
     return {task:'custom',waypoints:[],start:position||settings.start,finish:position||settings.start,
         speed_m_s:settings.speed_m_s,clearance_m:settings.clearance_m,...(settings.tower_avoidance?{tower_avoidance:structuredClone(settings.tower_avoidance)}:{}),
