@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import chi2
 
-from maritime_perception.validation import load_json
+from maritime_perception.validation import load_json, parse_utc
 
 
 def evaluate(session, output):
@@ -44,9 +44,7 @@ def evaluate(session, output):
             residuals.append(residual)
             errors.append(float(np.linalg.norm(residual)))
             containment.append(float(residual @ np.linalg.solve(cov, residual)) <= chi2.ppf(.95, 2))
-        from datetime import datetime
-        latencies.append((datetime.fromisoformat(report["published_at"].replace("Z", "+00:00"))-
-                          datetime.fromisoformat(report["state_at"].replace("Z", "+00:00"))).total_seconds())
+        latencies.append((parse_utc(report["published_at"])-parse_utc(report["state_at"]))*1e-9)
     final = reports[-1] if reports else {"tracks": []}
     for track in final["tracks"]:
         shared_eigenvalues.append(float(np.linalg.eigvalsh(track["uncertainty"]["shared_covariance_en_m2"])[0]))

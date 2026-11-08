@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 from glob import glob
 
 setup(
-    name="maritime_perception", version="0.1.0", python_requires=">=3.11",
+    name="maritime_perception", version="0.1.0", python_requires=">=3.10",
     packages=find_packages(),
     package_data={"maritime_perception": ["schemas/*.json", "config/*.json", "config/*.yaml"],
                   "perception_synthetic": ["scenarios/*.json"]},

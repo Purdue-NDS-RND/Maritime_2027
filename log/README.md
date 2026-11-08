@@ -35,9 +35,11 @@ MAVROS and the FCU connection must already be configured on the host. This repos
 does **not** contain `mavros_boot.sh` or `check_streams.sh`; use the team's actual host
 setup. This listener does not configure message rates, arm, command or launch the vehicle.
 
-Use a compatible ROS environment whose Python meets the drone package's >=3.11 requirement.
-The exercised portable runtime is Python 3.12; Humble/Jetson compatibility is unverified.
-For a Jazzy host, use its system Python so binary `rclpy` can be imported:
+Use the host ROS interpreter, Python >=3.10. Python 3.10 selects its own pinned
+dependency profile; Python >=3.11 retains the original pins. Portable 3.10/3.12 tests
+do not establish native Humble/Jetson compatibility. Source the installed distribution
+(`humble` instead of `jazzy` below for a Humble host) and use its system Python so
+binary `rclpy` can be imported:
 
 ```bash
 source /opt/ros/jazzy/setup.bash

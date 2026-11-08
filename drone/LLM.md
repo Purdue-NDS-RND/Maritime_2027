@@ -155,6 +155,19 @@ Use the README asynchronous test commands. Prefer a complete fused FCU pose/velo
 source first; the exact IMU/navigation pair is optional. Raw-only bags still need source
 adapters and verified exposure/clock/geometry/quality contracts for usable GPS reports.
 
+## Python 3.10 host compatibility (2026-11-08)
+
+The user's ROS host reports system Python 3.10.12. Package metadata now permits
+Python >=3.10; requirement markers select NumPy 1.26.4, SciPy 1.15.3, OpenCV 4.11.0.86
+and pyproj 3.6.1 for 3.10, preserving the existing pins for Python >=3.11. Nanosecond
+evaluation uses the existing integer UTC parser and IMU checksum streaming avoids
+the Python 3.11-only file_digest API. Fresh 3.10 and existing 3.12 x86_64 installs
+pass 161 drone tests; 11 GCS workspace tests pass on 3.10. ARM64 binary-wheel
+resolution, analytic/delay/loss CLI checks and camera dry-run pass. Native system
+rclpy/GI imports, ROS/DDS/Argus and Jetson execution remain for the team host.
+Use its sourced system interpreter with --system-site-packages; do not replace
+/usr/bin/python3 or bypass Requires-Python. Current commands are in README.md.
+
 ## User-established direction
 
 1. A drone launches from the boat and surveys buoys/objects in the water.

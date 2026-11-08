@@ -187,6 +187,12 @@ Validation: 160 drone tests and 11 GCS workspace tests pass. The normal analytic
 test produced 4 reports/12 observations; complete state loss produced zero observations.
 Native ROS/bag tests and physical sensing remain unexecuted; boat acceptance is unchanged.
 
+The Python 3.10 host install blocker is corrected with version-selected dependency
+pins and portable timestamp/checksum handling. Both Python 3.10 and 3.12 pass 161
+drone tests; 11 GCS workspace tests pass on 3.10. Analytic/delay/loss and camera dry-run
+checks pass; ARM64 binary-wheel resolution succeeds. Native ROS/GI/Argus/Jetson
+execution remains unverified. The higher-Python pins and boat behavior are preserved.
+
 This uses a perfect simulator map and does not establish camera-free feasibility
 on the real boat. Subsequent experiments introduce survey/GPS errors and buoy
 movement, evaluate clearance limits, and compare with physical route following.

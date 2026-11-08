@@ -76,7 +76,10 @@ def integrate_session(session, imu_path, contract_path, output):
                            ("navigation_measurements", session/"measurements.jsonl"),
                            ("imu", imu_path), ("contract", contract_path)):
             with path.open("rb") as stream:
-                provenance[name + "_sha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
+                digest = hashlib.sha256()
+                for chunk in iter(lambda: stream.read(1 << 20), b""):
+                    digest.update(chunk)
+                provenance[name + "_sha256"] = digest.hexdigest()
         config["imu_integration"] = dict(version=1, alignment="exact_stamp_only", state_count=count, **provenance)
         write_json(stage/"config.json", config)
         shutil.copyfile(imu_path, stage/"imu_samples.jsonl")

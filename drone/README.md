@@ -14,9 +14,9 @@ The deployed sensor direction remains fixed Arducam IMX519 + ordinary GNSS, with
 
 ## Setup and deterministic demonstrations
 
-Run from the repository root. Python 3.12 on Linux x86_64 was exercised; pinned SciPy
-and pyproj require Python >=3.11. This dependency set is not a claim of compatibility
-with the Jetson's eventual JetPack/ROS/Python combination.
+Run from the repository root. Python 3.10 and 3.12 on Linux x86_64 are exercised.
+Requirements select explicit Python 3.10 pins for host ROS/GI environments and retain
+the existing pins on Python >=3.11. Native Jetson/ROS/Argus execution remains unverified.
 
 Use **uv exclusively** to create environments, install Python packages and run Python
 commands for this workstream. Run every command below from the repository root. Use an
@@ -34,6 +34,14 @@ lockfile here, so use `uv pip install` and the explicit interpreter with `uv run
 --no-project`; do not assume `uv sync` is configured. The explicit interpreter prevents
 an unrelated active environment from being selected. `git`, `docker`, `ros2`, `colcon`
 and shell utilities retain their native commands; uv manages the Python environment.
+
+Python 3.10 compatibility (2026-11-08): a fresh x86_64 install passes 161 drone tests
+and 11 GCS workspace tests; the Python 3.12 environment also passes 161 drone tests.
+Analytic demo, delayed replay (4 reports/12 observations), total state loss (zero
+observations, expected nonzero exit), and camera dry-run pass on 3.10. ARM64 Python
+3.10 binary-wheel dependency resolution succeeds; native ARM/ROS/GI/Argus execution
+has not run here. Record package versions with data; byte-identical replay is tested
+within a runtime, not promised across the two dependency profiles.
 
 One command generates measurements, executes the actual production pipeline and evaluates
 its reports against a separate truth file:
@@ -122,13 +130,14 @@ sudo apt-get install python3-gi python3-gst-1.0 gstreamer1.0-tools gstreamer1.0-
 uv run --no-project --python /usr/bin/python3 python -V
 ```
 
-The system Python must be **>=3.11** and match the host GI/ROS binary bindings; the
-GStreamer video-info API used here requires GStreamer >=1.20. The
-existing SciPy/PROJ pins and package requirement are retained. A stock Python 3.10/Humble
-installation cannot run this dependency set; do not force-install it or assume a downloaded
-uv Python can import GI built for a different ABI. The final JetPack/ROS/Python matrix is
-still SP-01. Python 3.12/Linux x86_64 is the portable test environment, not Jetson acceptance.
-For a compatible system Python, run from the repository root:
+The system Python must be **>=3.10** and match the host GI/ROS binary bindings;
+the GStreamer video-info API requires GStreamer >=1.20. Python 3.10 selects NumPy
+1.26.4, SciPy 1.15.3, OpenCV 4.11.0.86 and pyproj 3.6.1. Keeping NumPy below 2 on
+this profile avoids introducing NumPy 2 into the older host stack; actual native
+imports still need verification. Python >=3.11 keeps the original NumPy/SciPy/OpenCV/
+pyproj pins. Do not use --ignore-requires-python or assume a downloaded uv interpreter
+can import ROS/GI built for another ABI. The final JetPack/ROS/Python matrix remains
+SP-01; portable tests do not establish native Jetson acceptance. From the repository root:
 
 ```bash
 uv venv --python /usr/bin/python3 --system-site-packages .venv-camera
@@ -136,6 +145,21 @@ uv pip install --python .venv-camera/bin/python -r drone/requirements-test.txt -
 uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.image_grabber --config drone/maritime_perception/config/imx519_capture.json --dry-run
 uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.image_grabber --config drone/maritime_perception/config/imx519_capture.json --output simulation/logs/perception/camera-run-01 --max-frames 30 --save-interval-s 0
 ```
+
+For ROS on the observed Python 3.10 host, first source its installed distribution
+(for example `source /opt/ros/humble/setup.bash` for Humble). Reuse the already created
+`.venv-ros`; its previous failed install did not install the project. After updating
+`feature/cv-raycast`, install and verify in that environment:
+
+```bash
+uv pip install --python .venv-ros/bin/python -r drone/requirements-test.txt -e ./drone
+uv run --no-project --python .venv-ros/bin/python python -c 'import rclpy, maritime_perception; print("Project and ROS OK")'
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.async_test --help
+```
+
+Check each command succeeds before running the next. `No module named
+maritime_perception` after an unsatisfiable-dependencies error is a failed-install
+consequence, not a separate ROS failure. Retain `.venv` Python 3.12 for portable tests.
 
 The sample requests the legacy 3840x2160/17 FPS mode, 1/1000 s shutter and rectification.
 Those requests must match a mode supported by the actual driver; they are not measured

@@ -11,8 +11,9 @@ from jsonschema.exceptions import ValidationError
 
 from maritime_perception.pipeline import PerceptionPipeline
 from maritime_perception.replay import replay_session
-from maritime_perception.validation import Unavailable
+from maritime_perception.validation import Unavailable, parse_utc, utc
 from perception_synthetic.demo import run
+from perception_synthetic.evaluate import evaluate
 from perception_synthetic.generator import load_scenario
 
 
@@ -33,6 +34,18 @@ def test_analytic_end_to_end_and_no_truth_replay(tmp_path):
     (tmp_path/"demo/session/truth.json").unlink()
     replay_session(tmp_path/"demo/session", tmp_path/"replay")
     assert (tmp_path/"replay/reports.jsonl").read_bytes() == (tmp_path/"demo/result/reports.jsonl").read_bytes()
+
+
+def test_evaluation_preserves_nanosecond_report_latency(tmp_path):
+    root = tmp_path/"demo"
+    run(load_scenario("analytic"), root)
+    path = root/"result/reports.jsonl"
+    reports = [json.loads(raw) for raw in path.read_text().splitlines()]
+    for report in reports:
+        report["published_at"] = utc(parse_utc(report["state_at"])+150_000_001)
+    path.write_text("".join(json.dumps(report)+"\n" for report in reports))
+    summary = evaluate(root/"session", root/"result")
+    assert summary["maximum_report_latency_s"] == pytest.approx(.150000001, abs=1e-12, rel=0)
 
 
 def test_stationary_survey_and_process_independent_determinism(tmp_path):

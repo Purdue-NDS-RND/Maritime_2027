@@ -299,6 +299,14 @@ doubles and do not complete hardware, optical, end-to-end timing or onboard acce
 
 ## Status maintenance
 
+Python 3.10 host compatibility now has a separate pinned dependency selection with
+the original Python >=3.11 pins preserved. Both 3.10 and 3.12 pass 161 drone tests;
+3.10 also passes 11 GCS workspace tests and analytic/async delay/loss/camera dry-run
+checks. ARM64 binary-wheel resolution succeeds. This removes the package-install
+blocker for the observed system Python 3.10 host; SP-01/SP-18/SP-19 still require
+native rclpy/GI/ROS/Argus execution and hardware evidence. Reuse the host interpreter
+instead of swapping system Python to a downloaded runtime.
+
 The updated completion plan assigns the first camera/pixel/recording slice to Student A,
 FCU/state/timing to Student B, geometry/acceptance to Samuel and simulation/GCS interfaces
 to the SW/Gazebo lead. Names and host inventory remain meeting decisions.
