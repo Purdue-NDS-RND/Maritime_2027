@@ -33,8 +33,10 @@ Markdown pack is a historical starting point; use current repository files for f
 
 ### First supplied hardware bag (2026-11-08)
 
-The user's `hardware-bag-02.zip` contains one intact SQLite database, without external
-metadata.yaml. Portable decoding of the actual Humble CDR payloads verified 47 rectified
+The user's `hardware-bag-02.zip` contains one intact SQLite database. Its subsequently
+supplied metadata.yaml matches that file: 11,020 messages, all 13 topic entries/counts/
+types, start time, 97.575138678 s duration and per-file statistics. No declared splits
+are missing. Portable decoding of the actual Humble CDR payloads verified 47 rectified
 1280x720 images, 62 CameraInfo/metadata records and unique exact companions for every
 image; 15 metadata records have no image in the database. Source spacing is about
 1.06 processed FPS under a 2 Hz request. IMU/GNSS each contain 1,952 messages and
@@ -49,7 +51,10 @@ PNGs with retained source clocks/calibration/checksums via a portable test decod
 No decoder dependency or raw-sensor fusion was added to production. The camera ROS
 publisher uses a typed byte array to avoid Humble's per-byte setter validation; rate
 improvement and native export CLI still need another Jetson run. See README commands.
-All 173 drone tests pass on Python 3.10 and 3.12, and static checks pass.
+The audit now cross-checks/hashes complete manifests and rejects mismatched counts,
+types and times before export. Completion flags refer only to the declared archive;
+partial snapshots retain unknown completeness. All 182 drone tests pass on Python 3.10
+and 3.12, and static checks pass.
 This updates recording/runtime evidence only: physical accuracy, timing/mount/height,
 frame-origin/reset and uncertainty acceptance remain open. Earlier statements below
 that no bag was supplied describe the implementation-time test boundary.

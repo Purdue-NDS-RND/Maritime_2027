@@ -327,6 +327,13 @@ an image, processed rate is about 1.06 Hz under a 2 Hz request, odometry covaria
 all zero, no camera TF is supplied and exposure clocks remain unverified. These are
 partial observations, not completion of the physical acceptance criteria.
 
+The later supplied metadata.yaml matches the single database, 11,020 total records,
+all 13 topic entries/counts/types, start/duration and per-file statistics. No declared
+splits are missing. Metadata validation/hashing now distinguishes complete declared
+archives from partial snapshots and rejects inconsistent manifests before export.
+This confirms the 15 image gaps are in the recording, not an omitted declared split;
+SP-06/SP-18/SP-41/SP-42 acceptance remains unchanged.
+
 The maintained bag audit now supports read-only SQLite snapshots/splits, ROS-free
 counts, exact camera companion export with checksums/source clocks, and raw navigation
 export. It was exercised on the supplied database with a portable Humble decoder;

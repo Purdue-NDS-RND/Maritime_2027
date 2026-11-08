@@ -355,8 +355,9 @@ split; a zipped directory is suitable to share along with config/calibration and
 
 The audit reports topic counts/bytes/rates, header gaps/duplicates/backwards times and
 frame IDs. SQLite snapshots can be inspected read-only even if the uploaded directory
-omits metadata. Complete directories use the metadata split list and reject missing
-splits; a standalone `.db3` is evidence only for that file, not proof of a complete run.
+omits metadata. Complete directories check the declared splits, total and per-topic
+counts/types, start/duration and per-file statistics; mismatches are rejected before
+export. A standalone `.db3` is evidence only for that file if its manifest lists others.
 `--counts-only` needs no ROS installation. Decoding uses the sourced native ROS/message
 packages; unknown definitions retain byte/count statistics and increment decode errors.
 
@@ -381,8 +382,20 @@ passes integrity inspection and contains about 97.6 seconds of telemetry. It con
 47 rectified 1280x720 images, 62 CameraInfo records and 62 metadata records. Every
 recorded image has a unique exact companion pair. Fifteen metadata records lack an
 image; no cause is established by the bag. Metadata source spacing has a median
-0.941 s (about 1.06 processed frames/s), below the requested 2 Hz. The ZIP omits
-`metadata.yaml`; include that file and all splits when sharing future recordings.
+0.941 s (about 1.06 processed frames/s), below the requested 2 Hz. The initial ZIP omitted
+`metadata.yaml`; the user subsequently supplied the matching version-5 manifest. Its
+single declared file, 11,020 total messages, all 13 topic entries/counts/types, starting
+time, 97.575138678 s duration and per-file statistics match the database. No additional
+declared splits are missing. The image gap is already present in the recorded counts;
+supplying the manifest does not recover the 15 absent images.
+
+Keep `metadata.yaml` beside `hardware-bag-02_0.db3` in the bag directory. The audit now
+hashes the manifest and reports `source.metadata_consistency_verified` and
+`source.archive_completeness_verified` as true for this complete matching recording.
+These refer to the declared archive, not lossless sensor delivery, calibration or
+position accuracy. A single selected split of a multi-file bag retains false completion
+flags; its counts are not compared with whole-bag totals. Partial old manifests with
+missing statistics retain unknown consistency instead of gaining verification.
 
 IMU and GNSS each have 1,952 messages and odometry has 1,951, at about 20 Hz.
 The bag includes a latched GPS origin and three static MAVROS frame-convention
@@ -428,8 +441,9 @@ uv run --no-project --python .venv/bin/python python -m maritime_perception.adap
 The new exporter was exercised on the actual database using a portable Humble CDR
 decoder: all messages decoded and 47 PNGs/checksums/source metadata were verified.
 Production decoding still uses native ROS, not a new required decoder dependency.
-All 173 drone tests pass on Python 3.10 and 3.12, including missing/duplicate companions,
-split handling, padded RGB export, typed ROS sequences and retained unknown covariance.
+All 182 drone tests pass on Python 3.10 and 3.12, including missing/duplicate companions,
+split handling, metadata count/type/time mismatches, padded RGB export, typed ROS
+sequences and retained unknown covariance.
 Native CLI/export execution on the Jetson remains to be checked by the team.
 
 The image publisher now uses `array('B')` for ROS Image data. Humble's generated

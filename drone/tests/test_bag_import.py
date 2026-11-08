@@ -9,6 +9,7 @@ from types import SimpleNamespace as NS
 import cv2
 import numpy as np
 import pytest
+import yaml
 
 from maritime_perception.adapters.rosbag_audit import audit_bag, plain
 from maritime_perception.validation import Unavailable
@@ -169,3 +170,76 @@ def test_counts_only_cannot_silently_produce_a_camera_export(recorded, tmp_path)
 def test_native_ros_typed_sequences_and_nonfinite_raw_values_are_strict_json():
     message = Message(covariance=array("d", [0., float("nan")]), quality=np.float64(float("inf")))
     assert json.dumps(plain(message), allow_nan=False) == '{"covariance": [0.0, null], "quality": null}'
+
+
+def manifest(path):
+    topics = [("/camera/image_rect", "sensor_msgs/msg/Image", 1),
+              ("/camera/camera_info", "sensor_msgs/msg/CameraInfo", 2),
+              ("/camera/frame_metadata", "std_msgs/msg/String", 2),
+              ("/mavros/local_position/odom", "nav_msgs/msg/Odometry", 2),
+              ("/tf", "tf2_msgs/msg/TFMessage", 0)]
+    return dict(version=5, storage_identifier="sqlite3", compression_mode="", message_count=7,
+        starting_time=dict(nanoseconds_since_epoch=1), duration=dict(nanoseconds=20),
+        relative_file_paths=[path.name],
+        files=[dict(path=path.name, message_count=7, starting_time=dict(nanoseconds_since_epoch=1),
+                    duration=dict(nanoseconds=20))],
+        topics_with_message_count=[dict(topic_metadata=dict(name=name, type=kind, serialization_format="cdr"),
+                                        message_count=count) for name, kind, count in topics])
+
+
+def test_complete_manifest_matches_database_and_is_hashed(recorded):
+    path, _ = recorded
+    metadata = path.parent/"metadata.yaml"
+    metadata.write_text(yaml.safe_dump(dict(rosbag2_bagfile_information=manifest(path))))
+    summary = audit_bag(path.parent, counts_only=True)
+    assert summary["source"]["all_declared_splits_supplied"]
+    assert summary["source"]["metadata_consistency_verified"]
+    assert summary["source"]["archive_completeness_verified"]
+    assert all(summary["source"]["metadata_consistency_checks"].values())
+    assert summary["source"]["metadata_sha256"] == hashlib.sha256(metadata.read_bytes()).hexdigest()
+    assert not summary["geolocation_ready"]
+
+
+@pytest.mark.parametrize("fault", ["total", "start", "duration", "topic_count", "topic_type", "file_count", "file_duration"])
+def test_stale_or_mismatched_manifest_is_rejected_before_export(recorded, tmp_path, fault):
+    path, messages = recorded
+    value = manifest(path)
+    if fault == "total":
+        value["message_count"] = 8
+    elif fault == "start":
+        value["starting_time"]["nanoseconds_since_epoch"] = 0
+    elif fault == "duration":
+        value["duration"]["nanoseconds"] = 21
+    elif fault == "topic_count":
+        value["topics_with_message_count"][0]["message_count"] = 2
+    elif fault == "topic_type":
+        value["topics_with_message_count"][0]["topic_metadata"]["type"] = "sensor_msgs/msg/CompressedImage"
+    elif fault == "file_count":
+        value["files"][0]["message_count"] = 8
+    else:
+        value["files"][0]["duration"]["nanoseconds"] = 21
+    (path.parent/"metadata.yaml").write_text(yaml.safe_dump(dict(rosbag2_bagfile_information=value)))
+    output = tmp_path/"export"
+    with pytest.raises(Unavailable, match="bag_metadata_mismatch"):
+        audit_bag(path.parent, decoder=lambda raw, kind: messages[raw], export_directory=output)
+    assert not output.exists()
+
+
+def test_one_selected_split_is_not_compared_with_whole_bag_totals(recorded):
+    path, _ = recorded
+    database(path.parent/"another.db3", [(1, "/another", "std_msgs/msg/Empty")], [(1, 0, b"x")])
+    value = manifest(path)
+    value["relative_file_paths"].append("another.db3")
+    value["message_count"] = 8
+    value["starting_time"]["nanoseconds_since_epoch"] = 0
+    value["duration"]["nanoseconds"] = 21
+    value["files"].append(dict(path="another.db3", message_count=1,
+        starting_time=dict(nanoseconds_since_epoch=0), duration=dict(nanoseconds=0)))
+    value["topics_with_message_count"].append(dict(topic_metadata=dict(name="/another", type="std_msgs/msg/Empty",
+        serialization_format="cdr"), message_count=1))
+    (path.parent/"metadata.yaml").write_text(yaml.safe_dump(dict(rosbag2_bagfile_information=value)))
+    assert audit_bag(path.parent, counts_only=True)["source"]["metadata_consistency_verified"]
+    selected = audit_bag(path, counts_only=True)
+    assert not selected["source"]["all_declared_splits_supplied"]
+    assert not selected["source"]["metadata_consistency_verified"]
+    assert not selected["source"]["archive_completeness_verified"]
