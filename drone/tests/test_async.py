@@ -111,11 +111,11 @@ def test_unknown_clock_and_bad_publication_time_are_not_replaced(settings, event
 
 
 def test_rosbag_audit_counts_messages_and_separates_header_times(tmp_path, monkeypatch):
-    (tmp_path/"metadata.yaml").write_text("rosbag2_bagfile_information:\n  storage_identifier: sqlite3\n")
+    (tmp_path/"metadata.yaml").write_text("rosbag2_bagfile_information:\n  storage_identifier: mcap\n")
     records = [("/camera/image_raw", b"a", 100), ("/camera/image_raw", b"b", 200), ("/imu", b"c", 300)]
     class Reader:
         def open(self, storage, conversion):
-            assert storage.storage_id == "sqlite3"
+            assert storage.storage_id == "mcap"
         def get_all_topics_and_types(self):
             return [NS(name="/camera/image_raw", type="sensor_msgs/msg/Image"), NS(name="/imu", type="sensor_msgs/msg/Imu")]
         def has_next(self):

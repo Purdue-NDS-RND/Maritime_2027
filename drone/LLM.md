@@ -31,6 +31,29 @@ handoff report for each chat. New chats should read this index rather than the f
 The current GitHub feature branch is the canonical shared context. The earlier exported
 Markdown pack is a historical starting point; use current repository files for future work.
 
+### First supplied hardware bag (2026-11-08)
+
+The user's `hardware-bag-02.zip` contains one intact SQLite database, without external
+metadata.yaml. Portable decoding of the actual Humble CDR payloads verified 47 rectified
+1280x720 images, 62 CameraInfo/metadata records and unique exact companions for every
+image; 15 metadata records have no image in the database. Source spacing is about
+1.06 processed FPS under a 2 Hz request. IMU/GNSS each contain 1,952 messages and
+odometry 1,951 at about 20 Hz over a 97.6 s bag. GPS origin is present; static TF contains
+MAVROS convention transforms, not camera extrinsics. All odometry covariances are zero,
+IMU/odometry have no exact matching timestamps, and exposure semantics remain unverified.
+
+The bag audit now reads supplied SQLite splits read-only, offers ROS-free counts,
+reports exact camera companions and navigation gaps, and exports PNGs/frames.jsonl plus
+raw navigation.jsonl using native ROS decoding. The actual database exported 47 verified
+PNGs with retained source clocks/calibration/checksums via a portable test decoder.
+No decoder dependency or raw-sensor fusion was added to production. The camera ROS
+publisher uses a typed byte array to avoid Humble's per-byte setter validation; rate
+improvement and native export CLI still need another Jetson run. See README commands.
+All 173 drone tests pass on Python 3.10 and 3.12, and static checks pass.
+This updates recording/runtime evidence only: physical accuracy, timing/mount/height,
+frame-origin/reset and uncertainty acceptance remain open. Earlier statements below
+that no bag was supplied describe the implementation-time test boundary.
+
 ## Python tooling requirement
 
 The user requires uv exclusively for Python setup and execution. The README uses

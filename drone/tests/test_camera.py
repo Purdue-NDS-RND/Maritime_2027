@@ -312,7 +312,14 @@ def test_ros_image_info_metadata_preview_and_shutdown(tmp_path, fake_gst, monkey
         def __init__(self):
             self.header = NS(frame_id="", stamp=NS(sec=0, nanosec=0))
     class Image:
-        pass
+        @property
+        def data(self):
+            return self._data
+        @data.setter
+        def data(self, value):
+            from array import array
+            assert isinstance(value, array) and value.typecode == "B"
+            self._data = value
     class Node:
         def __init__(self, name):
             nodes.append(self)

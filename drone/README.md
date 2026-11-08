@@ -353,9 +353,12 @@ after `/clock` is active. Do not mix real-time and simulation bags into one sess
 Stop cleanly so metadata is written. Keep the whole bag directory, metadata and every
 split; a zipped directory is suitable to share along with config/calibration and versions.
 
-The optional audit streams a native ROS 2 bag and reports per-topic count/bytes/rate,
-header duplicates/backwards times and frame IDs. It requires ROS/message packages;
-unknown custom definitions retain byte/count statistics and increment decode errors.
+The audit reports topic counts/bytes/rates, header gaps/duplicates/backwards times and
+frame IDs. SQLite snapshots can be inspected read-only even if the uploaded directory
+omits metadata. Complete directories use the metadata split list and reject missing
+splits; a standalone `.db3` is evidence only for that file, not proof of a complete run.
+`--counts-only` needs no ROS installation. Decoding uses the sourced native ROS/message
+packages; unknown definitions retain byte/count statistics and increment decode errors.
 
 ```bash
 uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.rosbag_audit --bag simulation/logs/perception/bench-bag --output simulation/logs/perception/bench-bag-audit.json
@@ -368,8 +371,82 @@ are present in the bag; raw-only recordings need the students' adapters. Replay 
 perception topics. Bag receive timestamps, ROS headers and camera PTS are distinct facts;
 a bag does not establish exposure synchronization, origin, covariance, heading or height.
 Preserve calibration/config files, camera control requests, runtime versions, mounting/
-water measurements and annotation/reference data beside the bag. No actual bag was supplied
-for this implementation, and no live hardware/bag/ROS trial has been claimed.
+water measurements and annotation/reference data beside the bag. See the first real
+recording below for observed flow and the remaining physical acceptance limits.
+
+### Import the first hardware bag
+
+The user supplied `hardware-bag-02.zip` on 8 November 2026. Its single SQLite database
+passes integrity inspection and contains about 97.6 seconds of telemetry. It contains
+47 rectified 1280x720 images, 62 CameraInfo records and 62 metadata records. Every
+recorded image has a unique exact companion pair. Fifteen metadata records lack an
+image; no cause is established by the bag. Metadata source spacing has a median
+0.941 s (about 1.06 processed frames/s), below the requested 2 Hz. The ZIP omits
+`metadata.yaml`; include that file and all splits when sharing future recordings.
+
+IMU and GNSS each have 1,952 messages and odometry has 1,951, at about 20 Hz.
+The bag includes a latched GPS origin and three static MAVROS frame-convention
+transforms, but no camera-mount transform. All 1,951 odometry pose/twist covariances
+are zero. There are no identical IMU/odometry header stamps. This supports source
+adapter and asynchronous replay development, not an exact-time IMU join or a verified
+navigation error model. GPS-origin presence alone does not establish its relationship
+to local `map`, camera offsets or the target-plane height.
+
+Run from the repository root in the existing system-Python ROS environment. Choose
+fresh output paths; no new packages beyond the existing ROS/project install are needed:
+
+```bash
+source /opt/ros/humble/setup.bash
+export RUN=simulation/logs/perception/team-test-01
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.adapters.rosbag_audit \
+  --bag "$RUN/hardware-bag-02" \
+  --export-camera "$RUN/hardware-import-01" \
+  --output "$RUN/hardware-bag-audit-01.json"
+```
+
+The export contains `images/`, `frames.jsonl`, raw `navigation.jsonl` and `audit.json`.
+Frame records retain the original capture ID, source PTS/clock, ROS header, calibration,
+requested controls and unverified exposure flags, plus exact CameraInfo and PNG SHA256.
+Association uses exact `(ROS header nanoseconds, frame_id)` keys; missing, duplicate
+or inconsistent companions are reported and excluded. It never pairs the latest metadata.
+Supported image exports are BGR8, RGB8 and mono8, including padded rows.
+Raw MAVROS/TF records retain their field names and receive timestamps. Nonfinite raw
+sensor values become JSON null. This is an input dataset for annotation/detector and
+source-adapter tests; it is not a normalized `config.json`/`measurements.jsonl` session.
+It does not change clocks, assert calibration validity, invent covariance or emit GPS
+tracks. Read `camera.exact_triplet_count`, `camera.metadata_without_image_count`,
+`topics.*.decode_errors` and `navigation.zero_pose_covariance_count` in the audit.
+
+For a desktop without ROS, inspect flow only (a `.db3` file path also works):
+
+```bash
+uv run --no-project --python .venv/bin/python python -m maritime_perception.adapters.rosbag_audit \
+  --bag simulation/logs/perception/team-test-01/hardware-bag-02 --counts-only \
+  --output simulation/logs/perception/team-test-01/hardware-bag-counts-01.json
+```
+
+The new exporter was exercised on the actual database using a portable Humble CDR
+decoder: all messages decoded and 47 PNGs/checksums/source metadata were verified.
+Production decoding still uses native ROS, not a new required decoder dependency.
+All 173 drone tests pass on Python 3.10 and 3.12, including missing/duplicate companions,
+split handling, padded RGB export, typed ROS sequences and retained unknown covariance.
+Native CLI/export execution on the Jetson remains to be checked by the team.
+
+The image publisher now uses `array('B')` for ROS Image data. Humble's generated
+uint8-sequence setter accepts this directly, avoiding Python per-byte validation for
+each full-resolution and preview message. Desktop checks preserve byte content; only
+a new Jetson run can establish rate/delivery improvement. This does not establish the
+cause of the 15 missing bag images. To isolate preview overhead during that run, add
+`--preview-width 0 --preview-height 0` to the capture command. The existing source
+resolution, output resolution, FPS, shutter/exposure and gain options remain available.
+
+Student A can annotate measured target points in these exported images immediately.
+Student B can inspect raw navigation timing/origin/covariance without recapturing data.
+Samuel/HW must provide camera-to-body rotation/translation, measured lens-to-target
+height, target dimensions and applicable lens/mode calibration. Exposure-clock mapping
+and a justified navigation/shared-error model are still needed for physical ENU/GPS
+reports. Arrival-header odometry brackets in the audit are diagnostic, not exposure
+synchronization. Do not independently fuse correlated IMU, odometry and GNSS outputs.
 
 Primary references: [ROS 2 rosbag2 recording QoS and clocks](https://github.com/ros2/rosbag2),
 [native Python reader example](https://github.com/ros2/rosbag2/tree/jazzy/rosbag2_examples/rosbag2_examples_py).

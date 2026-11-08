@@ -318,6 +318,24 @@ physical acceptance remain open. SP-04/SP-09/SP-19/SP-44 gain test infrastructur
 completed hardware acceptance. Record the first 30 to 60 second camera/navigation bag and
 implement the two normalized source adapters next; detector training does not block this.
 
+## First actual bag and import progress (2026-11-08)
+
+SP-04/SP-19/SP-44 now have actual camera/FCU recording evidence: the supplied SQLite
+snapshot contains 47 uniquely matched rectified images, 62 metadata/CameraInfo records,
+about 20 Hz IMU/GNSS/odometry and a latched GPS origin. Fifteen metadata records lack
+an image, processed rate is about 1.06 Hz under a 2 Hz request, odometry covariance is
+all zero, no camera TF is supplied and exposure clocks remain unverified. These are
+partial observations, not completion of the physical acceptance criteria.
+
+The maintained bag audit now supports read-only SQLite snapshots/splits, ROS-free
+counts, exact camera companion export with checksums/source clocks, and raw navigation
+export. It was exercised on the supplied database with a portable Humble decoder;
+47 PNGs were checked. Native Jetson export and post-optimization capture still need
+team execution. A typed ROS byte buffer removes a known Python validation cost without
+changing image content/settings. SP-06/SP-18/SP-41/SP-42 retain their measurement work;
+the next physical inputs are measured target dimensions, camera/body mount and height,
+verified exposure-clock mapping and a justified navigation covariance/correlation model.
+
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
 exists; describe important limits in its owning topic. Record unresolved numerical
 thresholds explicitly rather than inventing successful accuracy or performance figures.

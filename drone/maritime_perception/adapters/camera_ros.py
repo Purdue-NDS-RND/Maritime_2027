@@ -1,4 +1,5 @@
 """Optional ROS publication for image capture, independent of flight control."""
+from array import array
 import cv2
 import numpy as np
 import time
@@ -63,7 +64,9 @@ def run_ros(settings, ros_args):
             msg.header = header
             msg.height, msg.width = image.shape[:2]
             msg.encoding, msg.is_bigendian, msg.step = "bgr8", 0, msg.width*3
-            msg.data = image.tobytes()
+            # Humble's generated uint8[] setter accepts array('B') directly. Bytes
+            # take its Python per-element validation path for every full image.
+            msg.data = array("B", image.tobytes())
             return msg
 
         def info_message(self, info, stamp_ns):
