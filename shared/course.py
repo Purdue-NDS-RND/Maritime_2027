@@ -409,7 +409,11 @@ class Course:
 
 
 def validate_course(object_map,draft):
-    course=Course(object_map,draft)
+    if 'navigation_water' in draft:
+        from .navigation import NavigationCourse
+        course=NavigationCourse(object_map,draft)
+    else:
+        course=Course(object_map,draft)
     route=[to_local(draft['start'],course.reference),*[to_local(p,course.reference) for p in draft['waypoints']]]
     draft=course.draft
     errors=[]; progress=course.initial_progress; sections=[]

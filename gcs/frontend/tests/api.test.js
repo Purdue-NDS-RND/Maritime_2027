@@ -33,3 +33,16 @@ test('structured errors and mission command outcome handling are preserved',asyn
         return true;
     });
 });
+
+test('late generation is discarded after a newer reset and page-session headers stay in memory',async t=>{
+    const {newSession}=await import('../src/api.js');
+    let release;
+    t.mock.method(globalThis,'fetch',async(url,options)=>{
+        if(url==='/api/session')return {ok:true,json:async()=>({session_id:'page-only'})};
+        assert.equal(options.headers['X-Planner-Session'],'page-only');
+        if(url==='/api/generate')return new Promise(resolve=>release=()=>resolve({ok:true,json:async()=>({draft:'old'})}));
+        return {ok:true,json:async()=>({map:null})};
+    });
+    await newSession();const pending=api('generate','POST');await api('reset','POST');release();
+    await assert.rejects(pending,/Superseded response discarded/);
+});

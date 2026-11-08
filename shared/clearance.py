@@ -7,6 +7,9 @@ from .avoidance import tower_policy, zones
 
 
 def validate_route(object_map, draft, *, transit_finish=False):
+    if draft.get('planning_mode') == 'run':
+        from .run_builder import validate_run
+        return validate_run(object_map, draft)
     if draft.get('planning_mode') == 'competition':
         from .competition import validate_run
         return validate_run(object_map, draft)

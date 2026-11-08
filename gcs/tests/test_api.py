@@ -1,194 +1,202 @@
-"""Authoritative backend behavior using an isolated fake boat HTTP transport."""
+"""Session API and guided return behavior with an isolated boat transport."""
+from copy import deepcopy
 import importlib.util
+import json
 import os
-import tempfile
+import threading
 import unittest
 from unittest.mock import patch
+from test_run_builder import fixture
 
-HAS_CLIENT=importlib.util.find_spec('fastapi') is not None and importlib.util.find_spec('httpx') is not None
+HAS_CLIENT = importlib.util.find_spec('fastapi') is not None and importlib.util.find_spec('httpx') is not None
 
 
-@unittest.skipUnless(HAS_CLIENT,'FastAPI/httpx integration dependencies unavailable on host')
+@unittest.skipUnless(HAS_CLIENT, 'FastAPI/httpx unavailable on host')
 class ApiTests(unittest.TestCase):
     def setUp(self):
-        from test_workspace import WorkspaceTests
-        self.fixture=WorkspaceTests();self.fixture.setUp()
-        os.environ['GCS_DATA']=self.fixture.temp.name+'/api-data'
-        from gcs.app import main
         from fastapi.testclient import TestClient
-        self.main=main;main.workspace=self.fixture.workspace
-        self.client=TestClient(main.app)
-        self.calls=[]
-        self.vehicle={'state':'uploaded','position':self.fixture.draft['start'],
-                      'heartbeat_age_s':0,'position_age_s':0,'armed':False}
+        from gcs.app import main
+        self.main = main
+        main.sessions.clear();main.operations.clear()
+        self.client = TestClient(main.app)
+        value = self.client.post('/api/session').json()
+        self.client.headers['X-Planner-Session'] = value['session_id']
+        self.w = main.sessions[value['session_id']]
+        self.m,self.run,self.gps = fixture()
+        self.run['steps'] = self.run['steps'][:1]
+        self.w.edit({'revision':0,'map':self.m,'new_import':True})
+        self.w.edit({'revision':1,'run_draft':self.run})
+        self.vehicle = {'position':self.run['start'],'position_age_s':0,'heartbeat_age_s':0,'state':'idle','armed':False,'mode':4,'speed_m_s':0}
+        self.calls=[];self.ops={};self.fail_stop=False;self.fail_upload=False
         def boat(path,method='GET',body=None):
             self.calls.append((path,method,body))
-            if path=='/status':return self.vehicle
-            if path.startswith('/operations/'):return {'operation_id':'operation','state':'succeeded'}
-            return {'operation_id':'operation','state':'pending'}
+            if path == '/status':return deepcopy(self.vehicle)
+            if path.startswith('/operations/'):return self.ops[path.split('/')[-1]]
+            command = 'upload' if method == 'PUT' else 'start' if path.endswith('/start') else path[1:]
+            key = str(len(self.ops))
+            op = {'operation_id':key,'command':command,'state':'succeeded'}
+            if command == 'upload':
+                op['mission_id'] = body['mission']['mission_id']
+                self.vehicle.update(mission_id=op['mission_id'],state='uploaded')
+                if self.fail_upload:op.update(state='failed',detail='readback mismatch')
+            if command == 'start':self.vehicle.update(state='executing',armed=True,mode=10)
+            if command == 'stop':
+                self.vehicle.update(state='stopped',mode=4,speed_m_s=0)
+                if self.fail_stop:op.update(state='failed',detail='HOLD rejected')
+            if command == 'disarm':self.vehicle['armed']=False
+            self.ops[key]=op
+            # Real transport returns a receipt; reconciliation needs polling.
+            return {**op,'state':'pending'}
         self.mock=patch.object(main,'boat',boat);self.mock.start()
+
     def tearDown(self):
-        self.mock.stop();self.client.close();self.fixture.tearDown()
-    def test_validate_approve_upload_start_remain_separate(self):
-        self.assertTrue(self.client.post('/api/validate').json()['valid'])
-        self.assertFalse(self.calls)
-        self.assertEqual(self.client.post('/api/approve').status_code,200)
-        self.assertFalse(self.calls)
-        result=self.client.post('/api/upload');self.assertEqual(result.status_code,200)
-        self.assertEqual(result.json()['state'],'pending')
-        self.assertEqual(self.calls[-1][1],'PUT')
-        self.assertNotIn('buoys',self.calls[-1][2]['mission'])
-        self.assertNotIn('navigation_profile_id',self.calls[-1][2])
-        self.assertEqual(self.client.post('/api/start').status_code,200)
-        self.assertTrue(self.calls[-1][0].endswith('/start'))
-    def test_edit_revokes_backend_start_authority(self):
-        self.client.post('/api/approve')
-        self.client.put('/api/workspace',json={'draft':self.fixture.draft})
-        self.assertEqual(self.client.post('/api/start').status_code,422)
-        self.assertFalse(self.calls)
-    def test_stale_vehicle_or_unsafe_actual_start_rejected(self):
-        self.client.post('/api/approve');self.vehicle['position_age_s']=10
-        self.assertEqual(self.client.post('/api/upload').status_code,409)
-        self.vehicle['position_age_s']=0;self.vehicle['position']=self.fixture.map['buoys'][0]['centre']
+        self.mock.stop();self.client.close()
+
+    def generate(self):
+        r=self.client.post('/api/generate');self.assertEqual(r.status_code,200,r.text)
+        self.assertTrue(r.json()['success'],r.text)
+        return r.json()
+
+    def approve(self):
+        self.generate();self.assertTrue(self.client.post('/api/validate').json()['valid'])
+        r=self.client.post('/api/approve');self.assertEqual(r.status_code,200,r.text);return r.json()
+
+    def command(self,name):
+        r=self.client.post('/api/'+name);self.assertEqual(r.status_code,200,r.text)
+        return self.client.get('/api/operations/'+r.json()['operation_id']).json()
+
+    def started(self):
+        approval=self.approve();self.command('upload');self.command('start');return approval
+
+    def test_review_transfer_and_start_are_separate_and_readback_required(self):
+        self.approve();self.assertFalse(any(c[1]!='GET' for c in self.calls))
         self.assertEqual(self.client.post('/api/start').status_code,409)
-    def test_stop_and_disarm_do_not_require_approval(self):
+        self.command('upload');self.command('start')
+        self.assertEqual(self.w.read()['return_target'],self.run['start'])
+        self.assertEqual(self.client.post('/api/start').status_code,422)
+
+    def test_fresh_tabs_reload_backend_and_reset_are_empty_without_boat_commands(self):
+        self.approve();before=len(self.calls)
+        other=self.client.post('/api/session').json()
+        self.assertIsNone(other['workspace']['map']);self.assertFalse(other['workspace']['run_draft']['steps'])
+        reset=self.client.post('/api/reset').json();self.assertIsNone(reset['map']);self.assertIsNone(reset['return_target'])
+        self.assertEqual(len(self.calls),before)
+        self.main.sessions.clear()
+        self.assertEqual(self.client.get('/api/workspace').status_code,409)
+        self.assertEqual(self.client.post('/api/stop').status_code,200)
+
+    def test_stop_is_independent_and_cross_origin_is_rejected(self):
+        self.client.headers.pop('X-Planner-Session')
         self.assertEqual(self.client.post('/api/stop').status_code,200)
         self.assertEqual(self.client.post('/api/disarm').status_code,200)
-        self.assertEqual([c[0] for c in self.calls],['/stop','/disarm'])
-    def test_cross_origin_mutation_is_refused(self):
         self.assertEqual(self.client.post('/api/stop',headers={'Origin':'https://example.com'}).status_code,403)
-        self.assertFalse(self.calls)
 
-    def test_planning_operations_never_command_boat_and_failed_generation_revokes(self):
-        from test_planner import PlannerTests
-        m,d,_=PlannerTests().fixture()
-        self.client.put('/api/workspace',json={'map':m})
-        roles={k:v for k,v in d.items() if k not in ('start','waypoints','planner_task')}
-        self.client.put('/api/workspace',json={'course':{'gate':roles},'draft':d})
-        self.assertEqual(self.client.post('/api/course/suggest',json={'direction':[1,0]}).status_code,200)
-        generated=self.client.post('/api/generate').json()
-        self.assertTrue(generated['success'],generated)
-        self.assertFalse(self.calls)
-        self.assertEqual(self.client.post('/api/approve').status_code,200)
-        self.client.put('/api/workspace',json={'selected_task':'channel'})
-        self.assertIsNone(self.fixture.workspace.read()['approval'])
-        self.assertFalse(self.calls)
-        self.client.put('/api/workspace',json={'selected_task':'gate'})
-        self.assertEqual(self.client.post('/api/approve').status_code,200)
-        self.vehicle['position']={'latitude':m['geographic_reference']['latitude'],'longitude':m['geographic_reference']['longitude']}
-        self.assertEqual(self.client.post('/api/upload').status_code,409)
-        self.assertFalse(any(c[1]!='GET' for c in self.calls))
-
-    def test_competition_example_and_setup_are_unconfirmed_and_never_command(self):
-        response=self.client.get('/api/examples/competition')
-        self.assertEqual(response.status_code,200)
-        m=response.json();self.assertEqual(len(m['buoys']),23)
-        self.client.post('/api/import',json={'content':__import__('json').dumps(m)})
-        proposed=self.client.post('/api/course/prepare',json={'task':'channel','settings':{'clearance_m':2,'speed_m_s':.7}})
-        self.assertEqual(proposed.status_code,200)
-        self.assertEqual(proposed.json()['draft']['clearance_m'],2)
-        self.assertFalse(proposed.json()['draft']['course_confirmed'])
-        self.assertFalse(self.calls)
-
-
-    def test_general_attempt_uses_generate_time_position_and_freezes_approval(self):
-        from test_general_course import GeneralCourseTests
-        m,d,gps=GeneralCourseTests().fixture()
-        d['planner_task']='gate';d['passages']=d['passages'][:1];d['finish']=gps(5,0)
-        d['attempt']['start_source']='live'
-        self.client.put('/api/workspace',json={'map':m,'new_import':True,'course':{}})
-        self.client.put('/api/workspace',json={'draft':d})
-        self.vehicle.update(position=gps(-4,0),position_age_s=5)
-        self.assertEqual(self.client.post('/api/generate').status_code,422)
-        self.vehicle['position_age_s']=.1
-        result=self.client.post('/api/generate').json()
-        self.assertTrue(result['success'],result)
-        self.assertEqual(result['draft']['start'],self.vehicle['position'])
-        self.assertIn('captured_at',result['draft']['attempt'])
-        self.assertEqual(self.client.post('/api/approve').status_code,200)
-        frozen=self.client.get('/api/workspace').json()['approval']
-        self.vehicle['position']=m['buoys'][0]['centre']
-        self.assertEqual(self.client.post('/api/upload').status_code,409)
-        self.assertEqual(self.client.get('/api/workspace').json()['approval'],frozen)
-        self.assertFalse(any(method!='GET' for _,method,_ in self.calls))
-        edited=self.client.get('/api/workspace').json()['draft']
-        edited['attempt'].update(mode='remaining',first_section=0,selection_confirmed=True)
-        self.client.put('/api/workspace',json={'draft':edited})
-        self.assertEqual(self.client.post('/api/approve').status_code,422)
-
-    def test_shared_course_settings_are_authoritative_and_never_command(self):
-        from gcs.app.settings import defaults
-        settings=defaults(self.fixture.draft)
-        settings['speed_m_s']=.7
-        settings['tower_avoidance'].update(hard_m=2,soft_m=15)
-        response=self.client.put('/api/workspace',json={'game_settings':settings})
-        self.assertEqual(response.status_code,200,response.text)
-        self.assertEqual(response.json()['draft']['speed_m_s'],.7)
-        self.assertIsNone(response.json()['approval'])
-        self.assertFalse(self.calls)
-        saved=self.main.workspace.read()
-        settings['tower_avoidance']['soft_m']=-1
-        self.assertEqual(self.client.put('/api/workspace',json={'game_settings':settings}).status_code,422)
-        self.assertEqual(self.main.workspace.read(),saved)
-        self.assertFalse(self.calls)
-
-    def test_telemetry_stream_announces_backend_session_for_clean_restart(self):
-        import asyncio
-        import json
-        class Passive:
-            def snapshot(self):return {'position':None,'stale':True}
-        async def snapshot():
-            stream=self.main.telemetry_events(Passive())
-            try:return await anext(stream)
-            finally:await stream.aclose()
-        frame=asyncio.run(snapshot())
-        payload=json.loads(frame.removeprefix('data: '))
-        self.assertEqual(payload['gcs_session_id'],self.main.GCS_SESSION_ID)
-        self.assertTrue(payload['stale'])
-        self.assertFalse(self.calls)
-
-    def test_competition_atomic_generation_start_checks_and_consumption(self):
-        from test_competition_run import CompetitionRunTests
-        from copy import deepcopy
-        m,r,gps=CompetitionRunTests().fixture()
-        r['attempt']['start_source']='live'
-        self.client.put('/api/workspace',json={'map':m,'new_import':True})
-        self.client.put('/api/workspace',json={'planning_mode':'competition','run_draft':r})
-        geometry=self.client.post('/api/run/geometry',json=r)
-        self.assertEqual(geometry.status_code,200,geometry.text)
-        self.assertEqual(set(geometry.json()),{'gate','slalom','channel'})
-        self.assertFalse(self.calls)
-        self.vehicle.update(position=gps(-6,0),position_age_s=4)
+    def test_live_start_stale_and_actual_position_change(self):
+        d=deepcopy(self.run);d['attempt']['start_source']='live'
+        self.w.edit({'revision':self.w.read()['revision'],'run_draft':d})
+        self.vehicle['position_age_s']=4
         self.assertEqual(self.client.post('/api/generate').status_code,200)
-        self.assertFalse(self.client.post('/api/generate').json()['success'])
-        self.assertIsNone(self.main.workspace.read()['approval'])
-        self.vehicle['position_age_s']=0
-        result=self.client.post('/api/generate').json();self.assertTrue(result['success'],result)
-        self.assertFalse(any(method!='GET' for _,method,_ in self.calls))
-        self.assertEqual(self.client.post('/api/approve').status_code,200)
-        frozen=deepcopy(self.main.workspace.read()['approval'])
-        self.vehicle['position']=gps(-3,0)
+        self.assertFalse(self.w.read()['run_draft']['waypoints'])
+        self.vehicle['position_age_s']=0;self.approve();self.vehicle['position']=self.gps(-4,0)
         self.assertEqual(self.client.post('/api/upload').status_code,409)
-        self.assertEqual(self.main.workspace.read()['approval'],frozen)
-        self.vehicle['position']=gps(-6,0)
-        self.assertEqual(self.client.post('/api/upload').status_code,200)
-        self.assertEqual(self.client.post('/api/start').status_code,200)
+
+    def test_return_uses_sampled_position_and_frozen_target_after_task_or_finish(self):
+        for state in ('executing','complete','stopped'):
+            if not self.w.read()['return_target']:self.started()
+            target=deepcopy(self.w.read()['return_target'])
+            self.vehicle.update(position=self.gps(5,0),state=state,armed=True)
+            r=self.client.post('/api/return/prepare');self.assertEqual(r.status_code,200,r.text)
+            out=r.json();self.assertTrue(out['success'],out)
+            d=out['draft'];self.assertEqual(d['return_target'],target);self.assertEqual(d['finish'],target)
+            self.assertEqual(d['start'],self.gps(5,0));self.assertNotEqual(d['start'],d['finish'])
+            self.assertEqual(self.client.post('/api/start').status_code,422)
+            self.assertTrue(self.client.post('/api/validate').json()['valid'])
+            a=self.client.post('/api/approve');self.assertEqual(a.status_code,200,a.text)
+            self.assertEqual(a.json()['envelope']['mission']['finish_settle_s'],5)
+            self.assertEqual(self.client.post('/api/upload').status_code,409)
+            self.command('disarm');self.command('upload');self.command('start')
+            self.assertEqual(self.w.read()['return_target'],target)
+
+    def test_return_inside_channel_exits_only_through_beginning(self):
+        # Start at the safe launch area, then simulate interruption inside water.
+        d=deepcopy(self.run);_,all_steps,_=fixture();d['steps']=all_steps['steps']
+        self.w.edit({'revision':self.w.read()['revision'],'run_draft':d})
+        self.started();self.vehicle['position']=self.gps(34,0)
+        r=self.client.post('/api/return/prepare');self.assertEqual(r.status_code,200,r.text)
+        self.assertTrue(r.json()['success'],r.text)
+        from shared.navigation import NavigationCourse
+        out=r.json()['draft'];course=NavigationCourse(self.m,out)
+        self.assertIsNone(course.edge((34,0),(34,10),0))
+        self.assertIsNone(course.edge((34,0),(50,0),0))
+        self.assertEqual(course.edge((34,0),(20,0),0),1)
+        self.assertTrue(self.client.post('/api/validate').json()['valid'])
+
+    def test_return_failures_consume_outbound_authority_and_never_start(self):
+        self.started();self.fail_stop=True
+        r=self.client.post('/api/return/prepare');self.assertEqual(r.status_code,409);self.assertIn('HOLD rejected',r.text)
         self.assertEqual(self.client.post('/api/start').status_code,422)
-        self.assertEqual(self.client.post('/api/approve').status_code,422)
-        self.assertTrue(self.client.post('/api/generate').json()['success'])
-        self.assertEqual(self.client.post('/api/approve').status_code,200)
-        self.client.post('/api/stop')
+        self.fail_stop=False;self.vehicle['position_age_s']=4
+        self.assertEqual(self.client.post('/api/return/prepare').status_code,409)
+        self.vehicle['position_age_s']=0;self.vehicle['position']=self.m['buoys'][0]['centre']
+        r=self.client.post('/api/return/prepare');self.assertFalse(r.json()['success'])
+        self.assertFalse(self.w.read()['run_draft']['waypoints'])
+        self.assertEqual(sum(c[0].endswith('/start') for c in self.calls),1)
+
+    def test_return_blocked_target_and_failed_replacement_readback(self):
+        self.started();self.vehicle['position']=self.gps(5,0)
+        # Freeze target does not follow current position, even if now unsafe.
+        target=deepcopy(self.w.read()['return_target'])
+        self.w.state['map']['buoys'].append({'id':'new-obstacle','type':'point','centre':target,'object_type':'unknown'})
+        r=self.client.post('/api/return/prepare');self.assertFalse(r.json()['success']);self.assertIn('finish',r.text)
+        self.w.state['map']['buoys'].pop()
+        r=self.client.post('/api/return/prepare');self.assertTrue(r.json()['success'],r.text)
+        self.client.post('/api/validate');self.client.post('/api/approve');self.command('disarm')
+        self.fail_upload=True;self.assertEqual(self.command('upload')['state'],'failed')
+        self.assertEqual(self.client.post('/api/start').status_code,409)
+
+    def test_stop_cancels_in_flight_generation_without_planner_lock(self):
+        original=self.main.generate_run;entered=threading.Event();release=threading.Event();out=[]
+        def delayed(*args,**kwargs):
+            entered.set();release.wait(10);return original(*args,**kwargs)
+        with patch.object(self.main,'generate_run',delayed):
+            thread=threading.Thread(target=lambda:out.append(self.client.post('/api/generate')));thread.start()
+            self.assertTrue(entered.wait(3))
+            self.assertEqual(self.client.post('/api/stop').status_code,200)
+            release.set();thread.join(20)
+        self.assertEqual(out[0].status_code,422);self.assertFalse(self.w.read()['run_draft']['waypoints'])
+
+    def test_hold_timeout_and_changed_actual_return_start_never_initiate_movement(self):
+        self.started()
+        original=self.main.boat
+        def no_hold(path,*args,**kwargs):
+            result=original(path,*args,**kwargs)
+            if path=='/status':result['mode']=10
+            return result
+        from itertools import count
+        with patch.object(self.main,'boat',no_hold), patch.object(self.main.time,'monotonic',side_effect=count(1000,10)), patch.object(self.main.time,'sleep'):
+            response=self.client.post('/api/return/prepare')
+        self.assertEqual(response.status_code,409);self.assertIn('confirmed HOLD',response.text)
+        self.vehicle['position']=self.gps(5,0)
+        self.assertTrue(self.client.post('/api/return/prepare').json()['success'])
+        self.client.post('/api/validate');self.client.post('/api/approve');self.command('disarm');self.command('upload')
+        self.vehicle['position']=self.gps(9,0)
+        self.assertEqual(self.client.post('/api/start').status_code,409)
+        self.assertEqual(sum(c[0].endswith('/start') for c in self.calls),1)
+
+    def test_return_stops_before_saving_invalid_current_settings(self):
+        self.started();before=len(self.calls)
+        d=deepcopy(self.run);d['settings']['speed_m_s']=-1
+        response=self.client.post('/api/return/prepare',json={'revision':self.w.read()['revision'],'run_draft':d,'game_settings':{'version':1,**d['settings'],'task_overrides':{}}})
+        self.assertEqual(response.status_code,422)
+        self.assertEqual(self.calls[before][0],'/stop')
         self.assertEqual(self.client.post('/api/start').status_code,422)
 
-    def test_stop_is_sent_before_workspace_persistence_even_if_outcome_unknown(self):
-        for unknown in (False,True):
-            events=[]
-            def command(*args):
-                events.append('hold')
-                if unknown:
-                    raise self.main.HTTPException(503,'unknown outcome')
-                return {'operation_id':'stop'}
-            with patch.object(self.main,'boat',command), patch.object(self.main.workspace,'consume_run',lambda:events.append('persist')):
-                response=self.client.post('/api/stop')
-            self.assertEqual(events,['hold','persist'])
-            self.assertEqual(response.status_code,503 if unknown else 200)
+    def test_new_run_while_start_receipt_is_pending_never_restores_target(self):
+        self.approve();self.command('upload')
+        receipt=self.client.post('/api/start').json()
+        self.client.post('/api/reset')
+        self.client.get('/api/operations/'+receipt['operation_id'])
+        self.assertIsNone(self.w.read()['return_target']);self.assertIsNone(self.w.read()['map'])
+
+
+if __name__=='__main__':unittest.main()

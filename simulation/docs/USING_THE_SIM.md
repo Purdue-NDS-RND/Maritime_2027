@@ -310,3 +310,37 @@ Three consecutive baseline combined successes, a representative 0.25 m common
 offset and a bounded point-error execution are required for the new movement
 acceptance. Read `docs/milestone1.md` for the actual results; static checks or
 mission upload alone do not establish acceptance.
+
+### Ordered runs and reviewed return evaluation
+
+The survey runner also accepts Run builder `planning_mode: "run"` drafts with
+ordered `steps` and instance IDs. Its session client imports explicitly, saves
+the current revision, generates, validates, approves, uploads/readbacks and starts.
+Legacy fixed-order case inputs are converted to explicit instances for this
+client; the GCS never loads saved planner state. Use the full competition map.
+
+```bash
+# From simulation/: CASE contains survey.json and a successful generation.json.
+python3 scripts/survey_runner.py execute --case "$CASE" \
+  --output logs/run-builder-return --port 8084 --return-after-complete
+python3 scripts/survey_runner.py execute --case "$CHANNEL_CASE" \
+  --output logs/run-builder-channel-return --port 8085 --return-inside-channel
+```
+
+`--return-after-s N` requests a reviewed return during a task;
+`--return-inside-channel` triggers from a fresh reported position safely inside
+reviewed water. The test sends Stop, proves repeated outbound Start is rejected,
+prepares/validates/approves the return, explicitly disarms, uploads/readbacks and
+starts it. Outbound interruption is not task completion. Independent evaluation
+names passages by card instance, limits containment to each channel's own
+entry/exit, and checks return escape/settling separately without awarding task
+passage credit. Missing physics or fresh per-runtime contact proof remains
+inconclusive. Every result and source/image identity stays under ignored logs.
+
+The default launcher still refuses an active operator stack. For an intentional
+parallel test, `--parallel-isolated` uses an output-scoped launcher lock, a fresh
+Docker bridge network namespace, unique Gazebo partition, separate ROS process
+space and chosen loopback HTTP port. It never attaches to host/operator vehicle
+ports or changes the operator stack. Use distinct output paths/ports. The test
+cleans up only the containers it created. No controller gains, source pins,
+calibration, firmware parameters or normal `make run` defaults change.

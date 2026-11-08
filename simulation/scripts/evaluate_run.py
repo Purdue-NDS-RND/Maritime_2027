@@ -52,6 +52,8 @@ def evaluate(samples, footprint, course, start_s, end_s):
     channel_active = not course.get('channel_entry')
     failures, missing, passages, trajectory = [], [], [], []
     sequence = course['passages']
+    channel_states = {c['instance_id']:bool(c.get('return_escape')) for c in course.get('channels', [])}
+    channel_finished = set()
     next_passage = 0
     previous, finish_since, finished = None, None, False
     count = 0
@@ -212,6 +214,40 @@ def evaluate(samples, footprint, course, start_s, end_s):
                 continue
             if any(not contained(a, b, boundary) for a,b in zip(polygon,polygon[1:]+polygon[:1])):
                 failures.append('whole hull escaped channel/planning boundary')
+        # Ordered card channels are active only for their own entry/exit.
+        # Check the projected whole hull between finite end caps, including bow
+        # entry and stern exit; a later card may navigate outside this water.
+        from shared.course import inside as point_inside, intersects, segment_distance
+        for water in course.get('channels', []):
+            key = water['instance_id']
+            if key in channel_finished or next_passage < water['begin_passage']:
+                continue
+            entry, exit = water.get('entry'), water['exit']
+            def plane(point, cap):
+                return sum((point[i]-cap['origin'][i])*cap['direction'][i] for i in (0,1))
+            if not channel_states[key] and entry and max(plane(p,entry) for p in polygon) >= 0:
+                channel_states[key] = True
+            if not channel_states[key]:
+                continue
+            poly = water['polygon']
+            clipped = polygon[:]
+            # Clip the hull to the part still between the physical caps. This
+            # allows crossing only an end cap, while retaining every side edge.
+            for cap, sign in [(entry,1),(exit,-1)]:
+                if cap is None:continue
+                result = []
+                for a,b in zip(clipped,clipped[1:]+clipped[:1]):
+                    u,v = sign*plane(a,cap),sign*plane(b,cap)
+                    if u >= -1e-8:result.append(a)
+                    if u*v < 0:result.append(tuple(a[i]+u/(u-v)*(b[i]-a[i]) for i in (0,1)))
+                clipped = result
+                if not clipped:break
+            for a,b in zip(clipped,clipped[1:]+clipped[:1]):
+                from shared.task_geometry import segment_within
+                if not segment_within(a,b,poly):
+                    failures.append('whole hull escaped reviewed channel: '+key)
+            if min(plane(p,exit) for p in polygon) > 0:
+                channel_finished.add(key)
         finish = course['finish']
         finish_error = math.hypot(x-finish['x'], y-finish['y'])
         inside = finish_error <= finish['radius_m']

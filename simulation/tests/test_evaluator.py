@@ -112,6 +112,24 @@ class EvaluationTests(unittest.TestCase):
         self.course['task_channel']=[(1,-1),(6,-1),(6,1),(1,1)]
         self.assertEqual(self.result()['outcome'],'passed')
 
+    def test_ordered_channel_allows_final_exit_then_another_card(self):
+        self.course['channels']=[{'instance_id':'channel-1','polygon':[(.5,-1),(2.5,-1),(2.5,1),(.5,1)],
+                                 'entry':{'origin':[.5,0],'direction':[1,0]},'exit':{'origin':[2.5,0],'direction':[1,0]},
+                                 'begin_passage':0,'end_passage':1}]
+        self.assertEqual(self.result()['outcome'],'passed',self.result())
+        self.course['channels'][0]['polygon']=[(.5,-.1),(2.5,-.1),(2.5,.1),(.5,.1)]
+        self.assertIn('whole hull escaped reviewed channel: channel-1',self.result()['failures'])
+
+    def test_return_escape_has_no_task_passage_credit_and_still_checks_settling(self):
+        self.course['passages']=[]
+        self.course['channels']=[{'instance_id':'escape','polygon':[(-2,-1),(2.5,-1),(2.5,1),(-2,1)],
+                                 'entry':None,'exit':{'origin':[2.5,0],'direction':[1,0]},
+                                 'begin_passage':0,'end_passage':0,'return_escape':True}]
+        result=self.result();self.assertEqual(result['outcome'],'passed',result)
+        self.assertEqual(result['passages'],[])
+        self.samples[20].pop('contacts')
+        self.assertEqual(self.result()['outcome'],'inconclusive')
+
 
 
 class ProjectionTests(unittest.TestCase):

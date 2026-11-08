@@ -74,19 +74,23 @@ def suggest(object_map, direction):
             'diagnostics':['Geometry candidates may overlap tasks. Assign objects and confirm every role; unknown passing sides require operator input.']}
 
 
-def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60, deadline=None, transit_finish=False):
+def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60, deadline=None, transit_finish=False, navigation=False):
     deadline=min(deadline, time.monotonic()+max_seconds) if deadline is not None else time.monotonic()+max_seconds
     draft=deepcopy(draft)
     draft['transit_finish']=transit_finish
     preferred=finite(draft.get('preferred_buffer_m',draft['clearance_m']))
     if preferred<finite(draft['clearance_m']):
         raise ValueError('preferred buffer must be at least required buffer')
-    if not draft.get('planner_task') or not draft.get('sizes_confirmed') or not draft.get('course_confirmed') or not draft.get('planning_area') or (draft.get('geometry_version')!=2 and (not draft.get('entry') or not draft.get('exit'))):
+    if (not navigation and not draft.get('planner_task')) or not draft.get('sizes_confirmed') or not draft.get('course_confirmed') or not draft.get('planning_area') or (not navigation and draft.get('geometry_version')!=2 and (not draft.get('entry') or not draft.get('exit'))):
         return {'success':False,'diagnostics':['incomplete course assignments']}
     course_input=deepcopy(draft)
     try:
-        course=Course(object_map,draft)
-        if not course.planes:
+        if navigation:
+            from shared.navigation import NavigationCourse
+            course=NavigationCourse(object_map,draft)
+        else:
+            course=Course(object_map,draft)
+        if not navigation and not course.planes:
             raise ValueError('missing passage assignments')
         draft=deepcopy(course.draft)
         if course.general:
@@ -96,27 +100,28 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
         return {'success':False,'diagnostics':[str(error)]}
     # An interval union on the entry plane can prove a blocked approach for
     # circular obstacles. Other geometric failures remain search exhaustion.
-    origin,forward,left,low,high,_=course.planes[0]
-    intervals=[]
-    for obj in course.objects:
-        if obj['type'] not in ('point','cylinder'):
-            continue
-        relative=sub(to_local(obj['centre'],course.reference),origin)
-        along=dot(relative,forward); radius=obj.get('radius_m',0)+zones(obj,draft)[0]
-        if abs(along)<radius:
-            half=math.sqrt(radius*radius-along*along); lateral=dot(relative,left)
-            intervals.append((lateral-half,lateral+half))
-    covered=low
-    for a,b in sorted(intervals):
-        if a>covered+1e-7:
-            break
-        covered=max(covered,b)
-    if covered>=high:
-        return {'success':False,'diagnostics':['obstructed approach: confirmed entry window is blocked at required buffer']}
-    if draft['planner_task']=='channel' and not draft.get('channel'):
-        return {'success':False,'diagnostics':['incomplete channel boundary assignments']}
-    if not course.general and draft['planner_task']=='channel' and not entry_fits_channel(course):
-        return {'success':False,'diagnostics':['Channel entry window is too close to the permitted channel boundary for the required buffer. Move Entry inside the channel with enough room on each side; use Use live boat position to change only the attempt start.']}
+    if not navigation:
+        origin,forward,left,low,high,_=course.planes[0]
+        intervals=[]
+        for obj in course.objects:
+            if obj['type'] not in ('point','cylinder'):
+                continue
+            relative=sub(to_local(obj['centre'],course.reference),origin)
+            along=dot(relative,forward); radius=obj.get('radius_m',0)+zones(obj,draft)[0]
+            if abs(along)<radius:
+                half=math.sqrt(radius*radius-along*along); lateral=dot(relative,left)
+                intervals.append((lateral-half,lateral+half))
+        covered=low
+        for a,b in sorted(intervals):
+            if a>covered+1e-7:
+                break
+            covered=max(covered,b)
+        if covered>=high:
+            return {'success':False,'diagnostics':['obstructed approach: confirmed entry window is blocked at required buffer']}
+        if draft['planner_task']=='channel' and not draft.get('channel'):
+            return {'success':False,'diagnostics':['incomplete channel boundary assignments']}
+        if not course.general and draft['planner_task']=='channel' and not entry_fits_channel(course):
+            return {'success':False,'diagnostics':['Channel entry window is too close to the permitted channel boundary for the required buffer. Move Entry inside the channel with enough room on each side; use Use live boat position to change only the attempt start.']}
     ref=course.reference; start=to_local(draft['start'],ref); finish=to_local(draft['finish'],ref)
     if course.clearance(start,start)<course.required or any(not contained(start,start,p,course.required) for p in course.polygons):
         conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<zones(o,draft)[0]]
@@ -237,7 +242,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
             for i,(a,b) in enumerate(zip(simplified,simplified[1:])):
                 next_progress=course.edge(a,b,progress)
                 crossing=None
-                if progress==0 and next_progress>0:
+                if not navigation and progress==0 and next_progress>0:
                     origin,forward,_,_,_,_=course.planes[0]
                     u,v=dot(sub(a,origin),forward),dot(sub(b,origin),forward)
                     if u<=0<v:
