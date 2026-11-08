@@ -242,6 +242,114 @@ Primary control/runtime references:
 The product listing was not retrievable during review; no additional SKU compatibility
 or field-of-view claim is inferred from it.
 
+## Asynchronous testing and ROS 2 bags
+
+The [completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+now prioritizes one camera/pixel owner and one FCU/state/timing owner, with Samuel owning
+geometry/acceptance and the SW/Gazebo lead supplying simulation/GCS interfaces. First
+prove normalized message flow and explicit invalid-data handling; physical GPS accuracy
+requires the later measured contracts. A raw IMU topic alone is not the navigation input.
+Prefer the authoritative full FCU pose/velocity estimate when available rather than
+building new raw IMU/GNSS fusion or blocking on the exact IMU/navigation join.
+
+### Portable asynchronous smoke test
+
+The installed `perception_async_test` command and module below feed the existing core in
+arrival order. Frames wait in a bounded, timestamp-sorted queue for bracketing states;
+missing future pose times out with diagnostics. There is no latest-pose fallback or
+fixed-lag smoother. State samples remain ordered; late/duplicate states and frames are
+rejected. A short reorder hold tolerates frame arrival reordering within that window.
+Defaults of 0.5 s wait, 0.05 s reorder hold and 32 pending frames are test settings, not
+measured deployment limits. The numerical core still enforces its own pose-gap policy.
+
+After the standard uv setup, run from the repository root using new output directories:
+
+```bash
+uv run --no-project --python .venv/bin/python python -m perception_synthetic.demo --adapter synthetic --scenario analytic --output simulation/logs/perception/async-source
+uv run --no-project --python .venv/bin/python python -m maritime_perception.async_test --session simulation/logs/perception/async-source/session --output simulation/logs/perception/async-normal --jitter-ms 8 --require-observations
+uv run --no-project --python .venv/bin/python python -m maritime_perception.async_test --session simulation/logs/perception/async-source/session --output simulation/logs/perception/async-loss --drop-state-every 1 --require-observations
+```
+
+The last command intentionally exits nonzero: all states are removed, so no usable
+observation may appear. Inspect `summary.json`, `diagnostics.jsonl`, `arrivals.jsonl`,
+`reports.jsonl` and `observations.jsonl`. Seeded jitter is reproducible. Additional options
+include `--frame-delay-ms`, `--state-delay-ms`, `--drop-frame-every`, `--seed`, `--wait-s`,
+`--reorder-s` and `--max-pending`. The normal analytic run yielded 4 reports/12 observations,
+zero pending frames and a 0.11 s maximum pose wait with the default 20/80 ms frame/state
+delays. This is virtual-arrival software testing, not measured DDS or camera latency.
+
+### Live ROS test endpoints
+
+On a compatible sourced ROS host, the same script can listen to normalized
+`std_msgs/String` events on `/drone/perception/input` and publish reports on
+`/drone/perception/report`. Each input string contains the existing `{"kind":...,"data":...}`
+envelope for `vehicle_state`, `imu_state` or `frame`. Separate source adapters publish
+these records; the listener does not automatically convert arbitrary raw bags into GPS.
+Use one authoritative state stream and exact image metadata pairing. Source clock
+mappings and image exposure semantics must already be supplied for usable geolocation.
+
+In two terminals, using the compatible ROS environment from the capture guide:
+
+```bash
+uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.async_test --ros-live --config simulation/logs/perception/async-source/session/config.json --output simulation/logs/perception/async-ros --duration-s 30 --require-observations
+uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.async_test --ros-publish --session simulation/logs/perception/async-source/session --duration-s 20
+```
+
+The fixture publisher waits two seconds for discovery and sends synthetic normalized
+inputs with controlled arrival delays. This can test real DDS wiring on your host before
+hardware adapters exist. It preserves synthetic provenance. Native ROS execution has not
+run here; endpoint lifecycle tests use doubles. The test node uses host timing for waits
+and report publication, not a bag's wall-clock epoch; do not enable `use_sim_time` on this
+test node. A Gazebo source adapter still must map its source clock explicitly. Historical
+bag/fixture exposure-to-now age is not live sensor latency. Restart the test for a new
+origin, estimator epoch or playback loop; already-processed history is never rewritten.
+
+### First useful bag
+
+Record 30 to 60 seconds on the bench with the camera and flight controller, then a
+separate stationary/slow-motion sequence. Begin with a calibrated software output size
+such as 1280x720 at 2 processed frames/s to keep raw BGR recording near 5.5 MB/s before
+telemetry/serialization overhead. Full 3840x2160 BGR at 17 FPS is about 423 MB/s; measure
+storage and drops before attempting it. Keep the primary image and its matching K/D,
+not a preview substituted with full-resolution calibration.
+
+Inventory actual names/types/QoS with `ros2 topic list -t` and `ros2 topic info -v TOPIC`.
+Record the selected raw **or** rectified image, matching CameraInfo, frame metadata,
+fused pose/velocity, IMU, available GNSS/estimator health, TF and normalized inputs/reports.
+The following is an example only after confirming those names on the actual system:
+
+```bash
+ros2 bag record -s sqlite3 -o simulation/logs/perception/bench-bag --qos-profile-overrides-path drone/maritime_perception/config/rosbag_qos.yaml /camera/image_rect /camera/camera_info /camera/frame_metadata /mavros/imu/data /mavros/local_position/odom /tf /tf_static /drone/perception/input /drone/perception/report
+```
+
+Adapt the provided QoS file and add the actual health/GNSS topics. Check topic counts
+and gaps after recording; QoS compatibility alone does not prove delivery. Record `/clock`
+for a Gazebo bag, and use recorder `--use-sim-time` only for that intended clock domain
+after `/clock` is active. Do not mix real-time and simulation bags into one session.
+Stop cleanly so metadata is written. Keep the whole bag directory, metadata and every
+split; a zipped directory is suitable to share along with config/calibration and versions.
+
+The optional audit streams a native ROS 2 bag and reports per-topic count/bytes/rate,
+header duplicates/backwards times and frame IDs. It requires ROS/message packages;
+unknown custom definitions retain byte/count statistics and increment decode errors.
+
+```bash
+uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.rosbag_audit --bag simulation/logs/perception/bench-bag --output simulation/logs/perception/bench-bag-audit.json
+ros2 bag info simulation/logs/perception/bench-bag
+ros2 bag play simulation/logs/perception/bench-bag --rate 0.5 --topics /drone/perception/input
+```
+
+Start the ROS listener before the last command. It works only if normalized input events
+are present in the bag; raw-only recordings need the students' adapters. Replay only
+perception topics. Bag receive timestamps, ROS headers and camera PTS are distinct facts;
+a bag does not establish exposure synchronization, origin, covariance, heading or height.
+Preserve calibration/config files, camera control requests, runtime versions, mounting/
+water measurements and annotation/reference data beside the bag. No actual bag was supplied
+for this implementation, and no live hardware/bag/ROS trial has been claimed.
+
+Primary references: [ROS 2 rosbag2 recording QoS and clocks](https://github.com/ros2/rosbag2),
+[native Python reader example](https://github.com/ros2/rosbag2/tree/jazzy/rosbag2_examples/rosbag2_examples_py).
+
 ## IMU input and navigation integration
 
 The [IMU recorder guide](../log/README.md) covers actual ROS topic recording and uv setup.

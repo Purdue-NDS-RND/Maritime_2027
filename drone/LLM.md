@@ -134,6 +134,27 @@ establish residual versus common covariance, clock validity and frame/reset cont
 Current named common sources are constant over their declared session/sample; real drift
 models and empirical calibration remain open. Real hardware mode forbids synthetic config.
 
+### First asynchronous testing and team ownership
+
+The completion plan now reflects the IMU/camera changes and the 9 November HW/SW
+meeting. Proposed division: Student A owns capture, exact image metadata, manual pixels
+and recording; Student B owns the authoritative normalized FCU state, clocks and quality;
+Samuel owns geometry/acceptance; the SW/Gazebo lead supplies the simulation source
+contract and report inspection/GCS boundary. Confirm student names and host facts locally.
+
+`maritime_perception.async_test` now provides a bounded normalized-event coordinator,
+deterministic virtual arrival/fault replay, an optional ROS listener and fixture publisher.
+Frames wait for bracketing pose and time out explicitly; late/duplicate inputs and queue
+overflow have outcomes. It is not a raw IMU/GNSS estimator or fixed-lag smoother. A native
+rosbag2_py audit and adaptable QoS configuration support the first real recording.
+The default analytic test produced 4 reports/12 observations and no pending frames;
+removing all states produced zero observations and explicit timeouts. All 160 drone
+tests plus 11 GCS workspace tests pass. ROS endpoint and bag-reader tests use doubles;
+no native bag, DDS, camera or Jetson run occurred here. The user has not supplied a bag.
+Use the README asynchronous test commands. Prefer a complete fused FCU pose/velocity
+source first; the exact IMU/navigation pair is optional. Raw-only bags still need source
+adapters and verified exposure/clock/geometry/quality contracts for usable GPS reports.
+
 ## User-established direction
 
 1. A drone launches from the boat and surveys buoys/objects in the water.

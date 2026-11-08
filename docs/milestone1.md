@@ -181,6 +181,12 @@ workspace tests pass. Camera/GStreamer/ROS behavior uses structural doubles; rea
 Argus/Jetson, lens/mode calibration and exposure/rolling-shutter timing remain untested.
 This work neither changes boat execution nor repeats the historical simulator trial.
 
+The subsequent asynchronous bench harness and completion-plan update add normalized
+input buffering, controlled delay/loss replay, ROS test endpoints and a bag audit.
+Validation: 160 drone tests and 11 GCS workspace tests pass. The normal analytic arrival
+test produced 4 reports/12 observations; complete state loss produced zero observations.
+Native ROS/bag tests and physical sensing remain unexecuted; boat acceptance is unchanged.
+
 This uses a perfect simulator map and does not establish camera-free feasibility
 on the real boat. Subsequent experiments introduce survey/GPS errors and buoy
 movement, evaluate clearance limits, and compare with physical route following.

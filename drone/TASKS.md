@@ -299,6 +299,17 @@ doubles and do not complete hardware, optical, end-to-end timing or onboard acce
 
 ## Status maintenance
 
+The updated completion plan assigns the first camera/pixel/recording slice to Student A,
+FCU/state/timing to Student B, geometry/acceptance to Samuel and simulation/GCS interfaces
+to the SW/Gazebo lead. Names and host inventory remain meeting decisions.
+
+Asynchronous test support now covers bounded frame wait/reorder queues, seeded delay/loss
+replay, a ROS normalized-input listener/fixture publisher, a native bag audit and QoS sample.
+Portable validation is 160 drone tests and 11 GCS workspace tests; native ROS/bag and all
+physical acceptance remain open. SP-04/SP-09/SP-19/SP-44 gain test infrastructure, not
+completed hardware acceptance. Record the first 30 to 60 second camera/navigation bag and
+implement the two normalized source adapters next; detector training does not block this.
+
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
 exists; describe important limits in its owning topic. Record unresolved numerical
 thresholds explicitly rather than inventing successful accuracy or performance figures.

@@ -1,0 +1,45 @@
+/camera/image_raw:
+  history: keep_last
+  depth: 10
+  reliability: best_effort
+  durability: volatile
+/camera/image_rect:
+  history: keep_last
+  depth: 10
+  reliability: best_effort
+  durability: volatile
+/camera/camera_info:
+  history: keep_last
+  depth: 10
+  reliability: best_effort
+  durability: volatile
+/camera/frame_metadata:
+  history: keep_last
+  depth: 50
+  reliability: best_effort
+  durability: volatile
+/mavros/imu/data:
+  history: keep_last
+  depth: 100
+  reliability: best_effort
+  durability: volatile
+/mavros/local_position/odom:
+  history: keep_last
+  depth: 100
+  reliability: best_effort
+  durability: volatile
+/drone/perception/input:
+  history: keep_last
+  depth: 100
+  reliability: best_effort
+  durability: volatile
+/drone/perception/report:
+  history: keep_last
+  depth: 100
+  reliability: best_effort
+  durability: volatile
+/tf_static:
+  history: keep_last
+  depth: 1
+  reliability: reliable
+  durability: transient_local
