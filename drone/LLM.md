@@ -1,9 +1,11 @@
 # Maritime sensing and perception: working context
 
 Last updated: 2026-11-08. Owner: Samuel Yoon, Sensing and Perception Lead.
-Status: a runnable standalone pixel/state-to-GPS core and deterministic synthetic survey
-are implemented on `feature/cv-raycast`. Sensor, ROS/Docker/Jetson integration and physical
-accuracy remain unverified. [README.md](README.md) contains exact setup/demo/test commands.
+Status: the portable pixel/state-to-GPS core, deterministic synthetic survey and observed
+camera/MAVROS source bindings are implemented on `feature/cv-raycast`. The user's actual
+Jetson/ROS camera/FCU bag is verified recording evidence. Full raw-source normalization,
+Docker deployment, sustained performance and physical accuracy remain open.
+[README.md](README.md) contains exact setup/demo/test commands.
 
 ## Read this first
 
@@ -58,6 +60,29 @@ and 3.12, and static checks pass.
 This updates recording/runtime evidence only: physical accuracy, timing/mount/height,
 frame-origin/reset and uncertainty acceptance remain open. Earlier statements below
 that no bag was supplied describe the implementation-time test boundary.
+
+### Observed source binding implementation
+
+The installed `mavros_imx519_topics.json` binds all 13 observed topics/types/QoS and
+source frame labels. Camera publication, recorder command generation, bag audit/export
+and the new bounded live `hardware_source_check` use that same profile. The IMU logger
+already defaults to `/mavros/imu/data`. The repeatable `imx519_bench.json` selects the
+observed mode 1/3840x2160/17 FPS with rectified 1280x720 output, 2 Hz requested rate,
+requested 1/1000 s shutter and no preview; CLI controls remain available.
+
+The live checker subscribes read-only, reports exact recent camera companions, rates,
+header/type/frame mismatches, unknown odometry covariance, FCU connection, origin and
+time status. It keeps bounded keys/duplicate records and writes a summary on Ctrl+C.
+It emits no normalized pose/frame events and is not the raw-to-geolocation bridge.
+The source profile does not relabel map as survey_enu, certify origin/heading/height,
+make GStreamer PTS into exposure time or invent a covariance/shared-error model.
+Those measurements and the ensuing normalized-state/manual-pixel bridge remain W03-W06
+in the updated completion plan. Native execution of the new checker is a team-host task;
+actual bag decoding/profile matching and portable callback tests are separate evidence.
+Validation: 198 drone tests pass on Python 3.10 and 3.12. The actual bag passes the
+profile audit and complete source-monitor replay, retaining 47 exact image companions,
+the 15 metadata/image gaps and 1,951 unknown odometry covariance records. The live
+subscriber uses doubles in portable tests; no new physical acceptance is claimed.
 
 ## Python tooling requirement
 

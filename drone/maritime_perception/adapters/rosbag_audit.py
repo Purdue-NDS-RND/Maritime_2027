@@ -15,6 +15,7 @@ from ..replay import line, write_json
 from ..validation import Unavailable
 from .bag_source import bag_storage, native_decoder, native_records, sqlite_records, sqlite_sources
 from .ros_conversion import ros_stamp_ns
+from .hardware_topics import load_profile, profile_assessment
 
 
 IMAGE_TOPICS = ("/camera/image_rect", "/camera/image_raw")
@@ -57,18 +58,24 @@ def distribution(values):
 
 
 class CameraAudit:
-    def __init__(self):
+    def __init__(self, profile=None):
         self.images, self.infos, self.metadata = (defaultdict(list) for _ in range(3))
         self.invalid_metadata = 0
+        roles = profile["roles"] if profile else None
+        self.hardware_only = profile is not None and profile.get("source_mode") == "hardware"
+        self.image_domains = {roles["image"]["topic"]: roles["image"]["image_domain"]} if roles else {
+            "/camera/image_rect": "rectified", "/camera/image_raw": "raw"}
+        self.info_topic = roles["camera_info"]["topic"] if roles else INFO_TOPIC
+        self.meta_topic = roles["frame_metadata"]["topic"] if roles else META_TOPIC
 
     def add(self, topic, message):
-        if topic in IMAGE_TOPICS:
+        if topic in self.image_domains:
             self.images[header_key(message)].append(dict(topic=topic, width=int(message.width),
                 height=int(message.height), encoding=message.encoding, step=int(message.step),
                 bytes=len(message.data)))
-        elif topic == INFO_TOPIC:
+        elif topic == self.info_topic:
             self.infos[header_key(message)].append(camera_info(message))
-        elif topic == META_TOPIC:
+        elif topic == self.meta_topic:
             try:
                 item = json.loads(message.data)
                 if (type(item["ros_header_stamp_ns"]) is not int or item["ros_header_stamp_ns"] < 0
@@ -86,9 +93,10 @@ class CameraAudit:
                 continue
             image, info, metadata = self.images[key][0], self.infos[key][0], self.metadata[key][0]
             size = [image["width"], image["height"]]
-            domain = "rectified" if image["topic"] == "/camera/image_rect" else "raw"
+            domain = self.image_domains[image["topic"]]
             if (size != [info["width"], info["height"]] or size != metadata.get("input_image_size")
-                or domain != metadata.get("image_domain") or not metadata.get("calibration_id")):
+                or domain != metadata.get("image_domain") or not metadata.get("calibration_id")
+                or (self.hardware_only and metadata.get("synthetic") is not False)):
                 conflicts += 1
                 continue
             paired[key] = (metadata, info)
@@ -123,7 +131,7 @@ class CameraAudit:
             timing_limit="Odometry brackets use the host-arrival header, not verified exposure time.")
 
 
-def export_camera(records, types, decode, pairs, output):
+def export_camera(records, types, decode, pairs, output, *, image_topics=IMAGE_TOPICS, navigation_topics=None):
     import cv2
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
@@ -137,8 +145,8 @@ def export_camera(records, types, decode, pairs, output):
             except Exception:
                 decode_errors[topic] += 1
                 continue
-            if topic not in IMAGE_TOPICS:
-                if topic.startswith("/mavros/") or topic in ("/tf", "/tf_static"):
+            if topic not in image_topics:
+                if (topic in navigation_topics if navigation_topics is not None else topic.startswith("/mavros/") or topic in ("/tf", "/tf_static")):
                     navigation.write(line(dict(topic=topic, type=types[topic], bag_receive_ns=received,
                                                message=plain(message))))
                 continue
@@ -168,7 +176,8 @@ def export_camera(records, types, decode, pairs, output):
                 navigation_normalized=False, physical_accuracy_validated=False)
 
 
-def audit_bag(bag, storage_id=None, *, counts_only=False, decoder=None, export_directory=None):
+def audit_bag(bag, storage_id=None, *, counts_only=False, decoder=None, export_directory=None, profile=None):
+    profile = load_profile(profile) if isinstance(profile, str) else profile
     storage_id = bag_storage(bag, storage_id)
     if storage_id == "sqlite3":
         files, types, provenance = sqlite_sources(bag)
@@ -185,8 +194,8 @@ def audit_bag(bag, storage_id=None, *, counts_only=False, decoder=None, export_d
     topics = {name: dict(type=kind, count=0, serialized_bytes=0, first_receive_ns=None,
         last_receive_ns=None, receive_backwards=0, header_count=0, header_backwards=0,
         header_duplicates=0, max_header_gap_ns=None, frame_ids=[], decode_errors=0,
-        receive_minus_header_ns=[]) for name, kind in types.items()}
-    camera = CameraAudit()
+        receive_minus_header_ns=[], child_frame_ids=[]) for name, kind in types.items()}
+    camera = CameraAudit(profile)
     odom_stamps, imu_stamps = [], set()
     navigation = dict(odometry_count=0, zero_pose_covariance_count=0, zero_twist_covariance_count=0,
                       gps_fix_status_counts=Counter(), gps_origins=[], static_transforms=[])
@@ -216,6 +225,9 @@ def audit_bag(bag, storage_id=None, *, counts_only=False, decoder=None, export_d
                 info["receive_minus_header_ns"].append(received-stamp)
                 if frame not in info["frame_ids"] and len(info["frame_ids"]) < 20:
                     info["frame_ids"].append(frame)
+            if hasattr(message, "child_frame_id") and message.child_frame_id not in info["child_frame_ids"]:
+                if len(info["child_frame_ids"]) < 20:
+                    info["child_frame_ids"].append(message.child_frame_id)
             camera.add(topic, message)
             if types[topic] == "nav_msgs/msg/Odometry":
                 odom_stamps.append(ros_stamp_ns(message.header.stamp))
@@ -226,9 +238,9 @@ def audit_bag(bag, storage_id=None, *, counts_only=False, decoder=None, export_d
                 imu_stamps.add(ros_stamp_ns(message.header.stamp))
             elif types[topic] == "sensor_msgs/msg/NavSatFix":
                 navigation["gps_fix_status_counts"][str(message.status.status)] += 1
-            elif topic == "/mavros/global_position/gp_origin" and len(navigation["gps_origins"]) < 20:
+            elif types[topic] == "geographic_msgs/msg/GeoPointStamped" and len(navigation["gps_origins"]) < 20:
                 navigation["gps_origins"].append(plain(message))
-            elif topic == "/tf_static" and len(navigation["static_transforms"]) < 100:
+            elif topic == (profile["roles"]["tf_static"]["topic"] if profile else "/tf_static") and len(navigation["static_transforms"]) < 100:
                 navigation["static_transforms"].extend(plain(message.transforms))
         except Exception:
             info["decode_errors"] += 1
@@ -243,9 +255,14 @@ def audit_bag(bag, storage_id=None, *, counts_only=False, decoder=None, export_d
         camera=camera.summary(sorted(odom_stamps)) if decode else None,
         navigation=navigation if decode else None, geolocation_ready=False, physical_accuracy_validated=False,
         limits="Receive/header/PTS clocks differ. Exports do not verify exposure timing, mount, frame/origin, heading, height or covariance. No GPS reports or accuracy acceptance are produced.")
+    if profile:
+        summary["topic_profile"] = profile_assessment(profile, topics, decoded=decode is not None)
     if export_directory is not None:
         pairs, _ = camera.pairs()
-        summary["export"] = export_camera(sqlite_records(files), types, decode, pairs, export_directory)
+        navigation_topics = {item["topic"] for role, item in profile["roles"].items()
+                             if role not in ("image", "camera_info", "frame_metadata")} if profile else None
+        summary["export"] = export_camera(sqlite_records(files), types, decode, pairs, export_directory,
+            image_topics=camera.image_domains, navigation_topics=navigation_topics)
         write_json(Path(export_directory)/"audit.json", summary)
     return summary
 
@@ -254,6 +271,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bag", required=True, help="Complete bag directory, or a supplied SQLite .db3 snapshot")
     parser.add_argument("--storage-id")
+    parser.add_argument("--profile", help="Observed source topic profile, e.g. builtin:mavros_imx519")
     parser.add_argument("--counts-only", action="store_true", help="Inspect SQLite topic flow without ROS decoding")
     parser.add_argument("--export-camera", help="New directory for matched PNGs, frames.jsonl and raw navigation.jsonl")
     parser.add_argument("--output", required=True)
@@ -261,7 +279,7 @@ def main():
     if Path(args.output).exists() or (args.export_camera and Path(args.export_camera).exists()):
         raise Unavailable("audit_output_must_be_new")
     summary = audit_bag(args.bag, args.storage_id, counts_only=args.counts_only,
-                        export_directory=args.export_camera)
+                        export_directory=args.export_camera, profile=args.profile)
     with Path(args.output).open("x") as stream:
         stream.write(json.dumps(summary, indent=2, sort_keys=True, allow_nan=False)+"\n")
     print(json.dumps(summary, indent=2, allow_nan=False))

@@ -1,7 +1,8 @@
 # Sensing and perception tasks
 
-Last updated: 2026-11-08. Status: standalone synthetic milestone and portable IMU integration implemented; hardware,
-ROS/Docker/Jetson and physical acceptance tasks remain open. See the portable results below.
+Last updated: 2026-11-08. Status: portable processing and observed hardware source bindings
+are implemented; the user's real Jetson/ROS recording is verified. Full raw-source
+normalization, Docker deployment, sustained runtime and physical acceptance remain open.
 Owners below identify responsibility areas, not assigned teammates. Numerical acceptance
 limits must be set with boat/GCS owners before declaring deployment readiness.
 
@@ -342,6 +343,24 @@ team execution. A typed ROS byte buffer removes a known Python validation cost w
 changing image content/settings. SP-06/SP-18/SP-41/SP-42 retain their measurement work;
 the next physical inputs are measured target dimensions, camera/body mount and height,
 verified exposure-clock mapping and a justified navigation covariance/correlation model.
+
+### Known camera and MAVROS topic integration
+
+SP-01/SP-04/SP-19/SP-44 now use one installed profile for the 13 observed source
+topics/types/QoS and frame labels. It drives the camera publisher, recorder command,
+bag audit/export and bounded live source checker. The profile retains the measured
+bag checksums and observed host/mode information without making nominal rates acceptance
+limits. The bench preset disables preview, selects the observed sensor mode and retains
+all existing CLI capture controls. Native source-check and capture-rate retesting remain
+for the Jetson owner.
+
+The normalized raw-MAVROS state bridge and manual-pixel handoff are not completed by
+topic discovery: verified origin/reset, exposure clock, heading/height, mount and joint
+residual/shared covariance contracts are still required. No synthetic or zero-error
+state is substituted. Keep the current raw bag usable for both students while those
+measurements are obtained, and use the updated completion plan for the owner split.
+Validation is 198 drone tests on both Python 3.10 and 3.12 plus the actual bag's
+topic/profile and source-monitor replay. Native endpoint/runtime acceptance stays open.
 
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
 exists; describe important limits in its owning topic. Record unresolved numerical

@@ -28,6 +28,14 @@ def run_ros(settings, ros_args):
         from std_msgs.msg import String
     except ImportError as exc:
         raise SystemExit("Camera ROS publication unavailable: source a compatible ROS 2 environment") from exc
+    bindings = None
+    if settings.ros_topic_profile:
+        from .hardware_topics import load_profile, ros_qos
+        from ..validation import Unavailable
+        bindings = load_profile(settings.ros_topic_profile)["roles"]
+        domain = "rectified" if settings.rectify else "raw"
+        if bindings["image"]["image_domain"] != domain or bindings["image"].get("frame_id") != settings.frame_id:
+            raise Unavailable("camera_topic_profile_geometry_mismatch")
 
     class ImageGrabber(Node):
         def __init__(self):
@@ -43,10 +51,12 @@ def run_ros(settings, ros_args):
                 if settings.output:
                     self.recorder = CaptureRecorder(self.session)
                 qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST)
-                topic = "/camera/image_rect" if settings.rectify else "/camera/image_raw"
-                self.image_pub = self.create_publisher(Image, topic, qos)
-                self.info_pub = self.create_publisher(CameraInfo, "/camera/camera_info", qos)
-                self.metadata_pub = self.create_publisher(String, "/camera/frame_metadata", qos)
+                topic = bindings["image"]["topic"] if bindings else ("/camera/image_rect" if settings.rectify else "/camera/image_raw")
+                self.image_pub = self.create_publisher(Image, topic, ros_qos(bindings["image"]["qos"]) if bindings else qos)
+                self.info_pub = self.create_publisher(CameraInfo, bindings["camera_info"]["topic"] if bindings else "/camera/camera_info",
+                    ros_qos(bindings["camera_info"]["qos"]) if bindings else qos)
+                self.metadata_pub = self.create_publisher(String, bindings["frame_metadata"]["topic"] if bindings else "/camera/frame_metadata",
+                    ros_qos(bindings["frame_metadata"]["qos"]) if bindings else qos)
                 self.preview_pub = self.preview_info_pub = None
                 if settings.preview_width:
                     self.preview_pub = self.create_publisher(Image, "/camera/preview/image", qos)

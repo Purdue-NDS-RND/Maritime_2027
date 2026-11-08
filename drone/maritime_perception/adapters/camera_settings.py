@@ -42,6 +42,7 @@ class CaptureSettings:
     rectify: bool = False
     rectify_alpha: float = 0.
     frame_id: str = "arducam_optical_frame"
+    ros_topic_profile: str = ""
     output: str = ""
     image_format: str = "png"
     jpeg_quality: int = 95
@@ -106,6 +107,8 @@ class CaptureSettings:
             raise Unavailable("invalid_image_processing_strength")
         if not isinstance(self.frame_id, str) or not self.frame_id or not isinstance(self.calibration, str):
             raise Unavailable("invalid_camera_frame_or_calibration")
+        if not isinstance(self.ros_topic_profile, str):
+            raise Unavailable("invalid_ros_topic_profile")
         for prefix, fixed in (("exposure", self.exposure_us), ("gain", self.gain), ("digital_gain", self.digital_gain)):
             suffix = "_us" if prefix == "exposure" else ""
             lower, upper = getattr(self, prefix+"_min"+suffix), getattr(self, prefix+"_max"+suffix)

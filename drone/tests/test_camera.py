@@ -299,13 +299,15 @@ def test_captured_metadata_enters_existing_pipeline_and_unverified_time_is_rejec
 
 
 @pytest.mark.parametrize("read_failure", [False, True])
-def test_ros_image_info_metadata_preview_and_shutdown(tmp_path, fake_gst, monkeypatch, read_failure):
+@pytest.mark.parametrize("use_profile", [False, True])
+def test_ros_image_info_metadata_preview_and_shutdown(tmp_path, fake_gst, monkeypatch, read_failure, use_profile):
     from maritime_perception.adapters.camera_ros import run_ros
     state, _ = fake_gst
     state.no_sample = read_failure
     _, path = small_intrinsics(tmp_path)
     settings = CaptureSettings(width=64, height=48, output_width=32, output_height=24,
-        preview_width=16, preview_height=12, calibration=path, rectify=True, max_frames=1)
+        preview_width=16, preview_height=12, calibration=path, rectify=True, max_frames=1,
+        ros_topic_profile="builtin:mavros_imx519" if use_profile else "")
     published, nodes = {}, []
     lifecycle = NS(shutdown=0, destroyed=0, errors=[])
     class CameraInfo:
@@ -324,7 +326,9 @@ def test_ros_image_info_metadata_preview_and_shutdown(tmp_path, fake_gst, monkey
         def __init__(self, name):
             nodes.append(self)
         def create_publisher(self, message, topic, qos):
-            assert qos.depth == 1 and qos.reliability == "best_effort"
+            expected_depth = 50 if topic == "/camera/frame_metadata" else 10
+            assert qos.depth == (expected_depth if use_profile and "/preview/" not in topic else 1)
+            assert qos.reliability == "best_effort"
             published[topic] = []
             return NS(publish=published[topic].append)
         def create_timer(self, interval, callback):
@@ -339,7 +343,8 @@ def test_ros_image_info_metadata_preview_and_shutdown(tmp_path, fake_gst, monkey
     rclpy.spin_once = lambda node: node.tick()
     rclpy.shutdown = lambda: setattr(lifecycle, "shutdown", lifecycle.shutdown+1)
     modules = {"rclpy": rclpy, "rclpy.node": NS(Node=Node),
-        "rclpy.qos": NS(QoSProfile=lambda **kw: NS(**kw), ReliabilityPolicy=NS(BEST_EFFORT="best_effort"), HistoryPolicy=NS(KEEP_LAST="keep_last")),
+        "rclpy.qos": NS(QoSProfile=lambda **kw: NS(**kw), ReliabilityPolicy=NS(BEST_EFFORT="best_effort", RELIABLE="reliable"),
+            HistoryPolicy=NS(KEEP_LAST="keep_last"), DurabilityPolicy=NS(TRANSIENT_LOCAL="transient_local", VOLATILE="volatile")),
         "sensor_msgs": ModuleType("sensor_msgs"), "sensor_msgs.msg": NS(Image=Image, CameraInfo=CameraInfo),
         "std_msgs": ModuleType("std_msgs"), "std_msgs.msg": NS(String=lambda **kw: NS(**kw))}
     for name, module in modules.items():

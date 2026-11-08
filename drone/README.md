@@ -4,8 +4,9 @@ Implemented on `feature/cv-raycast`: a source-independent pixel/state -> ENU obs
 -> correlated uncertainty -> physical-instance tracking -> WGS84 JSON pipeline, with
 seeded synthetic survey generation, withheld evaluation and deterministic recording/replay.
 The default tracker is static/random-walk. No constant-velocity or moving-object claim
-is made. Real camera/FCU acquisition, trained detection, ROS runtime, Docker, Jetson and
-physical accuracy remain unvalidated. The IMU recorder now feeds the processing/replay
+is made. The supplied hardware bag demonstrates camera/FCU topic flow on the user's
+Jetson/ROS host. Trained detection, full raw-source normalization, Docker deployment,
+sustained onboard performance and physical accuracy remain unvalidated. The IMU recorder feeds the processing/replay
 boundary when paired with verified same-time navigation. Existing GCS import and boat
 behavior are unchanged.
 
@@ -16,7 +17,8 @@ The deployed sensor direction remains fixed Arducam IMX519 + ordinary GNSS, with
 
 Run from the repository root. Python 3.10 and 3.12 on Linux x86_64 are exercised.
 Requirements select explicit Python 3.10 pins for host ROS/GI environments and retain
-the existing pins on Python >=3.11. Native Jetson/ROS/Argus execution remains unverified.
+the existing pins on Python >=3.11. The user's captured Argus/ROS bag is runtime evidence;
+new source-check endpoints and full geolocation still require native team-host checks.
 
 Use **uv exclusively** to create environments, install Python packages and run Python
 commands for this workstream. Run every command below from the repository root. Use an
@@ -464,6 +466,105 @@ synchronization. Do not independently fuse correlated IMU, odometry and GNSS out
 
 Primary references: [ROS 2 rosbag2 recording QoS and clocks](https://github.com/ros2/rosbag2),
 [native Python reader example](https://github.com/ros2/rosbag2/tree/jazzy/rosbag2_examples/rosbag2_examples_py).
+
+## Observed camera and MAVROS source bindings
+
+The installed `config/mavros_imx519_topics.json` is the explicit hardware profile for
+the 13 topics observed in the first bag. It includes expected ROS types, recorded frame
+labels and compatible subscriber QoS. It is consumed by the camera publisher, bag
+audit/exporter, recorder command generator and the live `hardware_source_check` subscriber.
+The IMU logger already defaults to `/mavros/imu/data`. A namespaced deployment can copy
+the JSON and pass its path; adapt the recorder QoS YAML for renamed topics as well.
+
+| Role | Observed topic | Recorded frame or status |
+| --- | --- | --- |
+| Rectified image | `/camera/image_rect` | `arducam_optical_frame`, 1280x720 |
+| Camera model | `/camera/camera_info` | Same optical frame and image header |
+| Exact capture metadata | `/camera/frame_metadata` | Source PTS/clock, calibration ID, unknown exposure validity |
+| Fused pose/velocity | `/mavros/local_position/odom` | `map` / child `base_link`; covariance all zero |
+| IMU | `/mavros/imu/data` | `base_link`; preserve existing MAVROS conversion |
+| GNSS | `/mavros/global_position/global` | NavSatFix; reported covariance retained |
+| GPS origin | `/mavros/global_position/gp_origin` | `earth`; reliable/transient-local subscription |
+| FCU connection/mode | `/mavros/state` | Connected and disarmed in supplied bag |
+| System health | `/mavros/sys_status` | Raw sensor bitmasks; not an all-healthy assertion |
+| FCU time synchronization | `/mavros/timesync_status` | Does not verify camera exposure synchronization |
+| FCU time reference | `/mavros/time_reference` | Preserve source and timestamp |
+| Dynamic transforms | `/tf` | No messages in supplied bag; optional |
+| Static transforms | `/tf_static` | MAVROS convention transforms; camera mount absent |
+
+The profile's evidence block records the bag/metadata checksums and observed Jetson
+L4T 36.4.7, kernel 5.15.148-tegra, GStreamer 1.20.3, system Python 3.10.12 and Humble
+environment. These observations do not establish an exact JetPack/FCU firmware version
+or constrain future runs to the recorded rates/counts.
+
+From the repository root, use the existing `.venv-ros` installed with the system
+interpreter and `--system-site-packages`; retain the Python 3.10 requirement pins:
+
+```bash
+source /opt/ros/humble/setup.bash
+export RUN=simulation/logs/perception/team-test-01
+uv pip install --python .venv-ros/bin/python -r drone/requirements-test.txt -e ./drone
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.adapters.hardware_source_check \
+  --print-record-command --bag-output "$RUN/hardware-bag-03"
+```
+
+The last command prints the actual `ros2 bag record` command; copy it to a separate
+terminal and start it before capture. It includes all 13 hardware topics and excludes
+synthetic normalized input/report fixtures. Keep one bag for both students. In another
+sourced terminal, start capture with the explicit observed mode, matching topic profile
+and disabled preview for a repeatable performance comparison:
+
+```bash
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.adapters.image_grabber \
+  --config drone/maritime_perception/config/imx519_bench.json \
+  --ros --output "$RUN/camera-bag-capture-03"
+```
+
+The bench preset uses mode 1, 3840x2160 at negotiated 17 FPS, rectified 1280x720 output,
+2 Hz requested processing and a requested 1/1000 s shutter. All existing resolution,
+FPS, shutter/exposure, gain and other CLI overrides remain available; changed sensor
+geometry still needs a compatible calibration. The opt-in profile uses bounded image
+publisher depth 10 and metadata depth 50; generic capture retains its existing defaults.
+Neither deeper queues nor the typed byte-buffer optimization guarantee lossless recording.
+
+While camera and MAVROS are active, a third sourced terminal can inspect asynchronous
+input delivery directly; no detector, normalized-state provider or flight is required:
+
+```bash
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.adapters.hardware_source_check \
+  --ros --duration-s 15 --output "$RUN/source-check-01"
+```
+
+Inspect `summary.json` and `source_checks.jsonl`: expected topic/frame/type matches,
+counts/rates/ages, exact recent camera matches, invalid IMU quaternions, disconnected
+FCU samples, zero covariance, origin and time status. Camera matching retains a bounded
+recent window; full-run loss accounting belongs to the bag audit. Ctrl+C still writes
+the summary and closes ROS. All measured rates are observations, not accepted thresholds.
+
+After capture finishes, stop the recorder with Ctrl+C and keep its complete directory.
+Audit the original or new recording against the same profile:
+
+```bash
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.adapters.rosbag_audit \
+  --bag "$RUN/hardware-bag-02" --profile builtin:mavros_imx519 \
+  --output "$RUN/hardware-profile-audit-01.json"
+```
+
+The expected original-bag result is matching required topic/type/frame labels, 47 exact
+camera companions and an optional empty `/tf` warning. `geolocation_ready` remains false:
+this subscriber/profile is a source boundary, not the normalized geolocation node.
+The raw MAVROS-to-`vehicle_state` bridge still needs verified map-to-survey origin/reset,
+heading/height, exposure-clock mapping and the joint residual/shared covariance model.
+Do not rename `map` to `survey_enu`, treat zero covariance as certainty, or independently
+fuse correlated FCU outputs. Topic bindings can be correct while those contracts remain
+unknown. The plan assigns the remaining measurements and adapter work to their owners.
+
+Validation of this integration: 198 drone tests pass on Python 3.10 and 3.12. Replaying
+all 11,020 actual bag messages through the audit and source monitor matches the expected
+required topic/type/frame labels, 47 exact camera companions and 1,951 zero-covariance
+odometry records. `/tf` is the only empty optional topic. The recorder-command and
+bench-preset dry-run checks pass; ROS endpoint/QoS/lifecycle tests use doubles. Native
+source-check execution and post-change delivery/rate measurements remain for the team.
 
 ## IMU input and navigation integration
 
