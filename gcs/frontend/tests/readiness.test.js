@@ -39,6 +39,7 @@ test('structured API errors keep human reasons and identify useful recovery',()=
  assert.equal(explainFailure({detail:{errors:[{reason:'unsafe finish area'}]}}).title,'Finish area needs more room');
  assert.match(errorText([{loc:['body','speed'],msg:'positive value required'}]),/body → speed: positive value/);
  assert.match(explainFailure('Planning time limit reached').next,/does not prove/);
+ assert.equal(explainFailure('Planning request time limit reached; no route was received.').title,'Planning response timed out');
  assert.match(explainFailure('boat request outcome unknown').next,/before retrying/);
 });
 test('configuration errors name an otherwise hidden task or individual tower',()=>{

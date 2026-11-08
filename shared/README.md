@@ -27,3 +27,10 @@ object; deployment overlays do not add obstacles.
 containment. Live version 3 maps support dimension-free `point` objects, need no simulator identity and are never
 simulator verified. GCS backend planning lives in `gcs/app/planner.py`; shared
 code contains geometry and final validation, not a planning/control service.
+For a channel finish selected beyond its final buoy pair, that pair is the
+actual final passage. Containment remains mandatory through the finite exit
+crossing; only then may the route leave for its stopping region. The complete
+route and stopping disk still obey global boundaries and obstacle buffers.
+GPS channel task finishes before the final gate are invalid. Older tabs cannot
+restore such a finish through workspace save; generation and final validation
+also enforce the final crossing and stopping allowance.

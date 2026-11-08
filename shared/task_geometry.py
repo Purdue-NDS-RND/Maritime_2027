@@ -112,17 +112,23 @@ def resolve_geometry(object_map, draft):
         result['reviewed_channel'] = result['channel']
         result['derived_sections'] = [{'id': f'section_{i+1}', 'a': gps(a), 'b': gps(b), 'centre': gps(centres[i])}
                                       for i, (a, b) in enumerate(sections)]
-        # Crossings lie inside the end caps so containment can activate at full
-        # required clearance. The reviewed boundary itself is never expanded.
+        # The entrance may be inset for containment; the final crossing stays
+        # on the actual last pair. The reviewed boundary is never expanded.
         pad = result['clearance_m'] + result['finish_radius_m'] + 1
         first_direction = unit(sub(centres[1], centres[0]))
         last_direction = unit(sub(centres[-1], centres[-2]))
+        tangent = unit(sub(sections[-1][1], sections[-1][0]))
+        exit_forward = (tangent[1], -tangent[0])
+        if dot(exit_forward, last_direction) < 0:
+            exit_forward = tuple(-v for v in exit_forward)
+        finish_offset = dot(sub(to_local(result['finish'], ref), centres[-1]), exit_forward)
+        finish_allowance = result['clearance_m'] + (0 if result.get('transit_finish') else result['finish_radius_m'])
+        if finish_offset < finish_allowance - 1e-7:
+            raise ValueError('Channel finish must be beyond the final gate with room for the required buffer and stopping radius. Reload the GCS and use Finish past last gate, then review and generate again.')
         first = tuple(centres[0][i] + first_direction[i] * pad for i in (0, 1))
         if contained(centres[0],centres[0],polygon,result['clearance_m']) or math.dist(centres[0],centres[1])<=pad:
             first=centres[0]
-        last = tuple(centres[-1][i] - last_direction[i] * pad for i in (0, 1))
-        if contained(centres[-1],centres[-1],polygon,pad):
-            last=centres[-1]
+        last = centres[-1]
         if len(centres)>2 and dot(sub(last,centres[-2]),last_direction)<=0:
             raise ValueError('last channel section conflicts with the finish allowance; extend reviewed permitted water and move finish beyond the last section')
         anchors = [first, *centres[1:-1], last]

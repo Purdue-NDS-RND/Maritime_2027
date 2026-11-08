@@ -230,6 +230,17 @@ class Workspace:
                     for config in updated['run_draft'].get('task_setup', {}).values():
                         config['sizes_confirmed'] = False
                         config['course_confirmed'] = False
+            # A stale browser must not restore the former inside-channel finish.
+            # Allow incomplete assignments to be edited; enforce the finish rule
+            # as soon as their geometry can be resolved.
+            current=updated.get('draft') or {}
+            if current.get('planner_task')=='channel' and current.get('geometry_version')==2 and updated.get('map'):
+                from shared.task_geometry import resolve_geometry
+                try:
+                    resolve_geometry(updated['map'],current)
+                except (ValueError,KeyError,TypeError) as error:
+                    if str(error).startswith('Channel finish must be beyond'):
+                        raise ValueError(str(error)) from error
             json.dumps(updated, allow_nan=False)
             updated.pop('migration_notice', None)
             self.state = updated

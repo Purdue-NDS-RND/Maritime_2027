@@ -122,7 +122,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
         conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<zones(o,draft)[0]]
         return {'success':False,'diagnostics':['obstructed approach: unsafe planning start'+(': '+', '.join(conflicts) if conflicts else ' at planning boundary')],
                 'errors':[{'code':'unsafe_start','reason':'Unsafe planning start','location':list(start),'objects':conflicts}]}
-    if course.clearance(finish,finish)<course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m']) or any(not contained(finish,finish,p,course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m'])) for p in [*course.polygons,*([course.channel] if course.channel else [])]):
+    if course.clearance(finish,finish)<course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m']) or any(not contained(finish,finish,p,course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m'])) for p in course.finish_polygons):
         return {'success':False,'diagnostics':['unsafe finish area']}
     polygon=course.polygons[0]; xmin=min(p[0] for p in polygon); xmax=max(p[0] for p in polygon)
     ymin=min(p[1] for p in polygon); ymax=max(p[1] for p in polygon)

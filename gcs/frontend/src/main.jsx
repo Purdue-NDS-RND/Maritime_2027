@@ -5,19 +5,13 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import Planner from './Planner';
 import Feedback from './Feedback';
-import {errorText,freshStatus,operationNotice} from './readiness';
+import {freshStatus,operationNotice} from './readiness';
 import {defaultSettings,effectiveSettings,towerZones,routeIsVisible,settingsError} from './settings';
 import BoatControls from './BoatControls';
 import {configuration,heading,friendly} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
+import {api} from './api';
 
-async function api(path, method='GET', body) {
-    const response = await fetch('/api/' + path, {method, headers: {'Content-Type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)});
-    let value;
-    try{value=await response.json();}catch{throw new Error(`GCS returned HTTP ${response.status} without a readable response. Check the connection before retrying.`);}
-    if (!response.ok) {const error=new Error(errorText(value.detail));error.detail=value.detail;error.errors=value.detail?.errors;throw error;}
-    return value;
-}
 const blank = () => ({task:'gate_only',waypoints:[], start:{latitude:51.566151,longitude:-4.034345}, finish:{latitude:51.566151,longitude:-4.034345},speed_m_s:0.5,clearance_m:1.8,finish_radius_m:1,passages:[]});
 const mapBounds = map => [latlng(map.start_pose?.position||map.geographic_reference),...map.buoys.map(b=>latlng(b.centre)),...(map.obstacles||[]).flatMap(o=>o.footprint?.map(latlng)||[latlng(o.centre)]),...(map.stations||[]).map(s=>latlng(s.position))];
 const latlng = p => [p.latitude,p.longitude];

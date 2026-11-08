@@ -24,7 +24,7 @@ class GeneralCourseTests(unittest.TestCase):
         for name,x,y in coords:
             objects.append({'id':name,'type':'cylinder','category':'unknown','object_type':'buoy','centre':gps(x,y),'radius_m':.2,'height_m':1})
         m={'schema_version':3,'source':'live','geographic_reference':ref,'buoys':objects,'obstacles':[]}
-        d={'geometry_version':2,'planner_task':'channel' if channel else 'slalom','task':'custom','start':gps(-6,0),'finish':gps(24.86,5.62) if channel else gps(30,5),
+        d={'geometry_version':2,'planner_task':'channel' if channel else 'slalom','task':'custom','start':gps(-6,0),'finish':gps(26+4.5*3/math.sqrt(10),6+4.5/math.sqrt(10)) if channel else gps(30,5),
            'speed_m_s':.5,'clearance_m':.5,'preferred_buffer_m':.5,'finish_radius_m':.5,'sizes_confirmed':True,'course_confirmed':True,
            'direction':[math.cos(angle),math.sin(angle)],'planning_area':[gps(x,y) for x,y in [(-12,-15),(40,-15),(40,25),(-12,25)]],
            'attempt':{'mode':'full','start_source':'manual'},'passages':[],'waypoints':[]}
@@ -83,6 +83,78 @@ class GeneralCourseTests(unittest.TestCase):
         self.assertIsNone(c.edge(to_local(d['start'],c.reference),to_local(gps(6,15),c.reference),c.initial_progress))
         d['start']=gps(5,5.8)
         with self.assertRaisesRegex(ValueError,'boundary exclusion'):Course(m,d)
+
+    def test_exit_crosses_actual_last_gate_before_outside_finish(self):
+        from shared.clearance import validate_route
+        from shared.course import dot,sub
+        for angle in (0,.63):
+            with self.subTest(angle=angle):
+                m,d,gps=self.fixture(angle,channel=True)
+                old=Course(m,d)
+                centre=to_local(old.draft['derived_sections'][-1]['centre'],old.reference)
+                forward=old.planes[-1][1]
+                d['finish']=to_gps(*(centre[i]+3*forward[i] for i in (0,1)),old.reference)
+                c=Course(m,d)
+                self.assertLess(math.dist(c.planes[-1][0],centre),1e-6)
+                result=generate(m,d,max_seconds=15)
+                self.assertTrue(result['success'],result)
+                self.assertTrue(validate_route(m,result['draft'])['valid'])
+                before=tuple(centre[i]-2*forward[i] for i in (0,1))
+                finish=to_local(d['finish'],c.reference)
+                self.assertEqual(c.edge(before,finish,len(c.planes)-1),len(c.planes))
+                side=tuple(before[i]+10*c.planes[-1][2][i] for i in (0,1))
+                self.assertIsNone(c.edge(before,side,len(c.planes)-1))
+                self.assertGreater(dot(sub(finish,centre),forward),d['clearance_m']+d['finish_radius_m'])
+
+    def test_exit_finish_needs_room_and_partial_cannot_skip_last_gate(self):
+        m,d,gps=self.fixture(channel=True)
+        c=Course(m,d)
+        centre=to_local(c.draft['derived_sections'][-1]['centre'],c.reference)
+        forward=c.planes[-1][1]
+        d['finish']=to_gps(*(centre[i]+.2*forward[i] for i in (0,1)),c.reference)
+        with self.assertRaisesRegex(ValueError,'Channel finish must be beyond'):Course(m,d)
+        d['finish']=to_gps(*(centre[i]+3*forward[i] for i in (0,1)),c.reference)
+        d['start']=gps(23,5)
+        d['attempt'].update(mode='remaining',first_section=len(c.draft['passages'])-1,selection_confirmed=True)
+        partial=Course(m,d)
+        self.assertEqual(partial.initial_progress,0)
+        result=generate(m,d,max_seconds=15)
+        self.assertTrue(result['success'],result)
+
+    def test_old_inside_channel_finish_is_rejected_and_cannot_restore_saved_setup(self):
+        m,d,gps=self.fixture(channel=True)
+        with tempfile.TemporaryDirectory() as directory:
+            w=Workspace(directory)
+            saved=w.edit({'map':m,'draft':d})
+            for confirmed in (False,True):
+                stale=deepcopy(d)
+                stale.update(finish=gps(24.86,5.62),course_confirmed=confirmed)
+                result=generate(m,stale,max_seconds=1)
+                self.assertFalse(result['success'])
+                if confirmed:
+                    self.assertIn('Channel finish must be beyond',result['diagnostics'][0])
+                self.assertNotIn('draft',result)
+                with self.assertRaisesRegex(ValueError,'Channel finish must be beyond'):
+                    w.edit({'draft':stale,'course':{'channel':{'finish':stale['finish']}}})
+                self.assertEqual(w.read(),saved)
+
+    def test_extended_channel_allows_outside_approach_through_beginning(self):
+        for angle in (0,.63):
+            with self.subTest(angle=angle):
+                m,d,gps=self.fixture(angle,channel=True)
+                d['channel']=[gps(x,y) for x,y in [(-4,6),(12,6),(24,12),(28,0),(14,-6),(-4,-6)]]
+                c=Course(m,d)
+                # Cross the reviewed cap and its side upstream of the buoy pair.
+                for a,b in [((-4.2,0),(-3.8,0)),((-2,6.2),(-2,5.8))]:
+                    self.assertEqual(c.edge(to_local(gps(*a),c.reference),to_local(gps(*b),c.reference),0),0)
+                # The same side crossing downstream remains forbidden.
+                self.assertIsNone(c.edge(to_local(gps(6,6.2),c.reference),to_local(gps(6,5.8),c.reference),0))
+                d['start']=gps(-8,10)
+                result=generate(m,d,max_seconds=15)
+                self.assertTrue(result['success'],result)
+                self.assertEqual(result['draft']['attempt']['initial_progress'],0)
+                self.assertFalse(result['draft']['attempt']['started_inside_channel'])
+                self.assertEqual(result['draft']['channel'],d['channel'])
 
     def test_finite_planes_do_not_block_unrelated_crossings(self):
         m,d,gps=self.fixture()
