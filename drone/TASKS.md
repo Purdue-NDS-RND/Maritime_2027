@@ -1,6 +1,6 @@
 # Sensing and perception tasks
 
-Last updated: 2026-11-04. Status: standalone synthetic milestone implemented; hardware,
+Last updated: 2026-11-08. Status: standalone synthetic milestone and portable IMU integration implemented; hardware,
 ROS/Docker/Jetson and physical acceptance tasks remain open. See the portable results below.
 Owners below identify responsibility areas, not assigned teammates. Numerical acceptance
 limits must be set with boat/GCS owners before declaring deployment readiness.
@@ -263,6 +263,23 @@ migration is not part of this command conversion. A fresh uv environment passed 
 demos, manual-pixel replay, identical recorded replay, 74 drone tests, 11 GCS workspace
 tests and static checks. Dockerfiles use uv but still require
 actual image builds and ROS/Jetson execution before integration acceptance.
+
+## IMU integration progress (2026-11-08)
+
+- [x] Review the five IMU logger commits after `53ef249`; preserve their separation
+  while installing the implementation in the drone package and retaining `log/` imports.
+- [x] Retain quaternion, nanosecond stamp, frame and covariance availability in replayable
+  records; reject malformed readings and protect existing recordings from overwrite.
+- [x] Implement `imu_state` processing, a callback sink and an offline exact-time join
+  through the existing pose/projection/tracking/report pipeline. Retain joint sample/
+  shared covariance and reject unknown heading/height, clock/frame assumptions or noise.
+- [x] Run 104 drone tests, including 30 new IMU cases and an end-to-end 90-degree-heading
+  replay with retained common GNSS error. ROS lifecycle/QoS tests use doubles.
+
+SP-04/SP-19/SP-44 now have these additional portable portions. SP-01/SP-02/SP-06/SP-41/
+SP-42 remain uncompleted: no actual FCU/ROS/Jetson trial or sensor-model validation occurred.
+The exact join does not resolve asynchronous real streams; measured alignment, origin/reset,
+joint-correlation and deployment contracts remain necessary before a physical GPS claim.
 
 ## Status maintenance
 

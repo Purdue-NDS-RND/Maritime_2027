@@ -5,7 +5,9 @@ Implemented on `feature/cv-raycast`: a source-independent pixel/state -> ENU obs
 seeded synthetic survey generation, withheld evaluation and deterministic recording/replay.
 The default tracker is static/random-walk. No constant-velocity or moving-object claim
 is made. Real camera/FCU acquisition, trained detection, ROS runtime, Docker, Jetson and
-physical accuracy remain unvalidated. Existing GCS import and boat behavior are unchanged.
+physical accuracy remain unvalidated. The IMU recorder now feeds the processing/replay
+boundary when paired with verified same-time navigation. Existing GCS import and boat
+behavior are unchanged.
 
 Read [LLM.md](LLM.md), [TASKS.md](TASKS.md) and [AGENTS.md](AGENTS.md) for context/scope.
 The deployed sensor direction remains fixed Arducam IMX519 + ordinary GNSS, without RTK.
@@ -83,6 +85,77 @@ entry point. There is no automatic switch from unavailable hardware to synthetic
 Missing calibration, unknown required covariance, missing heading/height quality or bad
 timing produces explicit rejection/unavailability. A rejected measurement never becomes
 a fresh GPS observation; retained tracks may still be explicitly predicted/stale.
+
+## IMU input and navigation integration
+
+The [IMU recorder guide](../log/README.md) covers actual ROS topic recording and uv setup.
+The formatter/output/listener are installed with this drone package. JSONL records retain
+integer `stamp_ns`, `frame_id`, quaternion XYZW, body angular rate, acceleration and each
+covariance's known/unknown/unreported meaning. CSV and degree angles are diagnostics.
+Never reconstruct processing timestamps from the legacy floating-point `t` column.
+
+The processing core accepts `imu_state` events in addition to `vehicle_state` and `frame`:
+`data` contains `imu` (a recorded `maritime.imu_sample`), `navigation` (the existing
+source-neutral state fields), and `contract` (the checks below). `add_imu_state` replaces
+only attitude/angular rate with IMU values, converts rates into ENU, validates the joint
+pose model, then calls the existing pose-history/projection/tracking path. Exposure-time
+interpolation still uses the existing bounded pose resolver. Both replay entry points
+accept this event. Old sessions keep their original behavior.
+
+`navigation` supplies position, ENU velocity, position reference, quality, origin/epoch,
+clock, shared-model ID, and full sample/shared **joint pose** covariance. Its old quaternion
+and angular rate are replaced. The joint covariance must describe this exact combined
+estimate, including position-attitude correlation and common heading/GNSS errors; it is
+not made by adding correlated FCU outputs or zeroing missing fields. The total angular
+block must cover at least the reported IMU orientation covariance in the ENU tangent.
+MAVROS default covariance settings do not establish this model's validity.
+
+| Contract key | Required meaning before enabling |
+| --- | --- |
+| `expected_frame_id` | Measured IMU body frame ID (commonly `base_link`); FLU body axes align with the pipeline's body |
+| `orientation_covariance_frame` | Explicit `body` (rotate into ENU) or `survey_enu`; established from the actual source/model |
+| `conventions_verified` | True only after verifying quaternion body-to-ENU direction, body alignment and earth-referenced heading |
+| `clock_verified` | True only when IMU header nanoseconds and navigation are already in the same `survey_utc` clock, with clock errors represented in session settings |
+| `covariance_decomposition_verified` | True only for a justified full joint pose model split into sample and named shared errors |
+
+The boolean checks are explicit caller assertions, not automatic sensor verification.
+Navigation must retain `frame_id=survey_enu`, `body_frame=FLU`, valid position/heading/height,
+and a fixed WGS84 origin. A MAVROS frame named `map` is not automatically that origin.
+Do not relabel it without establishing its transform, datum and reset behavior.
+
+To integrate actual recordings, prepare an ordinary navigation/frame session in the
+[existing core contract](maritime_perception/contracts.py) and a measured `imu_contract.json`
+with the five keys above. Use only states with exactly matching IMU timestamps:
+
+```bash
+uv run --no-project --python .venv/bin/python python -m maritime_perception.adapters.imu_session --session simulation/logs/perception/navigation-session --imu simulation/logs/perception/imu/samples.jsonl --contract simulation/logs/perception/imu_contract.json --output simulation/logs/perception/imu-session
+uv run --no-project --python .venv/bin/python python -m maritime_perception.replay --session simulation/logs/perception/imu-session --output simulation/logs/perception/imu-result
+```
+
+These paths represent recordings/configuration you must provide, not bundled physical
+fixtures. The join streams through ordered data, rejects duplicates/missing matches and
+publishes a new session only after validation. It preserves the source configuration's
+synthetic/hardware provenance, copies IMU records and records source checksums. It does
+not copy truth into processing input or invent calibration/navigation. Old Euler-only CSV
+cannot satisfy this contract; record the JSONL path.
+
+The exact join deliberately refuses a one-nanosecond mismatch. Unsynchronized real streams
+need a separately validated timestamp/alignment and joint-correlation model before use;
+there is no nearest/latest-sample fallback. This is not a complete live camera/GNSS node.
+An application owning a valid same-time navigation provider can connect directly:
+
+```python
+from maritime_perception.adapters.imu_input import PipelineImuSink
+from maritime_perception.adapters.imu_output import ImuOutput
+
+# pipeline, navigation_at and measured_contract are owned by the sensor application.
+sink = PipelineImuSink(pipeline, navigation_at, measured_contract)
+output = ImuOutput(on_sample=sink)  # handle(from_imu_msg(message)) in its subscriber
+```
+
+Invalid pairs produce pipeline diagnostics and no fresh pose. IMU alone supplies neither
+GNSS position nor trustworthy camera height. SP-01/SP-02/SP-04/SP-06/SP-41/SP-42/SP-44
+remain open for physical contracts and asynchronous/live acquisition.
 
 ## First tests with manual pixels and real recordings
 
@@ -190,6 +263,17 @@ pixels and a separate measured target grid. A live ROS adapter, trained YOLO, fl
 radio and GCS importer are later increments; none is needed to start this land test.
 
 ## Tests and implementation boundaries
+
+IMU review (2026-11-08): the original 74 drone tests and 30 additional IMU tests pass.
+The added end-to-end case processes a 90-degree heading through the real plane projector,
+tracker and WGS84 encoder, recovering the analytical `(0.4,0)` m point and retaining the
+2.25 m² shared GNSS floor. IMU/session replay is byte-identical. Tests cover ROS unavailable/
+unknown covariance, bad quaternions/frames/times/quality, anisotropic covariance rotation,
+recording overwrite protection, sensor-data QoS and subscriber startup/shutdown via doubles.
+Both original demos, 11 existing GCS workspace tests, Python/XML/link/shell checks and a
+non-editable package installation outside the checkout also pass. The installed IMU CLI
+fails explicitly when ROS is missing; no synthetic input is selected instead.
+These are software checks. No live ROS/DDS, MAVROS/FCU, camera, Jetson or physical trial ran.
 
 Verified on 2026-11-04: 74 drone tests and 11 existing GCS workspace tests passed.
 Both demo commands ran and reports were inspected. The analytic case recovered all

@@ -51,6 +51,16 @@ class PerceptionPipeline:
         except (Unavailable, KeyError, TypeError, ValueError) as exc:
             self.pending_diagnostics.append({"status": "rejected", "reason": str(exc), "kind": "vehicle_state"})
 
+    def add_imu_state(self, data):
+        """Same-time IMU + verified navigation, also supported by recorded replay."""
+        from .adapters.imu_formatter import ImuSample
+        from .adapters.ros_conversion import imu_to_state
+        try:
+            sample = ImuSample.from_record(data["imu"])
+            self.add_state(imu_to_state(sample, data["navigation"], **data["contract"]))
+        except (Unavailable, AttributeError, KeyError, TypeError, ValueError) as exc:
+            self.pending_diagnostics.append({"status": "rejected", "reason": str(exc), "kind": "imu_state"})
+
     def process_frame(self, frame):
         if not isinstance(frame, dict) or not isinstance(frame.get("id"), str) or not frame["id"]:
             raise Unavailable("invalid_frame_id")

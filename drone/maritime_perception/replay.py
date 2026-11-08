@@ -35,6 +35,8 @@ def replay_session(session, output):
                         raise Unavailable("invalid_event_envelope")
                     if event["kind"] == "vehicle_state":
                         pipeline.add_state(event["data"])
+                    elif event["kind"] == "imu_state":
+                        pipeline.add_imu_state(event["data"])
                     elif event["kind"] == "frame":
                         report, ledger = pipeline.process_frame(event["data"])
                         reports.write(line(report))

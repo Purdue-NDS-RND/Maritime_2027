@@ -49,6 +49,8 @@ def main():
             event = json.loads(raw)
             if event["kind"] == "vehicle_state":
                 self.pipeline.add_state(event["data"])
+            elif event["kind"] == "imu_state":
+                self.pipeline.add_imu_state(event["data"])
             elif event["kind"] == "frame":
                 report, _ = self.pipeline.process_frame(event["data"])
                 encoded = line(report)

@@ -163,6 +163,13 @@ with zero synthetic identity errors, and configured shared GNSS variance was ret
 Python package build/install and a packaged analytic demo passed. ROS/Docker/Jetson,
 trained inference and physical acceptance were not exercised.
 
+The separate 2026-11-08 IMU review/integration adds lossless IMU recording, an exact-time
+navigation bridge and replay support on the same drone branch. All 104 drone tests pass
+(30 new IMU cases); analytic heading/ENU projection and shared-error retention are checked.
+Both synthetic demos remain passing. ROS lifecycle/QoS is checked with structural doubles,
+not a live DDS/MAVROS/FCU connection. Real heading, clocks, position/height and joint error
+models are still required. This does not change or rerun boat motion/simulator acceptance.
+
 No drone application, detection model, geolocation from images, marker landing,
 automatic route generation, Evade detector strategy, stitched aerial imagery,
 or other competition task mechanisms are required here.

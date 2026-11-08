@@ -1,6 +1,6 @@
 # Maritime sensing and perception: working context
 
-Last updated: 2026-11-04. Owner: Samuel Yoon, Sensing and Perception Lead.
+Last updated: 2026-11-08. Owner: Samuel Yoon, Sensing and Perception Lead.
 Status: a runnable standalone pixel/state-to-GPS core and deterministic synthetic survey
 are implemented on `feature/cv-raycast`. Sensor, ROS/Docker/Jetson integration and physical
 accuracy remain unverified. [README.md](README.md) contains exact setup/demo/test commands.
@@ -69,6 +69,32 @@ in this environment. Optional ROS conversions/recorded-event node/launch and CPU
 Dockerfiles are present but not runtime-verified. Local Ultralytics weights are required
 for the optional detector adapter; inference/trained water detection were not exercised.
 No camera/FCU driver, GCS importer, radio infrastructure or flight control was added.
+
+### IMU integration review (2026-11-08)
+
+Reviewed all five new `log/` commits (`22dc30e`, `a688d6c`, `91dd2ec`, `3b041fc`,
+`e2e25fe`) after `53ef249`. Their standalone logger split was retained as compatibility
+imports, with its maintained implementation installed in the drone adapters. Recordings
+now preserve quaternion, exact nanoseconds, frame and covariance availability. Invalid
+messages are rejected, output files are exclusive-created, and packaged ROS startup and
+cleanup are explicit. The absent startup-script references and direct Python setup were
+replaced with actual-interface checks and uv instructions in the [recorder guide](../log/README.md).
+
+`imu_state` events and `PipelineImuSink` connect verified same-time IMU/navigation to the
+existing pose/project/track/report path. The offline join CLI preserves input provenance
+and rejects missing/duplicate or mismatched times. ENU/FLU conversion is not repeated;
+IMU angular rates rotate from body to ENU. Position, velocity, heading/height quality,
+origin, clock mapping and a justified full joint sample/shared covariance model must be
+provided externally. No acceleration dead reckoning or independent fusion of correlated
+FCU outputs is introduced. See the [contract](README.md#imu-input-and-navigation-integration).
+
+All 104 drone tests pass, including analytic 90-degree heading, retained shared errors,
+truth-free deterministic IMU replay and structural ROS callback/QoS/cleanup tests. The
+original analytic/noisy demos also remain the regression reference. This is a portable
+integration, not a complete asynchronous live camera/GNSS node or physical acceptance.
+The actual flight-controller stream, mounting, true-north heading, clock/covariance
+semantics and Jetson/ROS runtime remain unverified under SP-01/SP-02/SP-04/SP-06/SP-41/
+SP-42/SP-44. The exact-time join intentionally refuses nearest/latest data.
 
 Do not treat a new covariance source ID as evidence of independence. Input adapters must
 establish residual versus common covariance, clock validity and frame/reset contracts.

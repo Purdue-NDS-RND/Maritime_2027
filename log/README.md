@@ -1,115 +1,85 @@
-# log/: IMU data pipeline
+# MAVROS IMU recording and perception integration
 
-Reads IMU data from MAVROS, cleans it up, and sends it to the terminal and/or a CSV file.
+The five IMU commits `22dc30e` through `e2e25fe` added a useful formatter/listener/output
+split, but the original CSV dropped quaternion, frame, covariance and exact timestamps.
+It also treated unreported ROS measurements as valid and referenced absent startup scripts.
+The maintained implementation now lives in `drone/maritime_perception/adapters/imu_*.py`.
+`log/` retains compatibility imports; `__init__.py` replaces the misspelled `init.py`.
+Install the drone package first. The installed listener also works outside the checkout.
 
-```
-/mavros/imu/data ──► imu_listener.py ──► imu_formatter.py ──► imu_output.py ──► terminal / CSV / memory
-                     (receives)          (cleans)             (decides where it goes)
-```
+| Component | Purpose |
+| --- | --- |
+| `imu_formatter` | Validated IMU record, exact nanoseconds, quaternion and covariance; degrees only for display |
+| `imu_output` | Throttled terminal, CSV, replayable JSONL, optional processing callback |
+| `imu_listener` | Read-only ROS 2 subscriber with sensor-data QoS and explicit rejected-message diagnostics |
+| `imu_input.PipelineImuSink` | Connect samples and a verified same-time navigation provider to the processing core |
+| `imu_session` | Join recorded IMU and same-time navigation; feed the existing replay CLI |
 
-| File | Job | Needs ROS? |
-|---|---|---|
-| `imu_listener.py` | ROS 2 node. Subscribes to `/mavros/imu/data` and passes each message along. | Yes |
-| `imu_formatter.py` | Converts a raw IMU message into a clean `ImuSample` (accel, gyro, roll/pitch/yaw in degrees). | No |
-| `imu_output.py` | Sends each `ImuSample` to its destinations: terminal (throttled), CSV, and `latest`. | No |
+No IMU-only GPS estimate is produced. Accelerations are not integrated into position.
+The same flight-controller estimate is not fused twice as independent data.
 
-All commands below are run from the **repo root**, the folder that *contains* `log/`.
+## Portable setup and checks
 
----
-
-## 1. Quick check (no ROS, no drone)
-
-This confirms the formatter and output files work using a fake IMU message:
+From the repository root, follow [drone setup](../drone/README.md#setup-and-deterministic-demonstrations)
+using uv and Python 3.12. Then run:
 
 ```bash
-python3 -c "
-from types import SimpleNamespace as N
-from log.imu_formatter import from_imu_msg
-from log.imu_output import ImuOutput
-msg = N(header=N(stamp=N(sec=1, nanosec=0)),
-        linear_acceleration=N(x=0.0, y=0.0, z=9.81),
-        angular_velocity=N(x=0.0, y=0.0, z=0.0),
-        orientation=N(x=0.0, y=0.0, z=0.7071068, w=0.7071068))
-out = ImuOutput()
-out.handle(from_imu_msg(msg))
-print('OK: formatter + output working')
-"
+uv run --no-project --python .venv/bin/python python -m pytest -q drone/tests/test_imu.py
 ```
 
-**Expected output:**
-```
-t=1.000s | accel [m/s^2] x= +0.00 y= +0.00 z= +9.81 | gyro [rad/s] x=+0.000 y=+0.000 z=+0.000 | roll=  +0.00 pitch=  +0.00 yaw= +90.00 deg
-OK: formatter + output working
-```
+These tests use structural ROS message doubles, not a running ROS/DDS system or FCU.
 
----
+## Record actual MAVROS messages
 
-## 2. Full check (live data through MAVROS)
+MAVROS and the FCU connection must already be configured on the host. This repository
+does **not** contain `mavros_boot.sh` or `check_streams.sh`; use the team's actual host
+setup. This listener does not configure message rates, arm, command or launch the vehicle.
 
-### Prerequisites
-- ROS 2 with MAVROS installed.
-- In **every new terminal**, load ROS first:
-  ```bash
-  source /opt/ros/<distro>/setup.bash   # run `ls /opt/ros` to find <distro> (e.g. humble, jazzy)
-  ```
-- Something for MAVROS to talk to:
-  - **Simulation:** the ArduPilot simulator (SITL) must already be running.
-  - **Real drone:** flight controller plugged in over USB.
+Use a compatible ROS environment whose Python meets the drone package's >=3.11 requirement.
+The exercised portable runtime is Python 3.12; Humble/Jetson compatibility is unverified.
+For a Jazzy host, use its system Python so binary `rclpy` can be imported:
 
-### Terminal 1: start MAVROS (leave running)
 ```bash
-./mavros_boot.sh sim        # or: ./mavros_boot.sh device
+source /opt/ros/jazzy/setup.bash
+uv venv --python /usr/bin/python3 --system-site-packages .venv-ros
+uv pip install --python .venv-ros/bin/python -r drone/requirements.txt -e ./drone
+ros2 topic list -t
+ros2 topic info -v /mavros/imu/data
+ros2 topic hz /mavros/imu/data
+mkdir -p simulation/logs/perception/imu
+uv run --no-project --python .venv-ros/bin/python python -m maritime_perception.adapters.imu_listener --ros-args -p jsonl_path:=simulation/logs/perception/imu/samples.jsonl -p csv_path:=simulation/logs/perception/imu/samples.csv
 ```
 
-### Terminal 2: set stream rates and check topics
-```bash
-./check_streams.sh          # replace with the stream-check script's actual filename
-```
-Wait for:
-```
-[PASS] ✅ All required MAVROS streams are live
-```
-If any line shows ❌, fix that before continuing.
+Use a new recording filename each run. Existing files are refused, not truncated.
+Parent directories must exist; write failures are visible. Ctrl+C closes both files.
+`uv run --no-project --python .venv-ros/bin/python python -m log.imu_listener` is the
+checkout compatibility entry point. `ros2 run maritime_perception perception_imu` is
+available after a compatible colcon build (not executed here).
 
-### Terminal 3: run the IMU listener
-```bash
-python3 -m log.imu_listener
-```
-**Expected:** one clean line of IMU data printed about once per second. When the drone is sitting still and level, `az` should be about **+9.81** (gravity), and roll and pitch should be about **0**.
-
-To also save every sample to a CSV:
-```bash
-python3 -m log.imu_listener --ros-args -p csv_path:=log/imu_log.csv
-```
-Stop with **Ctrl+C**. The CSV is closed automatically. Check it with:
-```bash
-head log/imu_log.csv
-```
-
-### Optional parameters
 | Parameter | Default | Meaning |
-|---|---|---|
-| `topic` | `/mavros/imu/data` | IMU topic to subscribe to |
-| `csv_path` | `""` (off) | File to save every sample to |
-| `print_period_s` | `1.0` | Seconds between terminal prints (`0` = don't print) |
+| --- | --- | --- |
+| `topic` | `/mavros/imu/data` | Fused attitude stream; verify the actual namespace |
+| `jsonl_path` | empty | Versioned `maritime.imu_sample` records for processing |
+| `csv_path` | empty | Diagnostic CSV; original ten columns retained with exact fields appended |
+| `print_period_s` | `1.0` | Terminal interval; `0.0` disables printing |
 
-Example: `python3 -m log.imu_listener --ros-args -p print_period_s:=0.2`
+Rates depend on FCU/MAVROS configuration; 20 Hz is not guaranteed. In a verified FLU
+frame, available accelerometer specific force is about +9.81 m/s² on Z at rest and level.
+The fused topic may carry cached acceleration from a different message; its header does
+not establish separate accelerometer sample time. Acceleration is diagnostic only here.
+An absent field (`covariance[0] == -1`) stays unavailable; all-zero covariance stays unknown.
+Unknown-covariance values may be displayed/recorded but are refused by the geolocation bridge.
+Euler yaw is ROS mathematical yaw in degrees, not a certified compass/true-north bearing.
 
----
+## Connect to geolocation
 
-## Troubleshooting
+Follow [the integration contract and replay commands](../drone/README.md#imu-input-and-navigation-integration).
+MAVROS already converts FCU NED/FRD data to ENU/FLU on the fused IMU topic; do not apply
+that conversion again. The actual installed source, body alignment, north reference,
+clock behavior and covariance model still require measurement/verification.
 
-| Problem | Likely cause | Fix |
-|---|---|---|
-| `No module named 'log'` | Running from the wrong folder | `cd` to the folder that contains `log/` |
-| `No module named 'rclpy'` / `ros2: command not found` | ROS not loaded in this terminal | Run the `source` command above |
-| `Permission denied` on a `.sh` file | Script not executable | `chmod +x *.sh` |
-| Listener runs but prints nothing | MAVROS not running, stream rates not set, or no sim/drone | Redo Terminals 1–2; check `ros2 topic hz /mavros/imu/data` |
-| `ros2 topic echo` shows data but the listener doesn't | QoS mismatch | The listener must use `qos_profile_sensor_data` (it does by default) |
-
-Useful commands while everything is running:
-```bash
-ros2 node list                      # should show /mavros and /imu_listener
-ros2 topic hz /mavros/imu/data      # should be ~20 Hz
-ros2 topic info /mavros/imu/data    # Subscription count ≥ 1 when the listener is running
-```
+Primary references checked during review:
+[ROS Imu definition](https://github.com/ros2/common_interfaces/blob/rolling/sensor_msgs/msg/Imu.msg),
+[MAVROS IMU plugin](https://github.com/mavlink/mavros/blob/ros2/mavros/src/plugins/imu.cpp), and
+[MAVROS IMU parameters](https://github.com/mavlink/mavros/blob/ros2/docs/plugins/std/imu.md).
+Plugin covariance parameters are configured assumptions, not measured accuracy certificates.
