@@ -1,0 +1,16 @@
+{
+  "adapter": "argus",
+  "sensor_id": 0,
+  "sensor_mode": -1,
+  "width": 3840,
+  "height": 2160,
+  "fps": "17",
+  "publish_hz": 4.0,
+  "shutter_speed": 1000.0,
+  "wb_mode": 1,
+  "rectify": true,
+  "calibration": "builtin:arducam_info.yaml",
+  "save_interval_s": 1.0,
+  "preview_width": 960,
+  "preview_height": 540
+}

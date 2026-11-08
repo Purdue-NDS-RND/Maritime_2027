@@ -86,6 +86,162 @@ Missing calibration, unknown required covariance, missing heading/height quality
 timing produces explicit rejection/unavailability. A rejected measurement never becomes
 a fresh GPS observation; retained tracks may still be explicitly predicted/stale.
 
+## Arducam IMX519 image capture
+
+The user selected the [16 MP IMX519 module with M12 wide-angle lens](https://www.uctronics.com/16mp-imx519-camera-module-with-m12-lens-wide-angle-color-rolling-shutter-for-raspberry-pi-and-openhd.html).
+The acquisition structure was reviewed against CUASC_2026 `image_grabber.py`, its
+compressed grabber, detector and launch/config files at commit
+`e50d6e2e42e0e6eeac150e8b7c94be0d0474a42d`. The maintained implementation is
+[adapters/image_grabber.py](maritime_perception/adapters/image_grabber.py).
+It captures without requiring trained weights, navigation or an armed vehicle.
+
+The two imported [calibration files](maritime_perception/config) are preserved byte-for-byte.
+`arducam_info.yaml` contains raw 3840x2160 K/D and a different rectified P;
+`kalibr.yaml` converts the same K/D to pinhole/radtan with k3=0. They are one historical
+calibration, not two independent measurements. Their provenance is recorded in
+`calibration_provenance.json`. Lens, focus and sensor-mode applicability to the selected
+M12 camera remains unverified. No mount, covariance or timing calibration is inferred.
+
+### Host requirements and first capture
+
+Use the Jetson's actual compatible IMX519 driver/Argus installation. The Raspberry Pi/
+OpenHD listing does not establish support for a particular Jetson carrier, cable or
+JetPack release. Host camera drivers remain outside the app. Inspect available modes
+and source controls on that host:
+
+```bash
+v4l2-ctl -d /dev/video0 --list-formats-ext
+gst-inspect-1.0 nvarguscamerasrc
+```
+
+These commands require host V4L2/GStreamer tooling. On a compatible Ubuntu host, native
+dependencies for the capture backend are installed separately from the uv environment:
+
+```bash
+sudo apt-get install python3-gi python3-gst-1.0 gstreamer1.0-tools gstreamer1.0-plugins-base gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 v4l-utils
+uv run --no-project --python /usr/bin/python3 python -V
+```
+
+The system Python must be **>=3.11** and match the host GI/ROS binary bindings; the
+GStreamer video-info API used here requires GStreamer >=1.20. The
+existing SciPy/PROJ pins and package requirement are retained. A stock Python 3.10/Humble
+installation cannot run this dependency set; do not force-install it or assume a downloaded
+uv Python can import GI built for a different ABI. The final JetPack/ROS/Python matrix is
+still SP-01. Python 3.12/Linux x86_64 is the portable test environment, not Jetson acceptance.
+For a compatible system Python, run from the repository root:
+
+```bash
+uv venv --python /usr/bin/python3 --system-site-packages .venv-camera
+uv pip install --python .venv-camera/bin/python -r drone/requirements-test.txt -e ./drone
+uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.image_grabber --config drone/maritime_perception/config/imx519_capture.json --dry-run
+uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.image_grabber --config drone/maritime_perception/config/imx519_capture.json --output simulation/logs/perception/camera-run-01 --max-frames 30 --save-interval-s 0
+```
+
+The sample requests the legacy 3840x2160/17 FPS mode, 1/1000 s shutter and rectification.
+Those requests must match a mode supported by the actual driver; they are not measured
+hardware performance. `--dry-run` validates calibration and prints controls without GI,
+ROS or a camera, so it also works in the portable `.venv` environment.
+
+Use a new output directory each run. The recorder saves PNGs (or explicitly selected
+JPEGs), checksums, `frames.jsonl` and `capture_config.json`, including effective K/D,
+calibration identity, requested controls and original source/arrival timing. Disk/encoder
+errors stop capture visibly. Ctrl+C, count/duration completion and startup failures release
+the pipeline. The one-buffer appsink drops old frames instead of building a backlog;
+slow publication, rectification or disk writes can drop captures and must be measured.
+
+### Controls at execution
+
+All controls are startup CLI options or keys in a JSON `--config` file. CLI values override
+the file. Settings are fixed for a capture session; restart with a new directory to change
+them. Sensor FPS, processing/publication rate and recording interval are separate controls.
+
+| Option(s) | Meaning |
+| --- | --- |
+| `--sensor-id`, `--sensor-mode` | Argus camera index and explicit mode; mode `-1` allows driver selection |
+| `--width`, `--height`, `--fps` | Requested capture caps; FPS accepts `17`, `29.97` or `30000/1001` |
+| `--output-width`, `--output-height` | Software resize after capture/optional rectification; both required together |
+| `--publish-hz` | Maximum application processing/publication rate, at most requested sensor FPS |
+| `--shutter-speed` | Reciprocal seconds: `1000` means 1/1000 s, converted to 1,000,000 ns for Argus |
+| `--exposure-us` | Alternative fixed integration time in microseconds; `1000` also means 1/1000 s |
+| `--exposure-min-us`, `--exposure-max-us` | Alternative AE exposure range; cannot combine with fixed exposure/shutter |
+| `--gain` or `--gain-min`, `--gain-max` | Fixed or automatic-range sensor analog gain, as a scalar multiplier |
+| `--digital-gain` or `--digital-gain-min`, `--digital-gain-max` | Fixed or range ISP digital gain, not dB |
+| `--wb-mode`, `--ae-lock`, `--awb-lock` | Argus white-balance enum and AE/AWB locks; defaults auto WB, unlocked |
+| `--exposure-compensation`, `--antibanding` | Argus compensation in stops and antibanding enum |
+| `--tnr-mode`, `--tnr-strength`, `--ee-mode`, `--ee-strength` | Noise reduction and edge enhancement; strength `-1` leaves the plugin default |
+| `--calibration` | ROS YAML, Kalibr YAML, `builtin:arducam_info.yaml`, `builtin:kalibr.yaml`, or `none` |
+| `--calibration-roi X Y WIDTH HEIGHT` | Explicit crop region in reference calibration pixels, then resize to capture caps |
+| `--rectify`, `--no-rectify`, `--rectify-alpha` | Correct distortion once, or retain raw pixels; alpha 0..1 controls rectified field of view |
+| `--preview-width`, `--preview-height` | Optional ROS preview with its own correctly resized CameraInfo |
+| `--image-format`, `--jpeg-quality`, `--save-interval-s` | PNG/JPEG recording and sampling interval; interval `0` saves each processed frame |
+| `--read-timeout-s`, `--startup-timeout-s`, `--max-frames`, `--duration-s` | Failure bounds and optional run limits |
+
+Unspecified gain/exposure (`0`) leaves those source ranges at driver defaults. Gain values
+must be >=1 when supplied; exposure cannot exceed the requested frame period. Unsupported
+sensor/driver limits may still reject or clip requests. Metadata separates requested
+settings from actual exposure/gain, which this backend leaves **unknown** rather than
+claiming they were achieved. Focus controls are not assumed for the selected M12 lens.
+
+For example, capture at the historical mode but deliver 1920x1080 images with automatically
+updated intrinsics, a 2 ms shutter and fixed gains:
+
+```bash
+uv run --no-project --python .venv-camera/bin/python python -m maritime_perception.adapters.image_grabber --adapter argus --width 3840 --height 2160 --output-width 1920 --output-height 1080 --fps 17 --publish-hz 4 --exposure-us 2000 --gain 2 --digital-gain 1 --wb-mode 6 --rectify --output simulation/logs/perception/camera-1080-output
+```
+
+Changing actual capture mode to 1920x1080 may change sensor crop/binning. A resolution
+mismatch therefore requires either that mode's own calibration, `--calibration none`
+for uncalibrated raw acquisition, or an explicitly verified reference ROI. For a measured
+full-field resize of the old calibration, the declaration would be
+`--width 1920 --height 1080 --calibration-roi 0 0 3840 2160`. Do not use that declaration
+for a cropped sensor mode. Full 16 MP capture similarly needs a 4656x3496 calibration or
+an established mode transform. Software output resizing does not require that assumption.
+
+Raw images use raw K/D. Rectification computes new K, clears D and publishes `image_rect`;
+it never labels corrected pixels as raw. Resize/crop transforms use OpenCV pixel centres.
+The preview has its own K/P/dimensions. With `--calibration none`, CameraInfo K[0] is zero
+and rectification is refused. The supplied historical P is never substituted for raw K.
+
+### ROS publication and the processing boundary
+
+After sourcing compatible ROS, append `--ros` to a capture command to publish
+`/camera/image_raw` or `/camera/image_rect`, `/camera/camera_info` and
+`/camera/frame_metadata`; optional preview topics are `/camera/preview/image` and
+`/camera/preview/camera_info`. Image topics use best-effort depth 1. `--output` is optional
+in ROS mode. `--ros-args` remappings can follow the capture arguments. Installed entry
+point: `ros2 run maritime_perception image_grabber ... --ros`. A colcon launch is also
+provided: `ros2 launch maritime_perception image_grabber.launch.py config:=/absolute/capture.json`.
+The desktop ROS Docker candidate contains GI and software GStreamer plugins; it does not
+provide a Jetson driver/Argus stack or imply a successful image build.
+
+The backend uses GI/appsink directly instead of OpenCV VideoCapture, preserving buffer
+PTS/running time, duration, negotiated caps and host arrival times while respecting row
+stride. Each run gets a distinct source-clock ID. ROS image headers carry host arrival
+time and explicitly matching metadata; they are **not verified exposure timestamps**.
+`detections_to_frame` pairs an exact capture metadata record and restores its source PTS
+instead of overwriting it with the detection header. Never pair with the latest metadata.
+
+In-process capture returns `CapturedFrame.image`, `.camera_info` and `.metadata`;
+`.detection_frame(origin_id)` supplies the existing detector/frame contract, including
+image domain, effective calibration ID and an identity pixel transform. Detection can run
+directly on these BGR pixels using the existing local-weights adapter. The geolocation
+configuration must describe the same effective camera model and measured mount/uncertainty.
+
+PTS is not automatically UTC, exposure midpoint or IMU time. The capture metadata retains
+`stamp_semantics=gstreamer_running_time_unverified`; processing rejects it until SP-06
+establishes clock mapping, exposure semantics/delay and rolling-shutter error treatment.
+Actual exposure/gain and rolling-shutter readout remain unknown. No GPS output, guessed
+mount/covariance or synthetic camera is substituted after hardware failure. Explicit
+`--adapter videotest --calibration none --width 640 --height 480 --fps 10` is available
+for a labeled software GStreamer smoke run, not camera or optical acceptance.
+
+Primary control/runtime references:
+[NVIDIA Argus/GStreamer](https://docs.nvidia.com/jetson/archives/r35.6.1/DeveloperGuide/SD/Multimedia/AcceleratedGstreamer.html),
+[Arducam IMX519/Jetson modes](https://docs.arducam.com/Nvidia-Jetson-Camera/Nvidia-Jetson-Orin-Series/NVIDIA-Jetson-AGX-Orin/Quick-Start-Guide/),
+[GStreamer appsink](https://gstreamer.freedesktop.org/documentation/app/appsink.html).
+The product listing was not retrievable during review; no additional SKU compatibility
+or field-of-view claim is inferred from it.
+
 ## IMU input and navigation integration
 
 The [IMU recorder guide](../log/README.md) covers actual ROS topic recording and uv setup.
@@ -263,6 +419,17 @@ pixels and a separate measured target grid. A live ROS adapter, trained YOLO, fl
 radio and GCS importer are later increments; none is needed to start this land test.
 
 ## Tests and implementation boundaries
+
+Camera integration (2026-11-08): 147 drone tests pass, including 43 new camera cases,
+and 11 existing GCS workspace tests pass. Tests compare the imported models, raw versus
+rectified rays, explicit mode transforms, pixel-centre resizing/preview, control units
+and conflicts, padded buffers, source timestamps, recording round trips and errors,
+GStreamer startup/read failures and ROS publication/shutdown. Camera/GStreamer/ROS tests
+use doubles: no native GI/GStreamer, Argus, actual ROS/DDS, Jetson or camera trial ran.
+The installed package was also exercised outside the checkout: packaged ROS/Kalibr
+calibration loading, configurable dry run, command registration and explicit missing-GI
+failure pass. Python/XML/local-link checks and strict shell syntax pass.
+The hardware/runtime/calibration checks in the capture guide remain necessary.
 
 IMU review (2026-11-08): the original 74 drone tests and 30 additional IMU tests pass.
 The added end-to-end case processes a 90-degree heading through the real plane projector,

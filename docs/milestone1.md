@@ -174,6 +174,13 @@ No drone application, detection model, geolocation from images, marker landing,
 automatic route generation, Evade detector strategy, stitched aerial imagery,
 or other competition task mechanisms are required here.
 
+The 2026-11-08 camera extension adds configurable Arducam/Argus image capture,
+historical CUASC intrinsics, consistent raw/rectified/resize geometry, recording and
+optional ROS publication. Validation: 147 drone tests (43 new camera cases) and 11 GCS
+workspace tests pass. Camera/GStreamer/ROS behavior uses structural doubles; real GI,
+Argus/Jetson, lens/mode calibration and exposure/rolling-shutter timing remain untested.
+This work neither changes boat execution nor repeats the historical simulator trial.
+
 This uses a perfect simulator map and does not establish camera-free feasibility
 on the real boat. Subsequent experiments introduce survey/GPS errors and buoy
 movement, evaluate clearance limits, and compare with physical route following.

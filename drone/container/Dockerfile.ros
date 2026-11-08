@@ -4,6 +4,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /usr/local/bin/
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv python3-colcon-common-extensions ros-jazzy-vision-msgs \
+    python3-gi python3-gst-1.0 gstreamer1.0-tools gstreamer1.0-plugins-base \
+    gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 \
     && rm -rf /var/lib/apt/lists/*
 RUN uv venv --python /usr/bin/python3 --system-site-packages /opt/perception-venv
 COPY requirements.txt /tmp/perception-requirements.txt

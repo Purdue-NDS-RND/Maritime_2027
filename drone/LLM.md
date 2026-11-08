@@ -96,6 +96,39 @@ The actual flight-controller stream, mounting, true-north heading, clock/covaria
 semantics and Jetson/ROS runtime remain unverified under SP-01/SP-02/SP-04/SP-06/SP-41/
 SP-42/SP-44. The exact-time join intentionally refuses nearest/latest data.
 
+### Configurable Arducam capture (2026-11-08)
+
+The user specified the IMX519 16 MP module with M12 wide-angle lens. CUASC_2026
+`src/vision_pipeline/vision_pipeline/image_grabber.py`, the compressed grabber/detector,
+launch/config and both intrinsic YAMLs were reviewed at `e50d6e2`. The two YAMLs contain
+the same 3840x2160 model and are preserved byte-for-byte in the installed drone config,
+with full commit/blob provenance. They remain historical candidates; applicability to
+the actual M12 lens/focus/mode and reprojection accuracy is unverified.
+
+The installed `image_grabber` CLI now uses native GStreamer GI/Argus, bounded appsink,
+source PTS/running time and stride-aware BGR extraction. Sensor/output resolution, FPS,
+processing rate, shutter/exposure ranges, analog/digital gain, white balance/locks,
+antibanding, noise reduction, sharpening and recording controls are startup options or
+JSON config keys. PNG/JPEG capture includes checksums, effective calibration and timing/
+control provenance. Optional ROS publication has correct raw/rectified topics, CameraInfo
+and separately calibrated preview. No detector weights or navigation are required to capture.
+
+Raw K/D, rectified new-K/zero-D and OpenCV pixel-centre resize/crop geometry are kept
+consistent. Changed capture modes require their own calibration or an explicitly verified
+reference ROI; arbitrary modes can instead capture uncalibrated raw images. Detector
+conversion pairs exact companion metadata and retains the source clock, not arrival time.
+Geolocation still rejects unverified exposure semantics. No mount/pose/covariance, actual
+exposure/gain achievement or rolling-shutter readout is fabricated.
+
+Portable validation: 147 drone tests (43 new camera cases) and 11 GCS workspace tests pass.
+Camera/GStreamer/ROS cases use structural doubles; no native GStreamer/GI, Argus, ROS/DDS,
+Jetson, camera or physical accuracy trial ran. The existing Python >=3.11 pins require a
+compatible host GI/ROS ABI; stock Python 3.10/Humble is not supported by this dependency set.
+See [capture commands, controls and limits](README.md#arducam-imx519-image-capture).
+SP-01/SP-05/SP-06/SP-18/SP-19 remain open for actual runtime, lens/mode calibration,
+timing/rolling-shutter and sustained onboard performance. Capture is an implemented
+source/recording boundary, not complete asynchronous live sensor fusion.
+
 Do not treat a new covariance source ID as evidence of independence. Input adapters must
 establish residual versus common covariance, clock validity and frame/reset contracts.
 Current named common sources are constant over their declared session/sample; real drift

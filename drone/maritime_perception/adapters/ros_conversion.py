@@ -1,7 +1,7 @@
 """ROS message conversion without ROS imports; callers verify source conventions."""
 import numpy as np
 
-from ..validation import Unavailable, covariance, rotation
+from ..validation import Unavailable, covariance, rotation, timestamp
 
 
 def ros_stamp_ns(stamp):
@@ -82,6 +82,12 @@ def detections_to_frame(message, metadata, *, pixel_sigma_px, reference_method):
     if not np.isfinite(pixel_sigma_px) or pixel_sigma_px <= 0:
         raise Unavailable("pixel_uncertainty_required")
     stamp = ros_stamp_ns(message.header.stamp)
+    if metadata.get("capture_session_id") is not None:
+        # Capture publishes an arrival-time ROS header plus source-PTS metadata.
+        # Pair the exact companion record; never replace PTS with detector arrival.
+        if stamp != metadata.get("ros_header_stamp_ns") or message.header.frame_id != metadata.get("frame_id"):
+            raise Unavailable("capture_detection_metadata_mismatch")
+        stamp = timestamp(metadata["stamp_ns"])
     frame = dict(metadata, stamp_ns=stamp)
     frame["detections"] = []
     for index, detection in enumerate(message.detections):

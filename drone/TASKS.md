@@ -281,6 +281,22 @@ SP-42 remain uncompleted: no actual FCU/ROS/Jetson trial or sensor-model validat
 The exact join does not resolve asynchronous real streams; measured alignment, origin/reset,
 joint-correlation and deployment contracts remain necessary before a physical GPS claim.
 
+## Camera integration progress (2026-11-08)
+
+- [x] Review CUASC image acquisition and intrinsic files at `e50d6e2`; preserve both
+  equivalent calibration YAMLs with full provenance as historical M12/mode candidates.
+- [x] Implement configurable Argus/GStreamer image capture, optional ROS publication,
+  stride-aware bounded acquisition and PNG/JPEG recording with source timing/checksums.
+- [x] Keep raw/rectified/resize/preview CameraInfo consistent; require explicit mode
+  geometry on a calibration-size mismatch, and pair detections with exact source metadata.
+- [x] Pass 147 drone tests, including 43 camera cases for controls, undistortion/rays,
+  resizing, buffer layout, recording, timestamps, failure/cleanup and ROS publication.
+
+SP-04/SP-18/SP-19/SP-44 have additional portable implementations. SP-01/SP-05/SP-06
+still require observed Jetson/driver/GI/ROS versions, actual M12 calibration, verified
+exposure timestamps, rolling-shutter and measured settings/rates. These test results use
+doubles and do not complete hardware, optical, end-to-end timing or onboard acceptance.
+
 ## Status maintenance
 
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
