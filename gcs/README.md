@@ -198,6 +198,12 @@ bounded-search limits and costs, which are not probabilities.
 See [map compiling](../docs/map_compiling.md) for the complete workflow, profile
 measurements, scoring assumptions, file format and session APIs.
 
+To practice with rotated and imperfect full courses, run `make random-course
+SEED=45` from `simulation/`, open its preview, and import the generated
+`observations.json`. See [random course testing](../simulation/docs/USING_THE_SIM.md#random-full-course-layouts)
+for repeatable seeds, variation levels and matching Gazebo launches. Preview
+observations contain no course assignments and are synthetic, unverified inputs.
+
 The browser first calls `POST /api/session`, keeps the returned `session_id` only
 in memory, and sends `X-Planner-Session` on planner requests. Unknown sessions
 are rejected after restart. `PUT /api/workspace` and `POST /api/import` require

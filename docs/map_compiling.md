@@ -3,6 +3,12 @@
 Status: implemented on `feature/map-compiling`. This is observation recognition
 and operator-reviewed planning, not physical-boat or competition qualification.
 
+Seeded full-course test inputs and matching Gazebo layouts are available through
+`make random-course SEED=45` in `simulation/`. See
+[random course testing](../simulation/docs/USING_THE_SIM.md#random-full-course-layouts)
+for rotation, bends, stagger, skew and variation constraints. Simulator truth is
+kept separate from shuffled GPS observations; recognition receives no role hints.
+
 ## Operator workflow
 
 Map presents one step at a time: **Clean up → Find course → Review tasks**.

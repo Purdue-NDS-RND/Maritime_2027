@@ -27,6 +27,9 @@ The launcher prints all resolved settings before Docker startup. `SIM_GPU` and
 An explicit `BOAT_MODEL=single|dual` enables cameras unless `CAMERAS` is supplied.
 See [camera boat selection](DUAL_CAMERA.md).
 
+Competition layout randomization uses the separate `COURSE_SEED` controls below;
+the menu's legacy `BUOY_SEED` still leaves the fixed competition layout unchanged.
+
 Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
 launches (redirected input or output) use calm water, cameras off and competition and never
 prompt. Use `./scripts/run.sh --non-interactive` for default startup without a
@@ -53,6 +56,86 @@ MAVLink on UDP `14550`; student software independently receives it on `14551`.
 
 Stop the attached simulation with `Ctrl+C`. If the terminal was closed or the
 Compose display was detached, use `make down`.
+
+## Random full-course layouts
+
+From `simulation/`, generate a preview without starting or replacing any runtime:
+
+```bash
+make random-course SEED=45
+```
+
+Open the printed `preview.html` path in your browser. It shows the full course
+with north up and offers the GPS observations download. In the GCS, import
+`simulation/logs/random-courses/moderate-seed-45/observations.json`, review the map,
+then **Compile course → Confirm tasks**. All 29 objects are retained, with colors
+and classifications but shuffled opaque IDs and no task labels or assignments.
+The import is synthetic, with unverified survey age and no execution authority.
+
+Change the seed for another repeatable layout, or choose a variation level:
+
+```bash
+make random-course SEED=46 VARIATION=mild
+make random-course SEED=47 VARIATION=strong CHECK=1
+make random-course SEED=48 VARIATION=moderate ROTATION=73
+```
+
+`CHECK=1` also writes `compile-check.json`: unhinted compiler output, the rank
+of the intended joint interpretation and per-task ranks, and search limits.
+A missing rank means the intended assignment was absent from the returned set;
+it does not prove an impossible layout. Truncated searches do not establish
+uniqueness or optimality. The generator does not consult the compiler when
+accepting a layout. Separate `truth.json` is for evaluation only.
+
+The same seed, variation, source and generator version reproduce the layout.
+Generated bundles refuse to overwrite an existing directory; use another seed
+or `python3 scripts/generate_course.py --seed 45 --output logs/random-courses/repeat-45`
+to regenerate it separately. The manifest records the source hash, generation
+version, accepted sample, rotation and variation parameters. `world.sdf` and
+`manifest.json` describe the matching rendered collision geometry; they are not
+an active, aligned simulator export.
+
+To run the matching course in Gazebo, stop your current simulation first, then:
+
+```bash
+SCENARIO=competition COURSE_SEED=45 COURSE_VARIATION=moderate WATER=calm make run
+```
+
+Add `COURSE_ROTATION_DEG=73` only when the preview used `ROTATION=73`.
+Otherwise rotation is sampled across 0–360 degrees from the seed. The boat
+stays at world (0,0), heading west; its starting heading is independent of course
+rotation. Existing cameras, dynamics, firmware parameters, geographic reference
+and MAVLink ports are unchanged. The default launch without `COURSE_SEED` is
+still the fixed competition map. Do not combine `COURSE_SEED` with `BUOY_SEED`.
+Actual movement testing uses the normal active-scene alignment/export workflow;
+do not substitute the preview's synthetic observations for verified scene identity.
+
+Variation bounds are exploratory development assumptions, not competition rules,
+placement tolerances or measured GPS accuracy:
+
+| Variation | Nominal centreline spacing / channel width variation | Local bend per step | Lateral / along-edge stagger | Gate skew | Connection angle deviation |
+| --- | --- | --- | --- | --- | --- |
+| mild | ±10% | ±5° | ±0.4 m | ±8° | ±15° |
+| moderate | ±20% | ±10° | ±0.9 m | ±18° | ±30° |
+| strong | ±30% | ±18° | ±1.5 m | ±30° | ±50° |
+
+Slalom steps and channel sections start from 30 ft; channel widths from 40 ft.
+Each gate independently varies the simulator's provisional 4 m width by the
+same percentage; this is not a compiler requirement. Stagger can change final
+measured distances beyond the centreline sampling percentage. The channel turns
+independently relative to the final slalom heading, rather than requiring a
+right angle. Towers follow their local channel edges. Other tasks remain rigid
+groups attached to the channel exit, and all prop yaw angles/footprints and
+station annotations rotate with the scene.
+
+Whole samples are rejected for crossing/degenerate geometry, physical surface
+separation below 0.5 m, objects within a 1.5 m spawn envelope plus that separation,
+or object centres outside a 120 m radius. Generation tries at most 100 samples
+and fails explicitly. These geometric checks do not establish a feasible route
+at your selected buffer or dynamic whole-hull clearance. No route, approval,
+vehicle command, missing detection or survey error is generated. For observation
+error experiments, use the separate survey-error tooling below against fixed
+simulator truth.
 
 ## Prove autonomous movement
 

@@ -1285,3 +1285,32 @@ objects. The prior tab is retained; a separate preview shows the simpler flow.
 This presentation change adds no new route or movement acceptance. Evidence is
 `ux-frontend-tests.log`, `ux-frontend-build.log`, `ux-cleanup.png`, `ux-review.png`,
 `ux-final-dom.txt` and `ux-layout.json` in the same ignored evidence directory.
+
+#### Seeded full-course layout testing (2026-11-08)
+
+`simulation/` now offers `make random-course SEED=45` for repeatable full-course
+preview bundles and `SCENARIO=competition COURSE_SEED=45 make run` for matching
+Gazebo geometry. Mild/moderate/strong development bounds vary rotation, local
+spacing/bends/stagger, gate skew/width, channel widths and connection angle.
+All 23 buoys and six props remain, with rotated footprints/stations. Samples
+with overlap, insufficient surface/spawn separation or invalid progression are
+rejected within 100 attempts. The boat spawn/heading, fixed default course,
+source pins, parameters, dynamics, calibration and MAVLink ports are preserved.
+
+Generated GPS observations have shuffled opaque IDs, colors/types and no task
+assignments; separate truth is used only for optional `CHECK=1` recognition
+evaluation. Bundles record generator version/source hash and refuse overwrite.
+See [random course testing](../simulation/docs/USING_THE_SIM.md#random-full-course-layouts)
+for commands, bounds and the distinction from fixed-truth survey-error tests.
+
+Simulator `make validate` passed, including Gazebo SDF validation for a strong
+random course. Nine generator tests cover 90 full-course layouts across presets,
+physical/role geometry, source preservation, arbitrary rotation, shuffled
+observations, rendered/exported footprints, deterministic CLI-to-launch replay,
+overwrite refusal and unhinted recognition. All nine existing compiler
+regressions also pass. Chrome imported seed 43 / strong / 73 degrees on isolated
+8083 and showed all three tasks in the intended first interpretation, with
+review still required and no console errors. The prior operator tab and running
+simulator were retained. No new motion or physical-boat acceptance is claimed.
+Raw logs, generated examples, DOM and screenshot are under ignored
+`simulation/logs/random-courses/`.

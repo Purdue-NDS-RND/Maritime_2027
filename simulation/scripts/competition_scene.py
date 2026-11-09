@@ -1,4 +1,4 @@
-"""Fixed competition props. Dimensions are estimates recorded in competition.json."""
+"""Competition collision props; source dimensions are simulator estimates."""
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -11,6 +11,10 @@ COLOURS = {'red':'0.85 0.02 0.02 1', 'green':'0.02 0.8 0.1 1',
 
 
 def render_objects(world, config, buoys):
+    generated = 'generation' in config
+    if generated:
+        from random_course import validate_layout
+        validate_layout(config)
     objects = []
     for item in [*buoys, *config['props']]:
         pose = item.get('resolved_pose', item.get('pose'))
@@ -21,7 +25,7 @@ def render_objects(world, config, buoys):
             raise SystemExit('Invalid competition pose')
         if item['category'] not in COLOURS:
             raise SystemExit('Invalid competition colour')
-        if not (-80 <= pose['x'] <= 12 and -28 <= pose['y'] <= 5):
+        if not generated and not (-80 <= pose['x'] <= 12 and -28 <= pose['y'] <= 5):
             raise SystemExit('Competition object outside approved course bounds: ' + name)
         kind = item.get('kind', 'buoy')
         model = ET.SubElement(world, 'model', name=name)

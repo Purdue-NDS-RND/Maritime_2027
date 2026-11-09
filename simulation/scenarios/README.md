@@ -32,6 +32,14 @@ These are fixed scene props, including a striped Zebra buoy; they do not use
 the regression ArUco buoy tracking plugin. Cameras and boat dynamics are unchanged.
 Competition bounds are checked separately; legacy scene bounds remain unchanged.
 
+For seeded rotation, uneven spacing, curved progression, skewed gates and
+independent channel angles, use `make random-course SEED=45` to preview, then
+`SCENARIO=competition COURSE_SEED=45 make run` for matching geometry. See
+[random full-course layouts](../docs/USING_THE_SIM.md#random-full-course-layouts)
+for variation levels, constraints and import instructions. This changes physical
+scene layout; `BUOY_SEED` remains the legacy jitter control. Fixed competition
+and small slalom regression layouts stay unchanged by default.
+
 Snapshots and active-scene checks include all 23 buoys and six physical props.
 Competition exports use object-map version 2: buoy records, circle/polygon
 obstacle footprints derived from actual collision primitives, station annotations,
