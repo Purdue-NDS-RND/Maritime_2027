@@ -8,11 +8,12 @@ import unittest
 from test_competition_run import CompetitionRunTests
 from gcs.app.run_builder import generate_run
 from gcs.app.sessions import SessionWorkspace
-from shared.run_builder import relationships, validate_run
+from shared.run_builder import validate_run
 
 
 def fixture():
     m, old, gps = CompetitionRunTests().fixture()
+    old['task_setup']['slalom']['passages'] = old['task_setup']['slalom']['passages'][1:]
     settings = {**old['settings'], 'tower_avoidance': {'hard_m': .5, 'soft_m': .5, 'strength': 0, 'overrides': {}}}
     run = {'planning_mode': 'run', 'steps': [{'id': t, 'type': t, 'setup': s} for t,s in old['task_setup'].items()],
            'settings': settings, 'planning_area': old['planning_area'], 'start': old['start'], 'sizes_confirmed': True,
@@ -43,21 +44,42 @@ class RunBuilderTests(unittest.TestCase):
                 if b['type'] == 'manual':
                     self.assertEqual(out['waypoints'][b['waypoint_start']:b['waypoint_end']],setups['manual']['waypoints'])
 
-    def test_sharing_is_adjacent_confirmed_and_bound_to_instances(self):
+    def test_gate_and_slalom_are_separate_blocks_without_a_return_crossing(self):
         m,r,_ = fixture()
-        relation = relationships(m,r)[0]
-        r['shared_crossings'] = [{k:relation[k] for k in ('gate_id','slalom_id','signature')}]
+        r['steps'] = r['steps'][:2]
         result = generate_run(m,r,max_seconds=15)
         self.assertTrue(result['success'], result)
-        self.assertEqual(result['draft']['blocks'][0]['instances'], ['gate','slalom'])
-        for mutation in ('reorder','edit','duplicate'):
-            d = deepcopy(r)
-            if mutation == 'reorder': d['steps'] = list(reversed(d['steps']))
-            if mutation == 'edit': d['steps'][0]['setup']['finish']['latitude'] += .00001
-            if mutation == 'duplicate': d['steps'][0]['id'] = 'new-gate'
-            self.assertFalse(generate_run(m,d)['success'])
-        r['steps'][0]['setup']['direction'] = [-1,0]
-        self.assertFalse(generate_run(m,r)['success'])
+        out = result['draft']
+        self.assertEqual([b['instances'] for b in out['blocks']], [['gate'], ['slalom']])
+        self.assertTrue(validate_run(m,out)['valid'])
+        from shared.geometry import to_local
+        slalom = out['blocks'][1]
+        points = out['waypoints'][slalom['waypoint_start']-1:slalom['waypoint_end']]
+        self.assertTrue(all(to_local(p,m['geographic_reference'])[0] > 0 for p in points))
+        # Old shared-crossing requests and merged blocks cannot skip Gate.
+        d = deepcopy(r);d['shared_crossings'] = [{'gate_id':'gate','slalom_id':'slalom','signature':'old'}]
+        self.assertFalse(generate_run(m,d)['success'])
+        d = deepcopy(out);d['blocks'][0]['instances'] = ['gate','slalom']
+        self.assertFalse(validate_run(m,d)['valid'])
+
+    def test_standalone_slalom_keeps_every_turn_and_exit_but_no_starting_gate(self):
+        m,r,gps = fixture()
+        r['steps'] = [r['steps'][1]]
+        r['start'] = gps(4,0)
+        result = generate_run(m,r,max_seconds=15)
+        self.assertTrue(result['success'],result)
+        out = result['draft']
+        self.assertTrue(validate_run(m,out)['valid'])
+        self.assertEqual([b['instances'] for b in out['blocks']], [['slalom']])
+        self.assertEqual([p['id'] for p in out['steps'][0]['setup']['passages']], ['turn','exit'])
+        broken = deepcopy(out)
+        # A route stopping before the exit must still fail course validation.
+        broken['waypoints'][-1] = gps(12,0)
+        self.assertFalse(validate_run(m,broken)['valid'])
+        r['steps'][0]['setup']['passages'].insert(0,{'id':'entrance','kind':'gate','red':'a','green':'b'})
+        stale = generate_run(m,r)
+        self.assertFalse(stale['success'])
+        self.assertIn('separate Gate card',stale['diagnostics'][0])
 
     def test_deadline_blocked_joins_overflow_duplicate_ids_and_no_partial(self):
         m,r,gps = fixture()

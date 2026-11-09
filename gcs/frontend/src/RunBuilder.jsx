@@ -7,11 +7,11 @@ import BoundaryControls from './BoundaryControls';
 export function moveStep(steps,from,to){const next=[...steps];const [step]=next.splice(from,1);next.splice(to,0,step);return next;}
 export function duplicateStep(step,id){return {id,type:step.type,setup:structuredClone(step.setup)};}
 export default function RunBuilder({workspace,draft,edit,selectedCard,onSelect,setMode,load,save,run,notify,busy,stale,onGenerated,changeWorkspace,setStep,invalidateRoute,selected,setSelected,updateSettings,showMap,sequenceHost,onPassageSelected,focusedPassage}) {
-    const [drag,setDrag]=useState(null),[relations,setRelations]=useState([]);
+    const [drag,setDrag]=useState(null);
     const card=valuesCard(draft,selectedCard);
     const cardIndex=(draft.steps||[]).findIndex(s=>s.id===selectedCard);
     const values=draft.steps||[];
-    function update(changes){invalidateRoute();setRelations([]);edit({...draft,...changes,shared_crossings:changes.shared_crossings||[],waypoints:[],generation_identity:null});}
+    function update(changes){invalidateRoute();edit({...draft,...changes,shared_crossings:[],waypoints:[],generation_identity:null});}
     function updateCard(id,next){update({steps:values.map(s=>s.id===id?{...s,setup:next}:s)});}
     async function add(type){await run(async()=>{
         let setup={waypoints:[],course_confirmed:false,finish_radius_m:1};
@@ -48,8 +48,6 @@ export default function RunBuilder({workspace,draft,edit,selectedCard,onSelect,s
             </div><label className="manual-review inline-check"><input type="checkbox" checked={!!card.setup.course_confirmed} disabled={!card.setup.waypoints?.length} onChange={e=>updateCard(card.id,{...card.setup,course_confirmed:e.target.checked})}/>I reviewed these ordered manual waypoints</label>
         </>:<TaskEditor key={card.id} {...{workspace,setMode,load,save,run,notify,showMap,onPassageSelected,focusedPassage}} instanceId={card.id} draft={{...card.setup,...draft.settings,planner_task:card.type,planning_area:draft.planning_area,sizes_confirmed:draft.sizes_confirmed}} edit={next=>updateCard(card.id,next)}/>}
       </>:<div className="empty-state"><span aria-hidden="true">⌖</span><h3>Select a task</h3><p>Select a task in your sequence to edit assignments, direction and endpoints here.</p></div>}
-      <div className="shared-crossing-controls">{values.some((s,i)=>s.type==='gate'&&values[i+1]?.type==='slalom')&&<button onClick={()=>run(async()=>{await save();setRelations(await load('run/relationship','POST'));})}>Review adjacent shared crossings</button>}
-      {relations.map(r=><label className="check-card" key={r.gate_id}><input type="checkbox" disabled={!r.compatible} checked={!!draft.shared_crossings?.some(c=>c.signature===r.signature&&c.gate_id===r.gate_id)} onChange={e=>{const next=(draft.shared_crossings||[]).filter(c=>c.gate_id!==r.gate_id);if(e.target.checked)next.push({gate_id:r.gate_id,slalom_id:r.slalom_id,signature:r.signature});edit({...draft,shared_crossings:next,waypoints:[]});invalidateRoute();}}/>Gate {r.gate_id.slice(0,8)} → Slalom {r.slalom_id.slice(0,8)}: {r.reason}. Confirm one shared crossing.</label>)}</div>
       </section></div>
       <section className="run-generation" aria-label="Generate complete run">
       <div className="generation-heading"><strong>Ready for route review?</strong><span>{values.filter(s=>s.setup.course_confirmed).length} of {values.length} tasks reviewed · {draft.settings.speed_m_s} m/s · {draft.settings.clearance_m} m required clearance</span></div>

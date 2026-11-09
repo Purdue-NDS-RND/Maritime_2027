@@ -16,7 +16,6 @@ export function courseOverlay(map,tasks){
         lines.push({task,kind:'travel',points:[ll(from),ll(to)]},{task,kind:'arrow',points:[at(-1,1),at(1),at(-1,-1)]});
     }
     for(const [task,roles] of Object.entries(tasks||{})){
-        if(task==='gate'&&tasks.slalom)continue;
         function pair(red,green,label){
             const a=observations[roles[red]],b=observations[roles[green]];
             if(!a||!b)return null;
@@ -28,14 +27,15 @@ export function courseOverlay(map,tasks){
             for(const colour of ['red','green'])lines.push({task,kind:'chain',points:[1,2,3].map(i=>ll(observations[roles[`channel.${colour}.${i}`]]))});
             for(let i=1;i<=3;i++)anchors.push(pair(`channel.red.${i}`,`channel.green.${i}`,`Channel ${i}`));
         }else{
-            anchors.push(pair('slalom.entrance.red','slalom.entrance.green','Starting gate / Slalom entrance'));
             if(task==='slalom'){
                 for(let i=1;i<=4;i++){
                     const p=observations[roles[`slalom.turn.${i}`]];anchors.push(p);
                     labels.push({task,position:ll(p),text:String(i)});
                 }
                 anchors.push(pair('slalom.exit.red','slalom.exit.green','Slalom exit'));
-            }else if(anchors[0]){
+            }else{
+                anchors.push(pair('slalom.entrance.red','slalom.entrance.green','Starting gate'));
+                if(!anchors[0])continue;
                 const a=local(observations[roles['slalom.entrance.red']],ref),b=local(observations[roles['slalom.entrance.green']],ref),m=local(anchors[0],ref),length=Math.hypot(b[0]-a[0],b[1]-a[1]),d=[(b[1]-a[1])/length,-(b[0]-a[0])/length];
                 arrow(observation(gps(m.map((v,i)=>v-3*d[i]),ref)),observation(gps(m.map((v,i)=>v+3*d[i]),ref)),task);
             }

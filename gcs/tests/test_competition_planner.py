@@ -25,7 +25,8 @@ class CompetitionPlannerTests(unittest.TestCase):
         channel=prepare_task(self.map,'channel')['draft']
         for actual,expected in [(gate['direction'],[-1,0]),(slalom['direction'],[-1,0]),(channel['direction'],[0,-1])]:
             for value,target in zip(actual,expected):self.assertAlmostEqual(value,target,places=8)
-        self.assertEqual(len(slalom['passages']),6)
+        self.assertEqual(len(slalom['passages']),5)
+        self.assertEqual(slalom['passages'][0]['buoy'],'dodge_turn_1')
         self.assertTrue(all(p.get('side') in ('left','right') for p in slalom['passages'] if p['kind']=='turn'))
         self.assertFalse(gate['course_confirmed'])
         self.assertEqual(set(channel['channel_chains']),{'left','right'})

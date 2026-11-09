@@ -6,7 +6,6 @@ import math
 from .geometry import to_local, finite, segment_distance
 from .clearance import validate_route
 from .task_geometry import resolve_geometry
-from .competition import shared_gate
 
 INPUTS = ('steps', 'settings', 'planning_area', 'start', 'attempt', 'sizes_confirmed', 'shared_crossings', 'execution_budget_s')
 SETUP_FIELDS = ('passages', 'direction', 'channel', 'channel_chains', 'connection_override', 'finish', 'finish_radius_m', 'entry_radius_m', 'exit_radius_m', 'course_confirmed')
@@ -29,6 +28,8 @@ def steps(run):
         raise ValueError('Every card needs a unique instance ID')
     if any(s['type'] not in ('gate', 'slalom', 'channel', 'manual') for s in values):
         raise ValueError('Unsupported card type')
+    if run.get('shared_crossings'):
+        raise ValueError('Gate and Slalom are separate tasks. Clear shared crossings and Generate again')
     return values
 
 
@@ -44,34 +45,10 @@ def task_input(run, step, start, final):
             raise ValueError('Manual card '+step['id']+' needs ordered waypoints')
         setup['finish'] = deepcopy(setup['waypoints'][-1])
     else:
+        if step['type'] == 'slalom' and (setup.get('passages') or [{}])[0].get('kind') == 'gate':
+            raise ValueError('Slalom starts at the first turn. Move the starting gate to a separate Gate card and review again')
         setup.update(planner_task=step['type'], geometry_version=2, require_full_entrance=True)
     return setup
-
-
-def relationships(object_map, run):
-    result = []
-    values = steps(run)
-    for a, b in zip(values, values[1:]):
-        if (a['type'], b['type']) != ('gate', 'slalom'):
-            continue
-        legacy = {'selected_tasks': ['gate', 'slalom'], 'task_setup': {'gate': a['setup'], 'slalom': b['setup']},
-                  **{k: run[k] for k in ('start', 'attempt', 'settings', 'planning_area')}}
-        relation = shared_gate(object_map, legacy)
-        signature = digest({'map': object_map, 'steps': values, 'settings': run['settings'], 'boundary': run['planning_area']})
-        result.append({**relation, 'gate_id': a['id'], 'slalom_id': b['id'], 'signature': signature})
-    return result
-
-
-def confirmed_pairs(object_map, run):
-    confirmations = run.get('shared_crossings', [])
-    available = relationships(object_map, run)
-    result = {}
-    for confirmation in confirmations:
-        match = next((r for r in available if r['compatible'] and all(r[k] == confirmation.get(k) for k in ('gate_id', 'slalom_id', 'signature'))), None)
-        if not match:
-            raise ValueError('Shared crossing changed: review and confirm these adjacent instances again')
-        result[match['gate_id']] = match['slalom_id']
-    return result
 
 
 def validate_run(object_map, run, actual_start=None):
@@ -80,7 +57,6 @@ def validate_run(object_map, run, actual_start=None):
         values = steps(run)
         if not run.get('sizes_confirmed') or any(not s['setup'].get('course_confirmed') for s in values):
             raise ValueError('Review the map and every complete card before generation')
-        pairs = confirmed_pairs(object_map, run)
         if run.get('generation_identity') != identity(object_map, run):
             raise ValueError('Run inputs changed: Generate and approve a fresh complete run')
         if not run.get('attempt', {}).get('captured_at') or run['attempt'].get('start_snapshot') != run['start']:
@@ -91,7 +67,7 @@ def validate_run(object_map, run, actual_start=None):
             raise ValueError('Execution budget must be within 10..7200 seconds')
         if any(run.get(k) != v for k,v in run['settings'].items()):
             raise ValueError('Flattened run settings differ from shared settings')
-        expected = [s for s in values if s['id'] not in pairs]
+        expected = values
         blocks = run.get('blocks', [])
         if [b['instance_id'] for b in blocks] != [s['id'] for s in expected]:
             raise ValueError('Run must contain every ordered card instance')
@@ -102,8 +78,7 @@ def validate_run(object_map, run, actual_start=None):
         for i, (block, step) in enumerate(zip(blocks, expected)):
             lo, hi = block['waypoint_start'], block['waypoint_end']
             final = i == len(blocks)-1
-            shared = [k for k, v in pairs.items() if v == step['id']]
-            if lo != cursor or not lo < hi <= len(points) or block['type'] != step['type'] or block['instances'] != [*shared, step['id']] or block['stopped_finish'] != final:
+            if lo != cursor or not lo < hi <= len(points) or block['type'] != step['type'] or block['instances'] != [step['id']] or block['stopped_finish'] != final:
                 raise ValueError('Invalid instance ranges or stopped-finish metadata')
             start = run['start'] if lo == 0 else points[lo-1]
             d = task_input(run, step, start, final)

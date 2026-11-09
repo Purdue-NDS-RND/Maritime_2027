@@ -26,7 +26,7 @@ from .run_builder import generate_run
 from .telemetry import Telemetry
 from .connections import Connections
 from shared.clearance import validate_route
-from shared.run_builder import digest, relationships, task_input, validate_run
+from shared.run_builder import digest, task_input, validate_run
 from shared.task_geometry import resolve_geometry
 
 GCS_SESSION_ID = str(uuid.uuid4())
@@ -174,12 +174,6 @@ def geometry(request: IncomingRequest, data: dict):
     d = checked(task_input, state['run_draft'], step, state['run_draft']['start'], True)
     resolved = checked(resolve_geometry, state['map'], d)
     return {k: resolved[k] for k in ('derived_sections', 'channel') if k in resolved}
-
-
-@app.post('/api/run/relationship')
-def run_relationship(request: IncomingRequest):
-    state = session(request).read()
-    return checked(relationships, state['map'], state['run_draft'])
 
 
 @app.post('/api/generate')

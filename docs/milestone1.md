@@ -1336,6 +1336,44 @@ rebuilds from current source using Docker's cache. Boat/simulator containers wer
 not restarted, and this deployment sent no boat commands. Build/start logs and
 the connected-browser screenshot are in the same ignored evidence directory.
 
+#### Separate starting Gate and Slalom tasks (2026-11-09)
+
+The starting pair now belongs only to Gate. Slalom suggestions contain four
+turns and the exit gate, and Slalom can run on its own. Add Gate then Slalom to
+include both in a combined run; each produces a separate block without a shared
+crossing or required return through the starting gate. Map previews and object
+lists reflect this split. Recognition retains its existing reference roles and
+saved course format. Legacy Slalom cards beginning with a gate and requests to
+merge shared crossings require correction and renewed review.
+
+All 134 backend/API tests, frontend workflow/render checks, production build and
+whitespace checks passed. Full competition-map planning covers labeled and
+compiled assignments at an explicitly selected 1.5 m required/preferred buffer,
+with distinct Gate/Slalom blocks and no return across the starting gate. A
+focused final full-map check also passed. Standalone Slalom and Gate → Slalom
+both reach Generate → Validate through the session API. Default clearance is
+unchanged.
+
+Follow-up validation exercised the current branch through a real headless Chrome
+session on isolated localhost:8085. The normal Map → Configure → Build run flow
+compiled and confirmed the full map, reviewed Gate then Slalom, and generated
+and validated a **15-waypoint / 64.06 m** route with separate blocks. Removing
+Gate in the builder produced a valid standalone **15-waypoint / 63.88 m** Slalom
+from the same manual start. Chrome recorded zero JavaScript exceptions.
+A real HTTP check starting at Gate's finish produced a valid standalone
+**14-waypoint / 48.84 m** Slalom; every route point stayed at least **4.5 m**
+beyond the starting-gate plane. These runs explicitly selected 0.5 m/s and
+1.5 m required/preferred clearance. A 2.1 m required buffer was correctly
+rejected at the 4 m exit opening without reducing clearance or retaining an
+executable route. A legacy Slalom setup still containing the starting gate was
+also rejected with correction instructions.
+
+Browser requests and server logs were audited for vehicle commands; no approval,
+upload or start occurred. The isolated browser/server were stopped after the
+checks. These establish browser/planning behavior, without new movement or
+physical-boat acceptance; the normal localhost:8080 GCS was not replaced.
+Raw evidence is under ignored `simulation/logs/separate-gate-slalom/`.
+
 #### Seeded full-course layout testing (2026-11-08)
 
 `simulation/` now offers `make random-course SEED=45` for repeatable full-course

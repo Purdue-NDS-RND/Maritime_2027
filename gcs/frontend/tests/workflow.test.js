@@ -14,6 +14,11 @@ test('channel finish suggestion is beyond the last actual pair, with settings re
 });
 test('competition directions have useful labels',()=>{assert.equal(heading([-1,0]),'West · 270°');assert.equal(heading([0,-1]),'South · 180°');});
 test('setup checklist explains what is absent',()=>{assert.deepEqual(missingSetup({planner_task:'channel',finish:{}}),['Task entry','Task exit','Travel direction','Planning boundary','Channel boundary']);});
+test('slalom rejects a legacy starting gate and accepts turns followed by the exit',()=>{
+ const draft={planner_task:'slalom',geometry_version:2,finish:{},direction:[1,0],planning_area:[{},{},{}],passages:[{kind:'turn',side:'left'},{kind:'gate'}]};
+ assert.deepEqual(missingSetup(draft),[]);
+ assert.deepEqual(missingSetup({...draft,passages:[{kind:'gate'},...draft.passages]}),['Move the starting gate to a separate Gate task']);
+});
 test('gate opening warning explains blocked opening and clears for feasible setting',()=>{
  const d={passages:[{kind:'gate',red:'dodge_gate_a_red',green:'dodge_gate_a_green'}],clearance_m:2.1};
  assert.match(gateWarnings(map,d)[0],/4.00 m.*4.20 m/);

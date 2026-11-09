@@ -44,6 +44,15 @@ const gateHtml=renderToStaticMarkup(<Planner {...props} step={3} selectedCard="g
 assert.match(gateHtml,/Gate 1 · show pair on map/);assert.match(gateHtml,/Replace first buoy/);assert.match(gateHtml,/Replace second buoy/);
 
 const roles={slalom:{'slalom.entrance.red':'dodge_gate_a_red','slalom.entrance.green':'dodge_gate_a_green','slalom.turn.1':'dodge_turn_1','slalom.turn.2':'dodge_turn_2','slalom.turn.3':'dodge_turn_3','slalom.turn.4':'dodge_turn_4','slalom.exit.red':'dodge_gate_b_red','slalom.exit.green':'dodge_gate_b_green'},channel:Object.fromEntries(['red','green'].flatMap((c)=>[1,2,3].map(i=>[`channel.${c}.${i}`,`evade_${c==='red'?'left':'right'}_${i-1}`])))};
+const gateRoles=Object.fromEntries(Object.entries(roles.slalom).slice(0,2));
+const splitOverlay=courseOverlay(map,{gate:gateRoles,slalom:roles.slalom});
+assert.equal(splitOverlay.lines.filter(l=>l.task==='gate'&&l.kind==='gate').length,1);
+assert.equal(splitOverlay.lines.filter(l=>l.task==='slalom'&&l.kind==='gate').length,1);
+assert.ok(!courseOverlay(map,{slalom:roles.slalom}).lines.some(l=>l.label==='Starting gate'));
+const splitCards=[{id:'g',type:'gate',setup:{geometry_version:2,passages:[{id:'start',kind:'gate',red:'dodge_gate_a_red',green:'dodge_gate_a_green'}]}},{id:'s',type:'slalom',setup:{geometry_version:2,passages:[{id:'turn',kind:'turn',buoy:'dodge_turn_1',side:'left'},{id:'exit',kind:'gate',red:'dodge_gate_b_red',green:'dodge_gate_b_green'}]}}];
+const splitHtml=renderToStaticMarkup(<Planner {...props} step={3} selectedCard="s" draft={{...draft,steps:splitCards}}/>);
+assert.match(splitHtml,/run Slalom on its own/);
+assert.doesNotMatch(splitHtml,/Review adjacent shared crossings|Dodge Gate A Red \/ Dodge Gate A Green/);
 for(const tasks of [roles,{gate:Object.fromEntries(Object.entries(roles.slalom).slice(0,2))}]){
  const geometry=courseOverlay(map,tasks);assert.ok(geometry.lines.some(l=>l.kind==='arrow'));
  for(const p of [...geometry.lines.flatMap(l=>l.points),...geometry.labels.map(l=>l.position)])assert.ok(p.length===2&&p.every(Number.isFinite));

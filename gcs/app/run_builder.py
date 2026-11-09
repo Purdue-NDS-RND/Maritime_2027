@@ -3,7 +3,7 @@ from copy import deepcopy
 import math
 import time
 from shared.geometry import to_local
-from shared.run_builder import steps, task_input, confirmed_pairs, identity, validate_run
+from shared.run_builder import steps, task_input, identity, validate_run
 from .attempts import capture_start
 from .planner import generate
 from .settings import defaults, effective_settings, validate_settings
@@ -27,12 +27,9 @@ def generate_run(object_map, run, status=None, max_seconds=60):
             raise ValueError('Review the map and every complete card before generation')
         if run['attempt']['mode'] != 'full':
             raise ValueError('Cards require complete tasks')
-        pairs = confirmed_pairs(object_map, run)
         run.update(waypoints=[], blocks=[], route_sections=[])
         for i, step in enumerate(values):
             current = step['id']
-            if current in pairs:
-                continue
             if time.monotonic() >= deadline:
                 raise TimeoutError('Run generation time limit reached; no partial route published')
             final = i == len(values)-1
@@ -49,7 +46,7 @@ def generate_run(object_map, run, status=None, max_seconds=60):
             run['waypoints'].extend(d['waypoints'])
             if len(run['waypoints']) > 500:
                 raise ValueError('Run exceeds the 500-waypoint boat limit')
-            run['blocks'].append({'instance_id': current, 'type': step['type'], 'instances': [*[k for k,v in pairs.items() if v == current], current],
+            run['blocks'].append({'instance_id': current, 'type': step['type'], 'instances': [current],
                                   'waypoint_start': lo, 'waypoint_end': len(run['waypoints']), 'attempt': d['attempt'], 'stopped_finish': final})
             route = [start, *d['waypoints']]
             sections = d.get('route_sections') if step['type'] != 'manual' else None
