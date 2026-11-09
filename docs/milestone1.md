@@ -1286,6 +1286,36 @@ This presentation change adds no new route or movement acceptance. Evidence is
 `ux-frontend-tests.log`, `ux-frontend-build.log`, `ux-cleanup.png`, `ux-review.png`,
 `ux-final-dom.txt` and `ux-layout.json` in the same ignored evidence directory.
 
+#### Automatic common planning boundary (2026-11-09)
+
+Map import/load now suggests a four-corner boundary fitted to the entire course's
+orientation, with 10 m editable padding on all sides. It encloses observations,
+native physical footprints, stations and a known start; Map confirmation reviews
+that outline alongside the detections. Map and Configure offer regeneration,
+corner dragging, manual replacement and undo. Invalid outlines block map/config
+continuation; outlying positions/endpoints are flagged. Reviewed boundaries stay
+fixed as telemetry/tasks change, and edits revoke route/sharing authority.
+
+All 131 existing backend/API tests passed, as did frontend geometry/render tests,
+the production build and whitespace checks. Geometry fixtures cover rotated,
+translated, sparse, collinear, repeated and outlying points, the full competition
+map at multiple angles, native obstacle surfaces and invalid manual polygons.
+Chrome on an isolated localhost:8084 preview checked full-map loading, padding,
+corner dragging and carryover to Configure, then imported the full map rotated
+37 degrees. Its automatic boundary supported compiled Gate setup and Generate
+→ Validate at unchanged 0.5 m/s and 1.8 m required/preferred clearance: one GPS
+waypoint, 15.2 m route. No approval, upload or start was performed. This is map/UI
+and planned-route evidence, with no new movement or physical-water acceptance.
+Raw evidence is under ignored `simulation/logs/planning-boundary/`.
+
+The same version was then built as `maritime-gcs:latest` and deployed to the main
+localhost:8080 GCS. Chrome verified the 29-object map's automatic boundary with
+fresh boat position and connected HOLD/zero-speed status. The running container
+matches the new image. GCS `make run` now uses Compose `up --build`, so startup
+rebuilds from current source using Docker's cache. Boat/simulator containers were
+not restarted, and this deployment sent no boat commands. Build/start logs and
+the connected-browser screenshot are in the same ignored evidence directory.
+
 #### Seeded full-course layout testing (2026-11-08)
 
 `simulation/` now offers `make random-course SEED=45` for repeatable full-course

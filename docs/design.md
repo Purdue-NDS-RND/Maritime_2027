@@ -450,6 +450,18 @@ local directions, order/sides, channel chains, permitted water and endpoints.
 Duplication copies one configuration into a new instance. Partial-task recovery,
 saved presets, setup copying and per-card speeds are outside this workflow.
 
+Map loading now suggests the common planning boundary before map confirmation.
+The GCS projects every mapped object/physical footprint, station annotation and
+known start into the fixed local metric frame, fits a rectangle using the
+observations' convex hull edge orientations, and adds an editable 10 m padding
+on all four sides. Arbitrary course rotation is supported without cardinal
+alignment or inferred task headings. The map-review action confirms the shown
+outline together with the observations. Explicit regeneration, corner dragging
+and manual replacement are available in Map and Configure; the boundary never
+tracks moving telemetry or expands silently for later tasks. A suggestion does
+not establish permitted water or replace reviewed channel chains. Existing
+boundary clearance, route invalidation and execution approval checks still apply.
+
 Generation captures a fresh start and plans each complete task from its preceding
 endpoint. Manual waypoints are retained exactly and all joins checked. One shared
 60-second deadline covers search, simplification and final segment validation;

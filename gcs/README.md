@@ -11,9 +11,13 @@ Planning works offline; execution requires a fresh boat connection.
 From the repository root:
 
 ```bash
-make -C gcs build
 make -C gcs run
 ```
+
+`run` builds the GCS image from the current checkout before starting it, using
+Docker's cache when inputs have not changed. It serves the production frontend
+and backend together, with the normal boat HTTP connection and passive telemetry.
+`make -C gcs build` remains available to build without starting the application.
 
 Open <http://localhost:8080>. Each page starts empty. **New run**, reload, another
 tab and backend restart discard planner maps, assignments, routes, reviews,
@@ -26,6 +30,20 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    object positions and types, apply corrections and confirm the map. Imports
    reset all course-specific inputs and restore shipped settings, even if object
    IDs are reused. Original observations remain available within this session.
+   Loading also suggests a four-corner planning boundary rotated to fit the
+   entire map, with **10 m extra room** on each side. It includes mapped objects,
+   native physical footprints, station annotations and any known start (fresh
+   live position when available). Review this amber outline before **I reviewed
+   the map — continue**; the same action confirms the objects and boundary.
+   **Extra room (m)** and **Regenerate** rebuild it after corrections;
+   **Edit corners** lets you drag numbered corners, and **Draw manually** starts
+   a replacement polygon. **Undo corner** removes its last point. Crossing or
+   collapsed outlines must be corrected before confirming the map.
+   The suggestion cannot infer shorelines or permitted water from observations.
+   Reviewed boundaries stay fixed as the boat moves or tasks change; correcting
+   them revokes the generated route and requires fresh validation/approval.
+   Positions or task endpoints outside the outline are flagged for correction;
+   route validation still checks required room and the complete stopping area.
 2. **Configure:** set shared speed, ordinary required/preferred buffers, tower
    hard/soft zones, common boundary, start source and execution budget. Blue
    panels cover ordinary clearance; purple covers tower avoidance; amber covers
@@ -34,6 +52,9 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    **Speed & clearance / LiDAR towers / Start & limits** categories; selecting a
    tower on the map opens its category. Continue stays pinned below the settings.
    Drawing tools open the map automatically; inputs remain in this page session.
+   The map-reviewed boundary is already populated here. The same boundary tools
+   remain available for corrections. Changing extra room takes effect only on
+   **Regenerate**, which replaces the current outline and fits it in the map.
 3. **Build run:** use the direct **＋ Gate / Slalom / Channel / Manual** buttons.
    The sequence sits above a persistent map (about 60%) and task editor (about
    40%). **Expand map** gives more room to the map while retaining an inspector.

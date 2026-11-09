@@ -367,3 +367,14 @@ main > .feedback { position: relative; display: flex; align-items: center; gap: 
 .guided-tasks details summary {font-size:10px;}
 .guided-tasks article>button {font-size:12px;}
 .guided-tasks details {margin-top:6px;padding-top:5px;border:0;}
+.planning-boundary-controls {border:1px solid #7f704a;border-left:3px solid #d3b96c;padding:10px;margin:12px 0;}
+.boundary-heading {display:flex;justify-content:space-between;gap:8px;font-size:12px;}
+.boundary-heading span {color:var(--muted);font-size:11px;}
+.planning-boundary-controls .hint {font-size:11px;line-height:1.45;margin:7px 0;}
+.boundary-padding {display:flex;align-items:flex-end;gap:8px;margin:8px 0;}
+.boundary-padding label {display:flex;align-items:center;gap:8px;margin:0;font-size:12px;flex:1;}
+.boundary-padding input {width:75px;margin:0;padding:5px;}
+.planning-boundary-controls .button-row {gap:5px;}
+.planning-boundary-controls button {font-size:11px;padding:5px 7px;}
+.planning-boundary-controls details {margin-top:8px;padding-top:6px;}
+.planning-boundary-controls summary {font-size:11px;}

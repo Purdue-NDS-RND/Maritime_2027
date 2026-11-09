@@ -2,6 +2,7 @@ import React,{useState} from 'react';
 import {createPortal} from 'react-dom';
 import TaskEditor from './TaskEditor';
 import {settingsError} from './settings';
+import BoundaryControls from './BoundaryControls';
 
 export function moveStep(steps,from,to){const next=[...steps];const [step]=next.splice(from,1);next.splice(to,0,step);return next;}
 export function duplicateStep(step,id){return {id,type:step.type,setup:structuredClone(step.setup)};}
@@ -14,11 +15,10 @@ export default function RunBuilder({workspace,draft,edit,selectedCard,onSelect,s
     function updateCard(id,next){update({steps:values.map(s=>s.id===id?{...s,setup:next}:s)});}
     async function add(type){await run(async()=>{
         let setup={waypoints:[],course_confirmed:false,finish_radius_m:1};
-        let boundary=draft.planning_area;
+        const boundary=draft.planning_area;
         if(type!=='manual'){
             const proposal=await load('course/prepare','POST',{task:type,settings:{...draft.settings,sizes_confirmed:draft.sizes_confirmed}});
             setup=proposal.draft;
-            if(!boundary?.length&&proposal.recognition_source!=='accepted')boundary=setup.planning_area||[];
             notify(proposal.ready?'Review the suggested assignments for this card.':proposal.diagnostics.join(' '));
         }
         const id=crypto.randomUUID();update({steps:[...values,{id,type,setup}],planning_area:boundary});onSelect(id);
@@ -60,15 +60,16 @@ export default function RunBuilder({workspace,draft,edit,selectedCard,onSelect,s
     </section>;
 }
 
-export function RunConfiguration({draft,edit,invalidateRoute,setMode,stale}) {
+export function RunConfiguration(props) {
+    const {draft,edit,invalidateRoute,setMode,stale}=props;
     function update(changes){invalidateRoute();edit({...draft,...changes,shared_crossings:[],waypoints:[],generation_identity:null});}
     return <section className="config-section navigation-section settings-table"><div className="section-title"><span className="config-dot amber"/><h3>Start, boundary & execution</h3></div>
       <label>Start source<select value={draft.attempt?.start_source||'live'} onChange={e=>update({attempt:{mode:'full',start_source:e.target.value}})}><option value="live">Live boat</option><option value="manual">Manual start (offline)</option></select></label>
       {draft.attempt?.start_source==='manual'&&<button onClick={()=>setMode('start')}>Choose manual start on map</button>}
       <p className="hint">{draft.attempt?.start_source==='manual'?'Manual start is an explicit planning input.':stale?'Live start unavailable: connect the boat or select Manual.':'Live start is captured fresh when generating.'}</p>
       <label>Execution budget (seconds)<input type="number" min="10" max="7200" value={draft.execution_budget_s} onChange={e=>update({execution_budget_s:Number(e.target.value)})}/></label>
-      <div className="boundary-configuration"><strong>Common planning boundary</strong><span>{draft.planning_area?.length||0} corners</span><div className="button-row"><button onClick={()=>setMode('planning_area')}>Add boundary corners</button><button disabled={!draft.planning_area?.length} onClick={()=>update({planning_area:draft.planning_area.slice(0,-1)})}>Undo corner</button><button className="quiet" onClick={()=>update({planning_area:[]})}>Clear boundary</button></div></div>
-      <details className="setting-help"><summary>Start and boundary help</summary><p>Every task uses this boundary and execution budget. Drawing opens the map. Generate captures a new start; edits require fresh generation and approval.</p></details>
+      <BoundaryControls {...props}/>
+      <details className="setting-help"><summary>Start and execution help</summary><p>Every task uses this boundary and execution budget. Generate captures a new start; edits require fresh generation and approval.</p></details>
     </section>;
 }
 export const TASK_STYLE={gate:{title:'Gate',symbol:'⇥',description:'Complete gate passage',color:'#57d6b4'},slalom:{title:'Slalom',symbol:'〰',description:'Ordered turns and passing sides',color:'#efc16a'},channel:{title:'Channel',symbol:'≋',description:'Reviewed permitted water',color:'#68d5ed'},manual:{title:'Manual',symbol:'⌖',description:'Exact ordered waypoints',color:'#a9bbd0'}};
