@@ -86,17 +86,23 @@ subscriber uses doubles in portable tests; no new physical acceptance is claimed
 
 ## Python tooling requirement
 
-The user requires uv exclusively for Python setup and execution. The README uses
-`uv venv --python 3.12`, `uv pip install` against the existing pinned requirements and
-`uv run --no-project --python .venv/bin/python python ...`. No uv project/lockfile
-migration or Jetson compatibility is implied. The pipeline report's command page and
-both Docker build candidates follow this workflow; ROS/Docker runtime remains unexecuted.
+The user requires uv exclusively for project Python setup and execution. Use the
+sourced system Python 3.10/Humble environment with system site packages on the observed
+Jetson host; portable checks also run on Python 3.12. Requirements retain explicit
+version markers and commands use `uv run --no-project --python VENV/bin/python python ...`.
+The user bag demonstrates native capture/ROS source flow. The new source checker,
+full normalized geolocation and container deployment still require native team trials.
 
 ## Readable reports and first bench test
 
 The user-requested [pipeline report](../docs/perception_reports/Maritime_Pipeline_Report.docx)
-and [completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
-are explanatory snapshots pinned to source `999f1ac`, not new acceptance evidence.
+is an explanatory snapshot of the earlier implementation. The updated
+[completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+reviews source `653ce92`, the verified hardware-bag-02 evidence and 198 portable tests.
+It records the exact topic table, Python 3.10 host, new source-check commands and revised
+Student A/Student B/Samuel/HW/SW assignments. Raw-to-normalized state and manual-pixel
+bridging remain open until geometry, timing, origin/quality and uncertainty are verified.
+Document status does not add physical acceptance evidence beyond the stated recordings.
 The [README first-test guide](README.md#first-tests-with-manual-pixels-and-real-recordings)
 shows explicit manual-pixel injection through replay and the inventory/recording needed
 for a stationary planar-grid experiment. Fake origins exercise software only; target
