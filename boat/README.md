@@ -69,10 +69,64 @@ Local file tests do not check map/obstacle clearance. GCS approval uses the
 shared conservative validator before mission transfer. Use a new mission ID for
 each deliberate new attempt; identical IDs are idempotent.
 
-`BOAT_CONNECTION` defaults to `udpin:127.0.0.1:14551`.
-`BOAT_ROS_DOMAIN_ID` defaults to 27 with local discovery. These are local
-development interfaces. The GCS uses the boat-owned HTTP API on localhost:8091;
-physical vehicle networking remains open. See [HTTP command ownership](../docs/boat_execution.md#milestone-1-http-and-command-ownership).
+`BOAT_CONNECTION` defaults to `udpin:127.0.0.1:14551` and `BOAT_BAUD` to
+115200 (pymavlink's previous default; irrelevant for UDP).
+`BOAT_ROS_DOMAIN_ID` defaults to 27 with local discovery. The HTTP API defaults
+to localhost:8091. See [HTTP command ownership](../docs/boat_execution.md#milestone-1-http-and-command-ownership).
+
+## Jetson field connections
+
+The selected field arrangement keeps the boat app on the Jetson. A local
+USB/serial link connects it to the Pixhawk; a separate Pixhawk telemetry port
+can feed the RFD pair for shore map telemetry. Actual port assignments, wiring,
+radio power and serial settings must be checked against the specific hardware.
+The RFD link does not transport the boat app HTTP API. See
+[shore setup](../gcs/README.md#field-connections-rfd-telemetry-and-jetson-mission-api).
+
+On the **Jetson**, from `boat/`:
+
+```bash
+cp field.env.example field.env
+ip -4 address
+ls -l /dev/serial/by-id/
+stat -Lc %g /dev/serial/by-id/YOUR_PIXHAWK
+```
+
+Edit `field.env` with the Jetson's private Wi-Fi/Ethernet IPv4 address in
+`BOAT_HTTP_HOST`, selected HTTP port, stable Pixhawk device path, its numeric
+group and matching serial baud. Use the same address/port in shore
+`GCS_BOAT_URL`. The example address/device are placeholders. For USB access:
+
+```bash
+make ENV_FILE=field.env SERIAL=1 build
+make ENV_FILE=field.env SERIAL=1 run
+```
+
+The override maps only the selected device to `/dev/boat-pixhawk` and grants
+its group to the non-root container. Host drivers remain outside the image.
+After USB replugging, recreate the container to update the mapped device.
+Rebuilding from source on the target Jetson may require platform-specific
+dependencies; this workflow has not yet been qualified on Jetson hardware.
+
+For a local MAVLink forwarder, omit `SERIAL=1` and set `BOAT_CONNECTION` in
+the environment file to its own UDP input. The Jetson app and shore radio
+reader need separate serial devices/forwarded outputs. Do not share a serial
+device or UDP consumer port between processes.
+
+`BOAT_HTTP_HOST` defaults to `127.0.0.1`; selecting a LAN interface explicitly
+enables remote mission commands. This API has no authentication or encryption:
+use an isolated trusted control LAN. Browser-origin requests are rejected, but
+that is not authentication. Stop with the same settings:
+
+```bash
+make ENV_FILE=field.env SERIAL=1 down
+```
+
+Changing settings requires container recreation, not just Docker restart.
+Reconfiguring/restarting the boat app is an execution interruption; do it while
+disarmed and stopped, then review a fresh run. Radio telemetry and network
+availability are separate from vehicle positioning/failsafe behavior. Physical
+link-loss behavior, STOP reachability and whole-boat performance remain unverified.
 
 Mission snapshots and the operation journal live under ignored
 `simulation/logs/boat/`, with progress/events under individual session folders; ROS logs under `simulation/logs/boat/ros/`.

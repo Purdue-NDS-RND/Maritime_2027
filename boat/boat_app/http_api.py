@@ -1,11 +1,11 @@
-"""Loopback development HTTP transport; no MAVLink access on HTTP threads."""
+"""Configurable boat HTTP transport; no MAVLink access on HTTP threads."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
 from urllib.parse import unquote, urlsplit
 
 
-def serve(control, port=8091):
+def serve(control, port=8091, host='127.0.0.1'):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -46,6 +46,6 @@ def serve(control, port=8091):
             except (ValueError, TypeError) as error:
                 self.reply(409, {'detail': str(error)})
         do_GET = do_POST = do_PUT = handle_request
-    server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    server = ThreadingHTTPServer((host, port), Handler)
     threading.Thread(target=server.serve_forever, name='boat-http', daemon=True).start()
     return server

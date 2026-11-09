@@ -95,3 +95,16 @@ class ControlTests(unittest.TestCase):
             self.assertEqual(error.exception.code,403)
         finally:
             server.shutdown();server.server_close()
+
+    def test_explicit_http_interface_and_read_only_status(self):
+        server = serve(self.control, 0, host='127.0.0.2')
+        try:
+            self.assertEqual(server.server_address[0], '127.0.0.2')
+            from urllib.request import build_opener, ProxyHandler
+            opener = build_opener(ProxyHandler({}))
+            with opener.open(f'http://127.0.0.2:{server.server_port}/status') as response:
+                self.assertEqual(json.load(response)['state'], 'ready')
+            self.assertEqual(self.fake.calls, [])
+        finally:
+            server.shutdown()
+            server.server_close()

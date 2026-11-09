@@ -23,12 +23,14 @@ from .course_compiler import compile_course
 from .course_files import load_course, save_course
 from .attempts import capture_start
 from .run_builder import generate_run
-from .telemetry import Telemetry, TelemetryConfig
+from .telemetry import Telemetry
+from .connections import Connections
 from shared.clearance import validate_route
 from shared.run_builder import digest, relationships, task_input, validate_run
 from shared.task_geometry import resolve_geometry
 
 GCS_SESSION_ID = str(uuid.uuid4())
+CONNECTIONS = Connections.from_env()
 sessions = {}
 operations = {}
 registry_lock = threading.RLock()
@@ -36,7 +38,9 @@ registry_lock = threading.RLock()
 
 @asynccontextmanager
 async def lifespan(app):
-    telemetry = Telemetry(TelemetryConfig.from_env())
+    global CONNECTIONS
+    CONNECTIONS = Connections.from_env()
+    telemetry = Telemetry(CONNECTIONS.telemetry)
     app.state.telemetry = telemetry
     telemetry.start()
     try:
@@ -59,13 +63,13 @@ async def same_origin(request: IncomingRequest, call_next):
 
 def boat(path, method='GET', body=None):
     data = None if body is None else json.dumps(body, allow_nan=False).encode()
-    request = Request('http://127.0.0.1:8091'+path, data=data, method=method, headers={'Content-Type': 'application/json'})
+    request = Request(CONNECTIONS.boat_url+path, data=data, method=method, headers={'Content-Type': 'application/json'})
     try:
         with urlopen(request, timeout=5) as response:
             return json.load(response)
     except HTTPError as error:
         raise HTTPException(error.code, json.loads(error.read()).get('detail', 'boat rejected command')) from error
-    except (URLError, TimeoutError) as error:
+    except (URLError, TimeoutError, ConnectionError) as error:
         raise HTTPException(503, 'boat request outcome unknown; query status/operations before retrying start') from error
 
 
@@ -375,6 +379,11 @@ def prepare_return(request: IncomingRequest, data: dict | None = None):
 @app.get('/api/status')
 def status():
     return boat('/status')
+
+
+@app.get('/api/connections')
+def connections():
+    return CONNECTIONS.snapshot()
 
 
 @app.get('/api/telemetry')

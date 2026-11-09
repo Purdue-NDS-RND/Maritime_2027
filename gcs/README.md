@@ -256,6 +256,82 @@ does not establish movement or physical-boat acceptance. See
 
 ## Live map telemetry
 
+### Field connections: RFD telemetry and Jetson mission API
+
+The selected field topology uses two independent links:
+
+```text
+Pixhawk -> boat RFD ~~~ shore RFD -> shore USB -> GCS passive map telemetry
+GCS -> Wi-Fi/Ethernet HTTP -> Jetson boat app -> local MAVLink -> Pixhawk
+```
+
+The radio reader consumes heartbeat, position/heading/speed and GPS fix. It
+sends no commands. Mission upload/start/stop/disarm, operation acknowledgements
+and boat-owned progress use HTTP to the Jetson. Live radio position alone does
+not establish mission readiness. The radio and Jetson links must refer to the
+same Pixhawk; verify system/component IDs in telemetry and boat `/api/status`.
+RFD model, wiring, radio settings, port assignment and physical performance
+remain to be checked on the actual hardware. See the
+[boat field setup](../boat/README.md#jetson-field-connections).
+
+On the **shore computer**, from `gcs/`:
+
+```bash
+cp field.env.example field.env
+ls -l /dev/serial/by-id/
+# Choose the RFD's stable device path; find its group with:
+stat -Lc %g /dev/serial/by-id/YOUR_SHORE_RADIO
+```
+
+Edit `field.env`: set `GCS_BOAT_URL` to the Jetson's private LAN address and
+HTTP port, `GCS_SERIAL_DEVICE` to the shore RFD path, `GCS_SERIAL_GID` to the
+numeric group above, and match the actual radio host baud and Pixhawk IDs.
+The example address and device are placeholders, not discovered hardware.
+Then start the GCS:
+
+```bash
+make ENV_FILE=field.env SERIAL=1 run
+```
+
+Open `http://localhost:8080`, then **Connection details** in the bottom bar.
+It shows the configured mission URL and telemetry device, independent link
+states, serial baud, selected IDs, GPS fix and device-open errors. A reachable
+HTTP API can still report stale vehicle status. Existing fresh boat status
+checks continue to govern execution controls. For a read-only check in another
+shore terminal:
+
+```bash
+curl --fail http://localhost:8080/api/connections
+curl --fail http://localhost:8080/api/status
+curl --fail http://localhost:8080/api/telemetry
+```
+
+Loading the full competition map and planning a route remains available offline.
+These checks and map loading send no vehicle commands. An HTTP receipt is still
+not confirmation of upload/start success; inspect the boat operation result.
+
+Settings apply only at startup. After an edit, use the same `make ... run`
+command to recreate the affected container; a plain Docker restart does not
+reload Compose environment files. The GCS starts with an empty planning session,
+requiring fresh review/approval; it never replays commands on reconnection.
+Stop the field GCS with:
+
+```bash
+make ENV_FILE=field.env SERIAL=1 down
+```
+
+`field.env` is ignored by Git. `ENV_FILE` and `SERIAL=1` also work with `build`;
+the default `make run` retains simulator connections. To use a host radio
+forwarder instead, omit `SERIAL=1` and put its separate UDP input in
+`GCS_MAVLINK_CONNECTION` in the environment file.
+
+The boat HTTP API has no authentication or encryption by default. Use an
+isolated, trusted control LAN and bind the boat to its intended interface;
+do not expose it to a public/shared network. No physical radio, Wi-Fi coverage,
+Jetson image compatibility or real-boat acceptance is implied by configuration.
+
+### Telemetry inputs and freshness
+
 Live map position comes from a separate, passive backend MAVLink reader. By
 default it listens on `udpin:127.0.0.1:14550`, the simulator's existing ground
 station output. UDP 14551 remains owned by the boat application. Close QGC or
@@ -270,6 +346,7 @@ telemetry can work while the boat mission HTTP API is unavailable.
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
 | `GCS_MAVLINK_CONNECTION` | `udpin:127.0.0.1:14550` | UDP input or Linux serial device path |
+| `GCS_BOAT_URL` | `http://127.0.0.1:8091` | Boat HTTP(S) origin; no credentials, path, query or fragment |
 | `GCS_MAVLINK_BAUD` | `57600` | Serial baud; match the radio's configured host baud |
 | `GCS_MAVLINK_SYSTEM_ID` | `1` | Selected ArduPilot vehicle |
 | `GCS_MAVLINK_COMPONENT_ID` | `1` | Selected autopilot component |
@@ -311,8 +388,9 @@ manual end-to-end check without changing route approvals or controller settings.
 
 Tests: `PYTHONPATH=.. python3 -m unittest discover -s tests -v` and
 `cd frontend && npm ci && npm run build`. Container builds use the committed
-npm lockfile. These are development loopback interfaces, not a selected
-physical vehicle networking or authentication design.
+npm lockfile. Loopback remains the development default. The selected private-LAN
+field configuration is documented above; physical networking and authentication
+remain unqualified.
 
 ## Telemetry filtering and recovery
 
@@ -351,8 +429,9 @@ all delayed frames from a restarted source.
 
 The browser timer advances telemetry age and detects silent streams. There is
 no prediction, route snapping or automatic command on reconnect. Radio telemetry
-does not carry the HTTP mission envelope to the onboard Jetson; physical mission
-transport is still undecided. Host serial drivers remain outside the container.
+does not carry the HTTP mission envelope to the onboard Jetson. That uses the
+separate configured Wi-Fi/Ethernet HTTP connection. Physical network operation
+remains unverified. Host serial drivers remain outside the container.
 
 ## Recorded telemetry validation and limits
 

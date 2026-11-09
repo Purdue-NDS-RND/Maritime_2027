@@ -9,6 +9,26 @@ This establishes simulator acceptance; physical-boat performance is unverified.
 See [recorded results](#recorded-simulator-results) below and
 [boat execution](boat_execution.md) for interfaces and fault behavior.
 
+Field connection configuration (2026-11-09) adds a startup-selected Jetson
+HTTP URL, boat IPv4 bind interface/port, serial baud/device overrides and
+separate mission/telemetry connection diagnostics. RFD remains passive map
+telemetry; mission commands/status use private Wi-Fi/Ethernet to the boat app.
+Loopback simulator defaults and boat command ownership are retained. See the
+[GCS field guide](../gcs/README.md#field-connections-rfd-telemetry-and-jetson-mission-api).
+
+All 134 GCS tests and 26 boat tests passed, plus frontend workflow/render checks,
+the production frontend/image builds, isolated packaged-image startup,
+Compose default/serial configuration, Python
+compilation and whitespace checks. An additional ROS wiring check verified
+explicit baud and HTTP interface settings. An isolated real HTTP server and
+pseudo-terminal MAVLink stream demonstrated independent API/telemetry loss and
+recovery, plus import of the full 23-buoy/6-prop competition map. Its request
+audit contained only boat status GETs, with no vehicle commands. Raw evidence is
+under ignored `simulation/logs/deployment-connections/` in the connection worktree.
+Browser automation had no available browser, so live visual/layout validation
+remains outstanding. These are configuration/protocol checks; physical RFD,
+network coverage, Jetson deployment and real-boat behavior remain unverified.
+
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
 GCS until after boat-only development. Boat-only testing remains the first

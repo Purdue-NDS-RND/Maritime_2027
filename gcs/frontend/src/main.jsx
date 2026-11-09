@@ -11,6 +11,7 @@ import Feedback from './Feedback';
 import {freshStatus,operationNotice} from './readiness';
 import {defaultSettings,effectiveSettings,towerZones,routeIsVisible,settingsError} from './settings';
 import BoatControls from './BoatControls';
+import ConnectionDetails from './ConnectionDetails';
 import {configuration,heading,friendly} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 import {api,newSession} from './api';
@@ -59,6 +60,7 @@ function App() {
     const mapChanged=useRef(false), pendingWork=useRef(0);
     const [workspace,setWorkspace]=useState({map:null,draft:null,approval:null});
     const [status,setStatus]=useState(null), [received,setReceived]=useState(0);
+    const [connections,setConnections]=useState(null);
     const [telemetry,setTelemetry]=useState(null), [telemetryReceived,setTelemetryReceived]=useState(0), [now,setNow]=useState(Date.now());
     const boatMarker=useRef();
     const [focusedFailure,setFocusedFailure]=useState(null);
@@ -201,6 +203,14 @@ function App() {
         return()=>{stream.close();clearInterval(timer);};
     },[]);
     const telemetryStale=!telemetry||telemetry.stale||now-telemetryReceived>1500;
+    useEffect(()=>{
+        const controller=new AbortController();
+        fetch('/api/connections',{signal:controller.signal}).then(response=>{
+            if(!response.ok)throw new Error('Connection settings unavailable');
+            return response.json();
+        }).then(setConnections).catch(()=>{if(!controller.signal.aborted)setConnections(null);});
+        return()=>controller.abort();
+    },[telemetry?.gcs_session_id]);
     useEffect(()=>{
         let active=true;
         async function poll(){for(const id of operations){try {const value=await api('operations/'+encodeURIComponent(id));if(active){setResults(r=>({...r,[id]:value}));if(watchedOperations.current.has(id)&&value.command==='start'&&value.state==='succeeded')api('workspace').then(w=>setWorkspace(old=>old.revision===w.revision?{...old,return_target:w.return_target,run_consumed:w.run_consumed,execution:w.execution}:old)).catch(reportError);if(watchedOperations.current.has(id)){const update=operationNotice(value);if(update){watchedOperations.current.delete(id);updateMessage(update.text);setNotice(update);}}}}catch{}}}
@@ -427,7 +437,7 @@ function App() {
         <aside aria-label="Mission workflow"><Planner knownBoundaryStart={boundaryStart()} {...{boundaryPadding,setBoundaryPadding,onRegenerateBoundary:regenerateBoundary,onBoundaryChange:changeBoundary}} originalOverlay={originalOverlay} setOriginalOverlay={setOriginalOverlay} candidateId={candidateId} setCandidateId={setCandidateId} sequenceHost={sequenceHost} onPassageSelected={focusPassage} focusedPassage={focusedPassage} showMap={()=>{setMapPreview(true);fitMap(true);}} selectedCard={activeTask} workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>{if(task!=='run')setActiveTask(task);setGeneratedTasks(tasks=>[...new Set([...tasks,task])]);}} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
       </div>
       <Feedback notice={notice} busy={busy} label={workLabel} elapsed={Math.max(0,Math.floor((now-startedAt)/1000))} onDismiss={()=>{setNotice(null);setFocusedFailure(null);}} onReview={step=>{setStep(step);setMode('inspect');setNotice(null);if(step===4)requestAnimationFrame(()=>{const details=document.getElementById('command-results');if(details){details.open=true;details.scrollIntoView({block:'center'});}});}} onFocus={focusFailure}/>
-      <section className="feedback" aria-live="polite"><p title={message}>{message}</p><details><summary>Connection details</summary><div className="connection-popover"><p>Boat API: {stale?'offline or stale':status?.state}. Position: {telemetryStale?'unavailable or stale':'live'}. Speed: {telemetry?.speed_m_s?.toFixed(2)??'—'} m/s. Heading: {telemetry?.heading_deg?.toFixed(1)??'—'}°.</p><p>{workspace.map?.schema_version===3?'GPS map · unverified':workspace.map?'Simulator map · alignment required':'No map loaded'}</p><code>{workspace.map?.scene_id||''}</code></div></details></section>
+      <section className="feedback" aria-live="polite"><p title={message}>{message}</p><details><summary>Connection details</summary><div className="connection-popover"><ConnectionDetails connections={connections} status={status} apiOnline={!!status&&!status.connection_lost&&now-received<=3500} vehicleStale={stale} telemetry={telemetry} telemetryStale={telemetryStale}/><p>{workspace.map?.schema_version===3?'GPS map · unverified':workspace.map?'Simulator map · alignment required':'No map loaded'}</p><code>{workspace.map?.scene_id||''}</code></div></details></section>
     </main>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
