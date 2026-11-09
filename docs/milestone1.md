@@ -9,6 +9,94 @@ This establishes simulator acceptance; physical-boat performance is unverified.
 See [recorded results](#recorded-simulator-results) below and
 [boat execution](boat_execution.md) for interfaces and fault behavior.
 
+Field connection configuration (2026-11-09) adds a startup-selected Jetson
+HTTP URL, boat IPv4 bind interface/port, serial baud/device overrides and
+separate mission/telemetry connection diagnostics. RFD remains passive map
+telemetry; mission commands/status use private Wi-Fi/Ethernet to the boat app.
+Loopback simulator defaults and boat command ownership are retained. See the
+[GCS field guide](../gcs/README.md#field-connections-rfd-telemetry-and-jetson-mission-api).
+
+All 134 GCS tests and 26 boat tests passed, plus frontend workflow/render checks,
+the production frontend/image builds, isolated packaged-image startup,
+Compose default/serial configuration, Python
+compilation and whitespace checks. An additional ROS wiring check verified
+explicit baud and HTTP interface settings. An isolated real HTTP server and
+pseudo-terminal MAVLink stream demonstrated independent API/telemetry loss and
+recovery, plus import of the full 23-buoy/6-prop competition map. Its request
+audit contained only boat status GETs, with no vehicle commands. Raw evidence is
+under ignored `simulation/logs/deployment-connections/` in the main workspace.
+Browser automation had no available browser, so live visual/layout validation
+remains outstanding. These are configuration/protocol checks; physical RFD,
+network coverage, Jetson deployment and real-boat behavior remain unverified.
+
+Main-workspace review (2026-11-09): the connection branch now includes GPS
+planner commit `8af16aa`, including the separate Gate/Slalom changes, through
+merge `417b8a0`. Revalidation passed all 137 GCS and 26 boat tests, frontend
+workflow/render checks and build, default/serial Compose settings, Python/Bash
+checks and the separate production image build. The isolated 8086 review demo
+uses synthetic serial telemetry and a status-only mock boat API; it is not the
+live simulator/boat connection. Its HTTP/serial checks cover independent link
+loss/recovery and full 29-object map import without vehicle commands. Browser
+automation remains unavailable. Evidence is in the same log directory under
+`workspace-review/`. GPS planner and the normal runtime remain unchanged pending
+operator review; no deployment-connection merge into GPS planner is recorded.
+
+The subsequent Chrome check exposed a blank preview: its browser origin was
+8086 while the backend still allowed only 8080, rejecting module/style requests
+with 403. Recreating only the review container with
+`GCS_ORIGIN=http://localhost:8086` restored the page. Compose now forwards that
+setting and the GCS guide documents alternate-port setup. Browser-origin asset
+requests return 200 while an unrelated origin remains rejected with 403.
+Chrome loaded the full 23-buoy/6-prop map and displayed the run builder; no
+approval/upload/start occurred. This supersedes the unavailable-browser limit
+for the initial map-loading check only. Physical acceptance remains open.
+
+Editable browser connections (2026-11-09) add a **Connections** dialog with
+Simulator/Field profiles, status-only API testing, visible saved-versus-active
+settings, container-visible serial discovery and live passive-reader replacement.
+Only connection settings/selection persist atomically in `/data/connections.json`;
+new pages/restarts still have empty maps, runs, approvals and return targets.
+Invalid saved settings require explicit recovery without opening another target.
+Mission-target changes expire every tab's planning/mission authority; telemetry
+changes retain it. Fresh old-boat status must be disarmed/stopped/outside AUTO,
+otherwise switching is blocked or requires explicit unknown-state acknowledgment
+when freshness is unavailable. Commands in flight, queued or unresolved block
+Apply. Read-only boat operation summaries support lost-receipt reconciliation
+across GCS restarts. Target generations isolate late responses and operation IDs.
+Fresh identity mismatches block Upload/Start; passive-link absence alone does not.
+
+All **164 GCS tests** and **27 boat tests** pass, including profile/restart
+persistence, corrupt files, failed atomic writes, concurrent edits, safety gates,
+command/apply races, unknown outcomes, late operation isolation, occupied ports,
+real UDP/pseudo-terminal serial switching, disconnect/replug, cache clearing
+before shutdown and replacement-reader following by an existing stream. Frontend
+request/readiness/render checks, production frontend/full-image builds, Python
+compilation, whitespace and default/serial GCS/boat Compose checks pass.
+
+Chrome on the explicitly labeled **isolated localhost:8087 review demo** loaded
+the full 23-buoy/6-prop map and exercised editing, Test API, save without apply,
+Cancel, two-tab revision conflicts, all-tab target invalidation, identity mismatch,
+telemetry-only map retention, missing-device/permission guidance, UDP/serial
+reconnect and independent API/telemetry loss/recovery. Restart retained active
+profiles while reopening empty planning. The final packaged demo has matched,
+live synthetic vehicle-2 links and no Chrome console errors. Asset requests with
+its exact 8087 origin return 200; an unrelated origin returns 403. The HTTP audit
+contains only status GETs and passive UDP/serial probes recorded no transmissions.
+
+The separately tagged `maritime-gcs:editable-connections-review` image/container
+and its private mock boats are available for operator review. The normal 8080
+GCS, boat, simulator and earlier 8086 preview were retained. Source integration
+into GPS planner does not deploy the normal runtime. These are
+software/protocol/browser checks; physical RFD, USB hotplug through real Docker
+device mappings, Jetson compatibility, radio/network performance and real-boat
+acceptance remain unverified. Raw evidence is under ignored
+`simulation/logs/deployment-connections/`: `editable-backend-final.log`,
+`editable-profile-tests.log`, `editable-boat-final.log`,
+`editable-frontend-final.log`, `editable-image-build.log`,
+`editable-origin-audit.json`, `editable-request-audit.json`,
+`editable-demo-final-state.json`, `editable-final-dom.txt` and
+`editable-connections.jpg`.
+
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
 GCS until after boat-only development. Boat-only testing remains the first

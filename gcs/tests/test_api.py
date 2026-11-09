@@ -18,6 +18,8 @@ class ApiTests(unittest.TestCase):
         from gcs.app import main
         self.main = main
         main.sessions.clear();main.operations.clear()
+        from gcs.app.connection_manager import ConnectionManager
+        main.manager = ConnectionManager()
         self.client = TestClient(main.app)
         value = self.client.post('/api/session').json()
         self.client.headers['X-Planner-Session'] = value['session_id']

@@ -24,11 +24,12 @@ export function reviewBlocks({draft,routeVisible,dirty,validation,approved,uploa
     const currentMission=approved&&mission&&status?.mission_id===mission;
     const execution=currentMission&&['starting','executing','stopping'].includes(status?.state)?'This mission is already starting, running or stopping. Monitor it or use Hold / Stop.':currentMission&&status?.state==='complete'?'This mission has finished. Generate and review a fresh attempt to run it again.':'';
     const working=busy?'Wait for the current request to finish.':'';
+    const identity=status?.identity_mismatch?'Vehicle identity mismatch. Correct Connections before Upload or Start.':'';
     return {
         validate:working||route,
         approve:working||route||(dirty?'Save and validate the edited route first.':!validation?.valid?'Validate the route and resolve its errors first.':approved?'This route is already approved.':''),
-        upload:working||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':status?.armed?'Disarm using Boat controls above before uploading. Go / Start arms automatically.':status?.mode===10?'Select Hold / Stop in Boat controls before uploading.':pending?.command==='upload'?'Upload is awaiting the boat’s acknowledgement and readback.':''),
-        start:working||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':pending?.command==='start'?'Start request is awaiting confirmation.':execution||(!uploaded?'Upload this approved route and wait for confirmation.':'')),
+        upload:working||identity||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':status?.armed?'Disarm using Boat controls above before uploading. Go / Start arms automatically.':status?.mode===10?'Select Hold / Stop in Boat controls before uploading.':pending?.command==='upload'?'Upload is awaiting the boat’s acknowledgement and readback.':''),
+        start:working||identity||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':pending?.command==='start'?'Start request is awaiting confirmation.':execution||(!uploaded?'Upload this approved route and wait for confirmation.':'')),
     };
 }
 export function errorText(detail) {

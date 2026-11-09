@@ -46,3 +46,21 @@ test('late generation is discarded after a newer reset and page-session headers 
     await newSession();const pending=api('generate','POST');await api('reset','POST');release();
     await assert.rejects(pending,/Superseded response discarded/);
 });
+
+test('connection revisions discard old status and planner responses while profile tests retain planning requests',async t=>{
+    const {newSession,setConnectionGeneration}=await import('../src/api.js');
+    let release;
+    t.mock.method(globalThis,'fetch',async(url,options)=>{
+        if(url==='/api/session')return {ok:true,json:async()=>({session_id:'generation-test',generation:2})};
+        if(url==='/api/status'){
+            assert.equal(options.headers['X-Connection-Generation'],'2');
+            return new Promise(resolve=>release=()=>resolve({ok:true,json:async()=>({state:'old'})}));
+        }
+        assert.equal(options.headers['X-Connection-Generation'],undefined);
+        return {ok:true,json:async()=>({reachable:true})};
+    });
+    await newSession();const old=api('status');
+    await api('connections/test','POST',{revision:0,boat_url:'http://candidate'});
+    setConnectionGeneration(3);release();
+    await assert.rejects(old,/Superseded response discarded/);
+});

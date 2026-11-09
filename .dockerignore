@@ -7,3 +7,5 @@ gcs/frontend/node_modules
 gcs/frontend/dist
 **/__pycache__
 **/*.pyc
+gcs/*.env
+boat/*.env

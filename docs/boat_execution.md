@@ -143,8 +143,12 @@ speed and end behavior.
 
 ## Milestone 1 HTTP and command ownership
 
-The boat also serves loopback HTTP on `127.0.0.1:8091` (ROS parameter
-`http_port`). HTTP and the retained local-file ROS services submit to one
+The boat serves HTTP on `127.0.0.1:8091` by default (ROS parameters
+`http_host` and `http_port`). Field startup can select the Jetson's private
+LAN interface with `BOAT_HTTP_HOST` / `BOAT_HTTP_PORT`; shore GCS uses
+`GCS_BOAT_URL`. This unauthenticated API requires a trusted isolated control
+LAN. See [field configuration](../boat/README.md#jetson-field-connections).
+HTTP and the retained local-file ROS services submit to one
 boat-owned queue. Only its worker receives/sends MAVLink, runs execution ticks,
 or changes execution state; status readers consume snapshots. ROS uses
 reentrant service callbacks so STOP can interrupt another pending service.
@@ -154,6 +158,9 @@ reentrant service callbacks so STOP can interrupt another pending service.
 - `POST /missions/{id}/start` starts that verified current mission explicitly.
 - `POST /stop`, `POST /disarm` retain the existing HOLD/disarm checks.
 - `GET /operations/{id}` returns pending/running/succeeded/failed/unknown.
+  `GET /status` also includes all unfinished operations and the last 32 receipts
+  for read-only lost-receipt reconciliation by the GCS connection manager. This
+  summary sends no command and never retries an operation.
 - `GET /status` returns the vehicle/mission snapshot, heading and telemetry ages.
 
 Long commands return HTTP 202 and an operation ID. Receipt is distinct from

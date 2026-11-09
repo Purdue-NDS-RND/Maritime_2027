@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import Planner,{WorkflowNav} from '../src/Planner.jsx';
 import BoatControls from '../src/BoatControls.jsx';
+import ConnectionDetails from '../src/ConnectionDetails.jsx';
 import {moveStep,duplicateStep} from '../src/RunBuilder.jsx';
 import {defaultSettings} from '../src/settings.js';
 import {courseOverlay} from '../src/courseOverlay.js';
@@ -32,6 +33,10 @@ assert.match(returns,/1 m stopping area/);assert.match(returns,/Explicitly Disar
 const controls=target=>renderToStaticMarkup(<BoatControls status={{armed:false,mode:4,speed_m_s:0}} stale={false} returnTarget={target}/>);
 assert.match(controls(null),/disabled=""[^>]*>Return now/);assert.doesNotMatch(controls(draft.start),/disabled=""[^>]*>Return now/);
 const source=fs.readFileSync('src/main.jsx','utf8');assert.doesNotMatch(source,/localStorage|sessionStorage/);
+const links=renderToStaticMarkup(<ConnectionDetails connections={{boat_url:'http://192.168.50.2:8091',telemetry:{connection:'/dev/gcs-radio',baud:57600,system_id:1,component_id:1}}} apiOnline={false} vehicleStale={true} telemetry={{gps_fix:6}} telemetryStale={false}/>);
+for(const text of ['Boat API unavailable','Telemetry live','192.168.50.2:8091','/dev/gcs-radio','57600','GPS fix: 6','sends no commands'])assert.ok(links.includes(text),text);
+const inverseLinks=renderToStaticMarkup(<ConnectionDetails apiOnline={true} vehicleStale={false} status={{state:'ready'}} telemetryStale={true}/>);
+assert.match(inverseLinks,/Boat API reachable/);assert.match(inverseLinks,/Telemetry unavailable or stale/);
 console.log('Four-view planning workspace, independent cards, return review and controls render.');
 
 const gateDraft={...draft,steps:[{id:'gate',type:'gate',setup:{geometry_version:2,passages:[{id:'passage',kind:'gate',red:'a',green:'b'}]}}]};
@@ -77,3 +82,9 @@ const confirmedHtml=renderToStaticMarkup(<AssignmentReview candidate={proposal} 
 assert.match(confirmedHtml,/disabled=""[^>]*>Slalom confirmed/);
 const differentHtml=renderToStaticMarkup(<AssignmentReview candidate={proposal} assignments={{slalom:{roles:{...roles.slalom,'slalom.turn.1':'different'},status:'accepted'}}}/>);
 assert.match(differentHtml,/>Confirm Slalom</);assert.doesNotMatch(differentHtml,/>Slalom confirmed</);
+
+import ConnectionsDialog,{linkLabel} from '../src/Connections.jsx';
+const editableLinks={selected_profile:'Field',active_profile:'Simulator',revision:0,profiles:{Simulator:{boat_url:'http://127.0.0.1:8091',telemetry:{connection:'udpin:127.0.0.1:14550',baud:57600,system_id:1,component_id:1}},Field:null},effective:null,error:'Corrupt saved configuration',identity_mismatch:true};
+const connectionsHtml=renderToStaticMarkup(<ConnectionsDialog connections={editableLinks} load={()=>{}}/>);
+for(const text of ['Connections','Mission API','Map telemetry','Test API','Save profile','Apply &amp; connect','Cancel','Corrupt saved configuration','Vehicle identity mismatch','does not reconnect'])assert.ok(connectionsHtml.includes(text),text);
+assert.equal(linkLabel('waiting'),'Waiting for vehicle');assert.equal(linkLabel('stale'),'Stale');

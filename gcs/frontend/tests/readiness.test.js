@@ -63,3 +63,11 @@ test('running and completed missions do not prompt a second upload to start agai
  assert.match(reviewBlocks(args).start,/already starting, running or stopping/);
  assert.match(reviewBlocks({...args,status:{mission_id:'approved',state:'complete'}}).start,/finished.*fresh attempt/);
 });
+
+
+test('a fresh identity mismatch blocks both execution actions without making missing telemetry a prerequisite',()=>{
+ const args={draft,routeVisible:true,dirty:false,validation:{valid:true},approved:true,uploaded:true,stale:false,status:{armed:false,mode:4,identity_mismatch:true}};
+ assert.match(reviewBlocks(args).upload,/identity mismatch/);assert.match(reviewBlocks(args).start,/identity mismatch/);
+ assert.equal(reviewBlocks({...args,status:{armed:false,mode:4}}).upload,'');
+ assert.equal(reviewBlocks({...args,status:{armed:false,mode:4}}).start,'');
+});

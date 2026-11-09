@@ -50,8 +50,14 @@ later if needed. Other competition tasks are outside the current design scope.
 The development GCS is a web application accessed through a browser on the
 desktop at localhost:8080, using React/Leaflet and FastAPI. Its live map uses
 passive MAVLink telemetry, with configurable UDP or serial connections, streamed
-from the backend to the browser. Mission delivery still uses the boat HTTP API;
-radio-only delivery to the onboard application remains undecided. See
+from the backend to the browser. Mission delivery uses the boat HTTP API.
+The selected field configuration uses Wi-Fi/Ethernet to the Jetson for mission
+commands/status and a separate RFD MAVLink link for passive shore telemetry.
+The GCS Connections dialog selects and persists Simulator/Field API and passive
+telemetry profiles; environment variables seed initial settings. Boat bind
+interface and local transport remain startup settings. Simulator loopback
+defaults remain available for explicit recovery. Radio-only mission
+delivery remains undecided. See
 [live position](../gcs/README.md#live-map-telemetry) for implemented behavior and limits.
 
 The GCS starts with objects on a plain map; object labels, station annotations
@@ -73,7 +79,10 @@ are not prerequisites.
 The drone sends its map to the GCS. The GCS sends the prepared mission to the
 boat. Both vehicles report status. No initial direct boat-to-drone link is
 required. Development delivery/acknowledgement now uses the boat HTTP operation API;
-physical vehicle formats and network transport remain open.
+physical vehicle operation remains unverified. The selected field transport is
+HTTP over a trusted private Wi-Fi/Ethernet network. The shore API target is
+editable at runtime; switching targets expires every tab's mission authority
+and requires fresh map/run review.
 
 `boat/`, `drone/`, `gcs/` and `simulation/` are independently runnable application
 areas with application-level containers. Multiple ROS 2 nodes may share a
@@ -83,7 +92,9 @@ and Jetson builds may differ. The removed adapter is not part of this design. De
 uses boat-owned loopback HTTP on port 8091. GCS map telemetry independently reads
 the simulator's UDP 14550 output, preserving UDP 14551 for the boat app. A host
 radio forwarder or configurable direct serial reader supports future shore
-telemetry. Physical radio operation and mission transport remain unverified.
+telemetry. The boat API can explicitly bind to a Jetson LAN interface and the
+shore GCS can target its URL; localhost is the default. Physical radio/network
+operation remains unverified.
 
 ## Navigation and accuracy
 

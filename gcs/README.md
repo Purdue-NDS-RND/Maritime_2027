@@ -260,6 +260,184 @@ does not establish movement or physical-boat acceptance. See
 
 ## Live map telemetry
 
+### Field connections: RFD telemetry and Jetson mission API
+
+The selected field topology uses two independent links:
+
+```text
+Pixhawk -> boat RFD ~~~ shore RFD -> shore USB -> GCS passive map telemetry
+GCS -> Wi-Fi/Ethernet HTTP -> Jetson boat app -> local MAVLink -> Pixhawk
+```
+
+The radio reader consumes heartbeat, position/heading/speed and GPS fix. It
+sends no commands. Mission upload/start/stop/disarm, operation acknowledgements
+and boat-owned progress use HTTP to the Jetson. Live radio position alone does
+not establish mission readiness. The radio and Jetson links must refer to the
+same Pixhawk; verify system/component IDs in telemetry and boat `/api/status`.
+RFD model, wiring, radio settings, port assignment and physical performance
+remain to be checked on the actual hardware. See the
+[boat field setup](../boat/README.md#jetson-field-connections).
+
+On the **shore computer**, from `gcs/`:
+
+```bash
+cp field.env.example field.env
+ls -l /dev/serial/by-id/
+# Choose the RFD's stable device path; find its group with:
+stat -Lc %g /dev/serial/by-id/YOUR_SHORE_RADIO
+```
+
+Edit `field.env`: set `GCS_BOAT_URL` to the Jetson's private LAN address and
+HTTP port, `GCS_SERIAL_DEVICE` to the shore RFD path, `GCS_SERIAL_GID` to the
+numeric group above, and match the actual radio host baud and Pixhawk IDs.
+The example address and device are placeholders, not discovered hardware.
+Then start the GCS:
+
+```bash
+make ENV_FILE=field.env SERIAL=1 run
+```
+
+Open `http://localhost:8080`, then **Connections** beside the vehicle indicator.
+The bottom **Connection details** panel retains compact active-link diagnostics.
+For an alternate browser address/port, set `GCS_ORIGIN` to that exact origin
+(for example `http://localhost:8086`) before recreating the container. Browser
+module/style requests also carry an origin; a mismatched value returns 403 and
+can leave the page blank. Compose passes this setting through; the default
+remains `http://localhost:8080`.
+It shows the configured mission URL and telemetry device, independent link
+states, serial baud, selected IDs, GPS fix and device-open errors. A reachable
+HTTP API can still report stale vehicle status. Existing fresh boat status
+checks continue to govern execution controls. For a read-only check in another
+shore terminal:
+
+```bash
+curl --fail http://localhost:8080/api/connections
+curl --fail http://localhost:8080/api/status
+curl --fail http://localhost:8080/api/telemetry
+```
+
+Loading the full competition map and planning a route remains available offline.
+These checks and map loading send no vehicle commands. An HTTP receipt is still
+not confirmation of upload/start success; inspect the boat operation result.
+
+Environment variables seed the first connection configuration. After initialization,
+`/data/connections.json` takes precedence, including after container restart.
+Change the active shore connections in **Connections** without restarting the
+GCS. Initial Docker USB device exposure and group access still require the
+serial overlay and container recreation; a plain restart does not reload
+Compose environment files. The Jetson boat application's own transport settings
+remain startup settings. The GCS starts every page/restart with an empty planning
+session and never replays commands on reconnect.
+Stop the field GCS with:
+
+```bash
+make ENV_FILE=field.env SERIAL=1 down
+```
+
+`field.env` is ignored by Git. `ENV_FILE` and `SERIAL=1` also work with `build`;
+a new data directory with default `make run` seeds simulator connections.
+An existing data directory retains its saved active settings. To use a host radio
+forwarder instead, omit `SERIAL=1` and put its separate UDP input in
+`GCS_MAVLINK_CONNECTION` in the environment file.
+
+The boat HTTP API has no authentication or encryption by default. Use an
+isolated, trusted control LAN and bind the boat to its intended interface;
+do not expose it to a public/shared network. No physical radio, Wi-Fi coverage,
+Jetson image compatibility or real-boat acceptance is implied by configuration.
+
+### Editable connection profiles
+
+**Simulator** starts with the loopback API `http://127.0.0.1:8091` and passive
+`udpin:127.0.0.1:14550` feed (IDs 1/1). **Field** starts unconfigured unless
+initial environment settings differ from those defaults. Enter the Jetson's
+HTTP(S) origin, then choose UDP (`udpin:ADDRESS:PORT`) or Serial / RFD with the
+device path available **inside the GCS container**, baud and expected IDs.
+`/dev/gcs-radio` is the serial overlay's container path, regardless of its
+host `/dev/serial/by-id/...` name. **Refresh devices** lists visible serial
+ports and retains a configured missing path with its availability/permissions.
+A reconnect cannot add a host device that Docker has not exposed. USB replugging
+may require container recreation if the mapped device's number changes.
+
+Selecting a profile or typing changes only the dialog draft:
+
+- **Test API** sends only `GET /status` to the entered origin. It reports
+  reachability, vehicle identity and freshness without changing the active API.
+- **Save profile** saves valid settings and the selected profile. The effective
+  active settings remain separate, including after restart.
+- **Apply & connect** saves and activates the draft. Only a changed telemetry
+  endpoint/baud/ID configuration replaces the single passive reader. Existing
+  browser streams follow that reader, with cached position/freshness cleared.
+- **Cancel** discards unsaved edits. Built-in Simulator defaults remain available
+  for explicit recovery, even after that profile has been edited.
+
+The dialog distinguishes Connecting, Waiting for vehicle, Live, Stale and
+connection errors. A configured transport or reachable API alone is not live
+vehicle confirmation. When both links are fresh but system/component IDs differ,
+a clear mismatch blocks Upload and Start. Missing passive telemetry alone does
+not add an execution prerequisite; boat-owned freshness checks still apply.
+
+One backend process owns these settings across all browser tabs. Concurrent
+saves/applies use a revision check and show a reload conflict instead of
+silently overwriting another operator's changes. A mission API origin change
+expires **every** planner session: reload a map, review settings/tasks, generate,
+validate and approve a new run. Uploaded authority, operation ownership and
+return targets from the prior boat cannot transfer. A telemetry-only change
+retains the map/run/approval. Tabs discard superseded status and planning responses.
+
+Switching the mission API first checks the **old** boat. Fresh status must show
+disarmed, speed ≤0.20 m/s, outside AUTO and not executing/starting/uploading,
+with no queued/running commands. If status is unavailable/stale, explicitly
+acknowledge that its state is unknown. Switching sends no Stop, Disarm or other
+vehicle command. Apply is refused while vehicle commands are in flight or have
+unresolved outcomes. Status and operation queries, Hold / Stop and Disarm stay
+available for reconciliation; Stop's request does not wait for a planner lock.
+
+For a lost receipt or unknown result, inspect the current boat and choose
+**Reconcile status / operations**. Known operation IDs are queried against their
+original target/generation. Explicit acknowledgment can resolve unknown outcomes
+only with fresh disarmed/stopped/non-AUTO status and a boat operation summary
+showing no queued/running command. This requires the updated boat app's read-only
+status summary; missing summaries give an actionable refusal. The boat journal
+also reveals unfinished commands after a GCS restart. Reconciliation never
+restores a prior approval or sends a vehicle command.
+
+Connection settings alone are written atomically to `/data/connections.json`
+(the default Compose bind is `simulation/logs/gcs/connections.json`). Maps,
+routes, approvals and return targets are never saved there. An invalid/corrupt
+file or failed initialization leaves a visible recovery state with **no active
+connection**; choose/correct a profile and explicitly Apply. Failed saves leave
+current connections/settings intact. No failure automatically falls back to a
+different endpoint/profile. If reader shutdown fails, no second reader starts;
+restart GCS to recover that exceptional state. Keep one Uvicorn worker.
+
+Connection endpoints are `GET /api/connections`, `POST /api/connections/save`,
+`POST /api/connections/apply`, `POST /api/connections/test`,
+`GET /api/connections/serial` and `POST /api/connections/reconcile`.
+Mutations/test use the displayed `revision`; serial discovery takes a `revision`
+query argument and optional `configured` path. Save/apply bodies contain `profile`,
+`settings: {boat_url, telemetry: {connection, baud, system_id, component_id}}`
+and `revision`; Apply/reconcile accept `acknowledge_unknown: true` explicitly.
+Test takes `boat_url` and `revision`. Telemetry events carry connection revision,
+mission generation and backend identity so all tabs can invalidate old authority.
+
+#### Isolated editable-connections review demo
+
+The review page at **http://localhost:8087/** is labeled **ISOLATED REVIEW DEMO ·
+SYNTHETIC BOATS**. Its separately tagged `maritime-gcs:editable-connections-review`
+image/container uses private mock APIs on container loopback 18091 (vehicle 1)
+and 18092 (vehicle 2), passive synthetic UDP 18450/18451 and a pseudo-terminal.
+These addresses belong to the demo container; they are not field settings.
+Its data and HTTP request audit live under
+`simulation/logs/deployment-connections/editable-demo-data/` and
+`editable-http-requests.jsonl`; `editable-preview.py` records its fixture.
+Normal localhost:8080 and the existing 8086 preview are retained. Source
+integration into GPS planner does not deploy the normal runtime; operator
+deployment remains a separate step.
+Physical RFD/Jetson, radio range, USB hotplug through real Docker device mappings
+and network/real-boat performance still require separate acceptance.
+
+### Telemetry inputs and freshness
+
 Live map position comes from a separate, passive backend MAVLink reader. By
 default it listens on `udpin:127.0.0.1:14550`, the simulator's existing ground
 station output. UDP 14551 remains owned by the boat application. Close QGC or
@@ -274,6 +452,7 @@ telemetry can work while the boat mission HTTP API is unavailable.
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
 | `GCS_MAVLINK_CONNECTION` | `udpin:127.0.0.1:14550` | UDP input or Linux serial device path |
+| `GCS_BOAT_URL` | `http://127.0.0.1:8091` | Boat HTTP(S) origin; no credentials, path, query or fragment |
 | `GCS_MAVLINK_BAUD` | `57600` | Serial baud; match the radio's configured host baud |
 | `GCS_MAVLINK_SYSTEM_ID` | `1` | Selected ArduPilot vehicle |
 | `GCS_MAVLINK_COMPONENT_ID` | `1` | Selected autopilot component |
@@ -315,8 +494,9 @@ manual end-to-end check without changing route approvals or controller settings.
 
 Tests: `PYTHONPATH=.. python3 -m unittest discover -s tests -v` and
 `cd frontend && npm ci && npm run build`. Container builds use the committed
-npm lockfile. These are development loopback interfaces, not a selected
-physical vehicle networking or authentication design.
+npm lockfile. Loopback remains the development default. The selected private-LAN
+field configuration is documented above; physical networking and authentication
+remain unqualified.
 
 ## Telemetry filtering and recovery
 
@@ -355,8 +535,9 @@ all delayed frames from a restarted source.
 
 The browser timer advances telemetry age and detects silent streams. There is
 no prediction, route snapping or automatic command on reconnect. Radio telemetry
-does not carry the HTTP mission envelope to the onboard Jetson; physical mission
-transport is still undecided. Host serial drivers remain outside the container.
+does not carry the HTTP mission envelope to the onboard Jetson. That uses the
+separate configured Wi-Fi/Ethernet HTTP connection. Physical network operation
+remains unverified. Host serial drivers remain outside the container.
 
 ## Recorded telemetry validation and limits
 

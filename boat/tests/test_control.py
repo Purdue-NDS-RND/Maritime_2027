@@ -80,6 +80,18 @@ class ControlTests(unittest.TestCase):
         self.control=Control(FakeController(),self.temp.name)
         self.assertEqual(start['operation_id'],self.control.submit('start',mission_id=self.mission.mission_id)['operation_id'])
         self.assertEqual(self.control.controller.calls,[])
+    def test_status_exposes_read_only_operation_summary_for_lost_receipts(self):
+        self.wait(self.upload())
+        self.fake.block = True
+        start = self.control.submit('start', mission_id=self.mission.mission_id)
+        self.assertTrue(self.fake.waiting.wait(1))
+        status = self.control.status()
+        operation = next(o for o in status['operations'] if o['operation_id'] == start['operation_id'])
+        self.assertIn(operation['state'], ('pending', 'running'))
+        operation['state'] = 'mutated'
+        self.assertNotEqual(self.control.operation(start['operation_id'])['state'], 'mutated')
+        self.assertEqual([c[0] for c in self.fake.calls], ['upload', 'start'])
+
     def test_http_receipt_and_origin_rejection(self):
         server=serve(self.control,0)
         base='http://127.0.0.1:'+str(server.server_port)
@@ -95,3 +107,16 @@ class ControlTests(unittest.TestCase):
             self.assertEqual(error.exception.code,403)
         finally:
             server.shutdown();server.server_close()
+
+    def test_explicit_http_interface_and_read_only_status(self):
+        server = serve(self.control, 0, host='127.0.0.2')
+        try:
+            self.assertEqual(server.server_address[0], '127.0.0.2')
+            from urllib.request import build_opener, ProxyHandler
+            opener = build_opener(ProxyHandler({}))
+            with opener.open(f'http://127.0.0.2:{server.server_port}/status') as response:
+                self.assertEqual(json.load(response)['state'], 'ready')
+            self.assertEqual(self.fake.calls, [])
+        finally:
+            server.shutdown()
+            server.server_close()
