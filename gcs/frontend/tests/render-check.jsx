@@ -82,3 +82,9 @@ const confirmedHtml=renderToStaticMarkup(<AssignmentReview candidate={proposal} 
 assert.match(confirmedHtml,/disabled=""[^>]*>Slalom confirmed/);
 const differentHtml=renderToStaticMarkup(<AssignmentReview candidate={proposal} assignments={{slalom:{roles:{...roles.slalom,'slalom.turn.1':'different'},status:'accepted'}}}/>);
 assert.match(differentHtml,/>Confirm Slalom</);assert.doesNotMatch(differentHtml,/>Slalom confirmed</);
+
+import ConnectionsDialog,{linkLabel} from '../src/Connections.jsx';
+const editableLinks={selected_profile:'Field',active_profile:'Simulator',revision:0,profiles:{Simulator:{boat_url:'http://127.0.0.1:8091',telemetry:{connection:'udpin:127.0.0.1:14550',baud:57600,system_id:1,component_id:1}},Field:null},effective:null,error:'Corrupt saved configuration',identity_mismatch:true};
+const connectionsHtml=renderToStaticMarkup(<ConnectionsDialog connections={editableLinks} load={()=>{}}/>);
+for(const text of ['Connections','Mission API','Map telemetry','Test API','Save profile','Apply &amp; connect','Cancel','Corrupt saved configuration','Vehicle identity mismatch','does not reconnect'])assert.ok(connectionsHtml.includes(text),text);
+assert.equal(linkLabel('waiting'),'Waiting for vehicle');assert.equal(linkLabel('stale'),'Stale');

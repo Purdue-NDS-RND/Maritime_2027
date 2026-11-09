@@ -1,6 +1,8 @@
 """Page-session planning; boat-owned commands and passive live telemetry."""
 import asyncio
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from contextlib import nullcontext
 from copy import deepcopy
 import json
 import math
@@ -23,14 +25,15 @@ from .course_compiler import compile_course
 from .course_files import load_course, save_course
 from .attempts import capture_start
 from .run_builder import generate_run
-from .telemetry import Telemetry
 from .connections import Connections
+from .connection_manager import ConnectionManager, fresh, safe_to_leave, serial_devices
 from shared.clearance import validate_route
 from shared.run_builder import digest, task_input, validate_run
 from shared.task_geometry import resolve_geometry
 
 GCS_SESSION_ID = str(uuid.uuid4())
-CONNECTIONS = Connections.from_env()
+manager = ConnectionManager()
+request_target = ContextVar('connection_target', default=None)
 sessions = {}
 operations = {}
 registry_lock = threading.RLock()
@@ -38,15 +41,25 @@ registry_lock = threading.RLock()
 
 @asynccontextmanager
 async def lifespan(app):
-    global CONNECTIONS
-    CONNECTIONS = Connections.from_env()
-    telemetry = Telemetry(CONNECTIONS.telemetry)
-    app.state.telemetry = telemetry
-    telemetry.start()
+    global manager
+    # Persist only connection profiles. Planning sessions always start empty.
+    path = Path(os.getenv('GCS_DATA', '/data'))/'connections.json'
+    try:
+        initial = Connections() if path.exists() else Connections.from_env()
+        manager = ConnectionManager(path, initial)
+    except (ValueError, TypeError) as error:
+        manager = ConnectionManager()
+        manager.path = path
+        manager.active = None
+        manager.error = f'Invalid initial connection settings: {error}. Recover explicitly in Connections.'
+    sessions.clear()
+    operations.clear()
+    manager.start()
+    app.state.telemetry = manager.reader
     try:
         yield
     finally:
-        telemetry.stop()
+        manager.stop()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -58,19 +71,76 @@ async def same_origin(request: IncomingRequest, call_next):
     if origin and origin not in (os.getenv('GCS_ORIGIN', 'http://localhost:8080'), 'http://127.0.0.1:8080'):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=403, content={'detail': 'cross-origin request rejected'})
-    return await call_next(request)
+    from fastapi.responses import JSONResponse
+    with manager.lock:
+        generation = manager.generation
+        target = manager.active
+    token = request_target.set((target, generation))
+    command = request.method == 'POST' and request.url.path in ('/api/upload', '/api/start', '/api/stop', '/api/disarm', '/api/return/prepare')
+    try:
+        expected = request.headers.get('x-connection-generation')
+        if expected is not None and expected != str(generation):
+            raise HTTPException(409, 'Mission target changed; discard this tab and review a fresh map/run')
+        with manager.command(generation) if command else nullcontext():
+            response = await call_next(request)
+        if generation != manager.generation and not request.url.path.startswith('/api/connections'):
+            raise HTTPException(409, 'Superseded mission-target response discarded')
+        response.headers['X-Connection-Generation'] = str(manager.generation)
+        return response
+    except HTTPException as error:
+        return JSONResponse(status_code=error.status_code, content={'detail': error.detail},
+                            headers={'X-Connection-Generation': str(manager.generation)})
+    finally:
+        request_target.reset(token)
+
 
 
 def boat(path, method='GET', body=None):
+    target, generation = request_target.get() or (manager.active, manager.generation)
+    if target is None:
+        raise HTTPException(503, 'Connection settings need recovery. Open Connections and Apply explicitly.')
+    return boat_at(target, generation, path, method, body)
+
+
+def boat_at(target, generation, path, method='GET', body=None):
     data = None if body is None else json.dumps(body, allow_nan=False).encode()
-    request = Request(CONNECTIONS.boat_url+path, data=data, method=method, headers={'Content-Type': 'application/json'})
+    request = Request(target.boat_url+path, data=data, method=method, headers={'Content-Type': 'application/json'})
     try:
         with urlopen(request, timeout=5) as response:
-            return json.load(response)
+            value = json.load(response)
+            if not isinstance(value, dict):
+                raise ValueError('Boat API must return a JSON object')
+            with manager.lock:
+                if generation != manager.generation:
+                    raise HTTPException(409, 'Late result from previous mission target discarded')
+                if path == '/status':
+                    manager.update_status(value, generation)
+                if method != 'GET':
+                    key = value.get('operation_id') or 'unknown-'+uuid.uuid4().hex
+                    manager.track(key, value if value.get('operation_id') else {'state': 'unknown', 'detail': 'Command response missing operation ID'})
+                elif path.startswith('/operations/'):
+                    manager.track(path.split('/')[-1], value)
+            return value
     except HTTPError as error:
-        raise HTTPException(error.code, json.loads(error.read()).get('detail', 'boat rejected command')) from error
-    except (URLError, TimeoutError, ConnectionError) as error:
-        raise HTTPException(503, 'boat request outcome unknown; query status/operations before retrying start') from error
+        if path == '/status':
+            with manager.lock:
+                if generation == manager.generation:
+                    manager.api_error = f'Boat API returned HTTP {error.code}; check the mission API address and service'
+        if method != 'GET' and error.code >= 500:
+            manager.track('unknown-'+uuid.uuid4().hex, {'state': 'unknown', 'detail': f'{method} {path}: HTTP {error.code}; reconcile before switching'})
+        try:
+            detail = json.loads(error.read()).get('detail')
+        except (ValueError, AttributeError):
+            detail = None
+        raise HTTPException(error.code, detail or f'Boat API returned HTTP {error.code}. Check the address, service and network; reconcile command outcomes before switching.') from error
+    except (URLError, TimeoutError, ConnectionError, OSError, ValueError) as error:
+        if path == '/status':
+            with manager.lock:
+                if generation == manager.generation:
+                    manager.api_error = f'Boat API unavailable: {error}. Check the Jetson address, service and network.'
+        if method != 'GET':
+            manager.track('unknown-'+uuid.uuid4().hex, {'state': 'unknown', 'detail': f'{method} {path}: receipt unavailable; reconcile current boat status before switching'})
+        raise HTTPException(503, 'boat request outcome unknown; query status/operations before retrying start' if method != 'GET' else f'Boat API unavailable: {error}. Check the address, network and boat service.') from error
 
 
 def checked(function, *args, **kwargs):
@@ -90,9 +160,10 @@ def session(request):
 @app.post('/api/session')
 def create_session():
     key = str(uuid.uuid4())
+    workspace = SessionWorkspace()
     with registry_lock:
-        sessions[key] = SessionWorkspace()
-    return {'session_id': key, 'backend_id': GCS_SESSION_ID, 'workspace': sessions[key].read()}
+        sessions[key] = workspace
+    return {'session_id': key, 'backend_id': GCS_SESSION_ID, 'generation': manager.generation, 'workspace': workspace.read()}
 
 
 @app.post('/api/reset')
@@ -211,6 +282,8 @@ def fresh_vehicle():
 
 def validate_actual_start(approval):
     status = fresh_vehicle()
+    if manager.mismatch(status, manager.telemetry_snapshot()):
+        raise HTTPException(409, 'Vehicle identity mismatch between mission API and live map telemetry. Correct Connections before Upload or Start.')
     d = approval['inputs']['draft']
     if d.get('planning_mode') == 'run':
         result = checked(validate_run, approval['inputs']['map'], d, status['position'])
@@ -227,25 +300,41 @@ def validate_actual_start(approval):
 
 def record(value, w, command, approval=None):
     if value.get('operation_id'):
-        operations[value['operation_id']] = (w, command, deepcopy(approval), w.authority_epoch)
+        manager.track(value['operation_id'], value)
+        operations[value['operation_id']] = (w, command, deepcopy(approval), w.authority_epoch, (request_target.get() or (manager.active, manager.generation)))
     if value.get('state') == 'succeeded' and value.get('operation_id'):
         reconcile(value['operation_id'], value)
     return value
 
 
+def forget_operation(operation_id, entry):
+    with manager.lock:
+        if operations.get(operation_id) is entry:
+            operations.pop(operation_id, None)
+
+
 def reconcile(operation_id, value):
-    entry = operations.get(operation_id)
+    # Validate and track under a short lock. Planner updates stay outside it;
+    # an expired workspace is no longer reachable from any page session.
+    with manager.lock:
+        generation = (request_target.get() or (manager.active, manager.generation))[1]
+        if generation != manager.generation:
+            raise HTTPException(409, 'Previous-target operation discarded')
+        entry = operations.get(operation_id)
+        if entry and entry[4][1] != manager.generation:
+            raise HTTPException(409, 'Previous-target operation discarded')
+        manager.track(operation_id, value)
     if entry and value.get('state') == 'succeeded':
-        w, command, approval, epoch = entry
+        w, command, approval, epoch, _ = entry
         if command == 'start':
             w.start_succeeded(approval)
         elif command == 'upload' and epoch == w.authority_epoch:
             w.uploaded_id = approval['envelope']['approval_id']
         elif command == 'disarm' and epoch == w.authority_epoch:
             w.disarm_epoch = epoch
-        operations.pop(operation_id, None)
+        forget_operation(operation_id, entry)
     elif value.get('state') in ('failed', 'cancelled', 'unknown'):
-        operations.pop(operation_id, None)
+        forget_operation(operation_id, entry)
     return value
 
 
@@ -377,28 +466,111 @@ def status():
 
 @app.get('/api/connections')
 def connections():
-    return CONNECTIONS.snapshot()
+    return {**manager.snapshot(), 'review_demo': os.getenv('GCS_REVIEW_DEMO')}
+
+
+@app.post('/api/connections/save')
+def save_connection(data: dict):
+    return checked(manager.save, data.get('profile'), data.get('settings'), data.get('revision'))
+
+
+def invalidate_target():
+    with registry_lock:
+        for workspace in sessions.values():
+            workspace.cancelled.set()
+        sessions.clear()
+        operations.clear()
+
+
+@app.post('/api/connections/apply')
+def apply_connection(data: dict):
+    value = checked(manager.apply, data.get('profile'), data.get('settings'), data.get('revision'),
+                    data.get('acknowledge_unknown') is True,
+                    lambda old: boat_at(old, manager.generation, '/status'), invalidate_target)
+    return value
+
+
+@app.post('/api/connections/test')
+def test_connection(data: dict):
+    with manager.lock:
+        manager.check_revision(data.get('revision'))
+    # Deliberately independent of the active target, command tracking and authority.
+    target = checked(Connections, boat_url=data.get('boat_url', ''))
+    try:
+        request = Request(target.boat_url+'/status', method='GET')
+        with urlopen(request, timeout=5) as response:
+            value = json.load(response)
+        if not isinstance(value, dict):
+            raise ValueError('Expected a boat status JSON object')
+        with manager.lock:
+            manager.check_revision(data.get('revision'))
+        return {'reachable': True, 'status': value, 'fresh': fresh(value), 'boat_url': target.boat_url}
+    except (OSError, ValueError) as error:
+        return {'reachable': False, 'error': str(error), 'boat_url': target.boat_url}
+
+
+@app.get('/api/connections/serial')
+def list_serial(revision: int, configured: str | None = None):
+    with manager.lock:
+        manager.check_revision(revision)
+    return {'devices': serial_devices(configured),
+            'help': 'Only devices visible inside this container are listed. Map the USB radio with the serial Compose overlay and its numeric device group; refresh after replugging. Docker device mappings may require container recreation after USB re-enumeration.'}
+
+
+@app.post('/api/connections/reconcile')
+def reconcile_connections(data: dict):
+    # Explicit resolution of lost receipts/unknown operations against this boat.
+    with manager.lock:
+        manager.check_revision(data.get('revision'))
+        serial = manager.command_serial
+        if manager.inflight:
+            raise HTTPException(409, 'Wait for command requests to finish')
+        pending = deepcopy(manager.pending)
+    status = boat('/status')
+    for key in pending:
+        if not key.startswith('unknown-'):
+            reconcile(key, boat('/operations/'+quote(key, safe='')))
+    with manager.lock:
+        manager.check_revision(data.get('revision'))
+        if serial != manager.command_serial or manager.inflight:
+            raise HTTPException(409, 'A command raced with reconciliation; inspect current status again')
+        if data.get('acknowledge_unknown') is True:
+            if (not fresh(status) or not safe_to_leave(status) or not isinstance(status.get('operations'), list)
+                    or any(op.get('state') in ('pending', 'running') for op in status['operations'])):
+                raise HTTPException(409, 'Unknown outcomes require fresh disarmed/stopped/non-AUTO status and a boat operation summary with no queued/running commands. Update the boat app if the summary is missing.')
+            manager.resolved_unknown.update(k for k, v in manager.pending.items() if v.get('state') == 'unknown')
+            manager.pending = {k: v for k, v in manager.pending.items() if v.get('state') != 'unknown'}
+    return manager.snapshot()
 
 
 @app.get('/api/telemetry')
-def telemetry_snapshot(request: IncomingRequest):
-    return {**request.app.state.telemetry.snapshot(), 'gcs_session_id': GCS_SESSION_ID}
+def telemetry_snapshot():
+    with manager.lock:
+        return {**manager.telemetry_snapshot(), 'gcs_session_id': GCS_SESSION_ID,
+                'connection_revision': manager.revision, 'connection_generation': manager.generation}
 
 
-async def telemetry_events(telemetry):
+async def telemetry_events():
     while True:
-        yield 'data: '+json.dumps({**telemetry.snapshot(), 'gcs_session_id': GCS_SESSION_ID}, allow_nan=False)+'\n\n'
+        yield 'data: '+json.dumps(telemetry_snapshot(), allow_nan=False)+'\n\n'
         await asyncio.sleep(.2)
 
 
 @app.get('/api/telemetry/events')
-async def live_telemetry(request: IncomingRequest):
-    return StreamingResponse(telemetry_events(request.app.state.telemetry), media_type='text/event-stream',
+async def live_telemetry():
+    return StreamingResponse(telemetry_events(), media_type='text/event-stream',
                              headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.get('/api/operations/{operation_id}')
 def operation(operation_id: str):
+    entry = operations.get(operation_id)
+    if entry:
+        target, generation = entry[4]
+        if generation != manager.generation:
+            raise HTTPException(409, 'Operation belongs to a previous mission target')
+    elif operation_id not in manager.pending:
+        raise HTTPException(404, 'Operation is not owned by this connection')
     return reconcile(operation_id, boat('/operations/'+quote(operation_id, safe='')))
 
 

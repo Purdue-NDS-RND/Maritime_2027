@@ -12,6 +12,12 @@ from gcs.app.connections import Connections
 
 
 class ConnectionTests(unittest.TestCase):
+    def setUp(self):
+        from gcs.app.connection_manager import ConnectionManager
+        self.manager_patch = patch.object(main, 'manager', ConnectionManager())
+        self.manager_patch.start()
+        self.addCleanup(self.manager_patch.stop)
+
     def test_environment_and_invalid_origins(self):
         with patch.dict(os.environ, {'GCS_BOAT_URL': 'http://192.168.50.2:8091/',
                                      'GCS_MAVLINK_CONNECTION': '/dev/gcs-radio',
@@ -47,7 +53,7 @@ class ConnectionTests(unittest.TestCase):
         thread.start()
         target = f'http://127.0.0.1:{server.server_port}'
         try:
-            with patch.object(main, 'CONNECTIONS', Connections(boat_url=target)):
+            with patch.object(main.manager, 'active', Connections(boat_url=target)):
                 client = TestClient(main.app)
                 value = client.get('/api/connections').json()
                 self.assertEqual(value['boat_url'], target)
@@ -62,7 +68,7 @@ class ConnectionTests(unittest.TestCase):
             thread.join()
 
     def test_command_body_and_unknown_outcome_are_preserved(self):
-        with patch.object(main, 'CONNECTIONS', Connections(boat_url='http://jetson:8092')), \
+        with patch.object(main.manager, 'active', Connections(boat_url='http://jetson:8092')), \
                 patch.object(main, 'urlopen') as transport:
             transport.return_value.__enter__.return_value.read.return_value = b'{"operation_id":"receipt"}'
             self.assertEqual(main.boat('/missions/new', 'PUT', {'mission': 'approved'}),

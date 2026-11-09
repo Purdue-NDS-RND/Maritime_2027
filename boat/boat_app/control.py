@@ -45,6 +45,10 @@ class Control:
     def status(self):
         with self.lock:
             result = deepcopy(self.snapshot)
+            # Read-only reconciliation for a GCS command whose receipt was lost.
+            # Include every unfinished operation, plus the last 32 receipts.
+            entries = list(self.registry['operations'].values())
+            result['operations'] = deepcopy([op for op in entries[:-32] if op['state'] in ('pending', 'running', 'unknown')] + entries[-32:])
         # Ages must advance even if the worker is waiting for a response.
         age = max(0, time.monotonic() - result.pop('snapshot_monotonic_s', time.monotonic()))
         for key in ('heartbeat_age_s', 'position_age_s'):

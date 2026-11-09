@@ -53,8 +53,10 @@ passive MAVLink telemetry, with configurable UDP or serial connections, streamed
 from the backend to the browser. Mission delivery uses the boat HTTP API.
 The selected field configuration uses Wi-Fi/Ethernet to the Jetson for mission
 commands/status and a separate RFD MAVLink link for passive shore telemetry.
-Startup settings select the Jetson URL, boat bind interface and serial
-devices/baud; simulator loopback defaults are retained. Radio-only mission
+The GCS Connections dialog selects and persists Simulator/Field API and passive
+telemetry profiles; environment variables seed initial settings. Boat bind
+interface and local transport remain startup settings. Simulator loopback
+defaults remain available for explicit recovery. Radio-only mission
 delivery remains undecided. See
 [live position](../gcs/README.md#live-map-telemetry) for implemented behavior and limits.
 
@@ -78,7 +80,9 @@ The drone sends its map to the GCS. The GCS sends the prepared mission to the
 boat. Both vehicles report status. No initial direct boat-to-drone link is
 required. Development delivery/acknowledgement now uses the boat HTTP operation API;
 physical vehicle operation remains unverified. The selected field transport is
-HTTP over a trusted private Wi-Fi/Ethernet network, configured at startup.
+HTTP over a trusted private Wi-Fi/Ethernet network. The shore API target is
+editable at runtime; switching targets expires every tab's mission authority
+and requires fresh map/run review.
 
 `boat/`, `drone/`, `gcs/` and `simulation/` are independently runnable application
 areas with application-level containers. Multiple ROS 2 nodes may share a

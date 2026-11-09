@@ -95,7 +95,8 @@ stat -Lc %g /dev/serial/by-id/YOUR_PIXHAWK
 Edit `field.env` with the Jetson's private Wi-Fi/Ethernet IPv4 address in
 `BOAT_HTTP_HOST`, selected HTTP port, stable Pixhawk device path, its numeric
 group and matching serial baud. Use the same address/port in shore
-`GCS_BOAT_URL`. The example address/device are placeholders. For USB access:
+`GCS_BOAT_URL` for first initialization, or edit the shore GCS **Connections**
+profile once saved settings exist. The example address/device are placeholders. For USB access:
 
 ```bash
 make ENV_FILE=field.env SERIAL=1 build
@@ -132,3 +133,11 @@ Mission snapshots and the operation journal live under ignored
 `simulation/logs/boat/`, with progress/events under individual session folders; ROS logs under `simulation/logs/boat/ros/`.
 Client disconnection does not affect execution. Application or MAVLink loss
 has different fault semantics, detailed in the [execution reference](../docs/boat_execution.md).
+
+The HTTP status response includes a read-only operation summary: all unfinished
+receipts plus the last 32 operations. The shore connection manager uses it to
+reconcile lost command receipts, including after a GCS restart, before switching
+mission targets. It adds no command or retry. Explicitly resolving an unknown
+outcome requires fresh disarmed/stopped/non-AUTO status with no queued/running
+commands; older boat images without the summary cannot satisfy that check.
+Boat-only supplied-route execution and the local MAVLink owner are unchanged.

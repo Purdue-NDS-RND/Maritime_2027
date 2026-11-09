@@ -158,6 +158,9 @@ reentrant service callbacks so STOP can interrupt another pending service.
 - `POST /missions/{id}/start` starts that verified current mission explicitly.
 - `POST /stop`, `POST /disarm` retain the existing HOLD/disarm checks.
 - `GET /operations/{id}` returns pending/running/succeeded/failed/unknown.
+  `GET /status` also includes all unfinished operations and the last 32 receipts
+  for read-only lost-receipt reconciliation by the GCS connection manager. This
+  summary sends no command and never retries an operation.
 - `GET /status` returns the vehicle/mission snapshot, heading and telemetry ages.
 
 Long commands return HTTP 202 and an operation ID. Receipt is distinct from

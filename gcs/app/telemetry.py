@@ -22,12 +22,16 @@ class TelemetryConfig:
     component_id: int = 1
 
     def __post_init__(self):
+        if any(c.isspace() or ord(c) < 32 for c in self.connection):
+            raise ValueError('MAVLink endpoint cannot contain whitespace')
         if not self.connection.startswith(('udpin:', '/dev/')):
             raise ValueError('GCS MAVLink connection must be udpin:HOST:PORT or /dev/DEVICE')
         if self.connection.startswith('udpin:'):
             parts = self.connection.split(':')
             if len(parts) != 3 or not parts[1] or not parts[2].isdigit() or not 1 <= int(parts[2]) <= 65535:
                 raise ValueError('GCS MAVLink UDP endpoint must be udpin:HOST:PORT (port 1..65535)')
+        if self.connection.startswith('/dev/') and ('/../' in self.connection or self.connection.endswith('/..')):
+            raise ValueError('Use a device path inside /dev')
         if self.baud <= 0:
             raise ValueError('GCS MAVLink baud must be positive')
         if not 1 <= self.system_id <= 255 or not 1 <= self.component_id <= 255:
@@ -161,6 +165,7 @@ class Telemetry:
             except Exception as error:
                 logger.warning('GCS telemetry connection unavailable: %s', error)
                 with self.lock:
+                    self.reset()
                     self.error = str(error)
             finally:
                 if link is not None:
