@@ -10,8 +10,8 @@ def validate_map(data):
         raise ValueError('version 3 is an unverified live map')
     reference = data['geographic_reference']
     to_local(reference, reference)
-    if not isinstance(data['buoys'], list) or not data['buoys']:
-        raise ValueError('map must contain buoys')
+    if not isinstance(data['buoys'], list):
+        raise ValueError('map buoys must be a list')
     obstacles = data['obstacles'] if data['schema_version'] in (2,3) else data.get('obstacles', [])
     if not isinstance(obstacles, list) or (data['schema_version'] == 1 and obstacles):
         raise ValueError('unsupported obstacles')
@@ -23,7 +23,7 @@ def validate_map(data):
             raise ValueError('duplicate object identity')
         names.add(obj['id'])
         to_local(obj['centre'], reference)
-        if obj['type'] == 'point' and data['schema_version'] == 3:
+        if obj['type'] == 'point':
             if any(key in obj for key in ('radius_m', 'height_m', 'footprint')):
                 raise ValueError('point objects use centre-based buffers, without physical dimensions')
             continue

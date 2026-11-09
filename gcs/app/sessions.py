@@ -9,12 +9,15 @@ from shared.run_builder import INPUTS, digest, validate_run
 from shared.clearance import validate_route
 from .settings import defaults, effective_settings, validate_settings
 from .run_builder import new_run
+from .course_compiler import binding, validate_hints, validate_assignments
 
 
 def empty_state():
     return {'map': None, 'original_map': None, 'run_draft': new_run(), 'approval': None,
             'planning_mode': 'run', 'game_settings': defaults(), 'revision': 0,
-            'run_consumed': False, 'return_target': None, 'execution': None}
+            'run_consumed': False, 'return_target': None, 'execution': None,
+            'compiler_hints': {}, 'compilation': None, 'course_assignments': {},
+            'map_history': {'undo': [], 'redo': []}}
 
 
 class SessionWorkspace:
@@ -75,11 +78,24 @@ class SessionWorkspace:
             old = self.state['run_draft']
             run = updated['run_draft']
             if updated['map'] != self.state['map'] and not data.get('new_import'):
+                updated['map_history']['undo'] = [*updated['map_history']['undo'], deepcopy(self.state['map'])][-100:]
+                updated['map_history']['redo'] = []
+                updated['compilation'] = None
+                updated['course_assignments'] = {}
+                # Removed/retyped objects cannot remain pinned. Undo restores the
+                # observations only; recognition is always reviewed afresh.
+                ids = {o['id']:o for o in [*updated['map']['buoys'], *updated['map'].get('obstacles', [])]}
+                updated['compiler_hints'] = {r:k for r,k in updated['compiler_hints'].items() if k in ids and ids[k].get('object_type')=='buoy'}
+                try:
+                    validate_hints(updated['map'], updated['compiler_hints'])
+                except ValueError:
+                    updated['compiler_hints'] = {}
                 if updated.get('run_setup'):
                     updated['run_setup']['sizes_confirmed'] = False
                     for step in updated['run_setup']['steps']:
                         step['setup']['course_confirmed'] = False
                 run['sizes_confirmed'] = False
+                run['shared_crossings'] = []
                 for step in run.get('steps', []):
                     step['setup']['course_confirmed'] = False
             # Preserve a generated route only for an identical input save. An
@@ -94,6 +110,117 @@ class SessionWorkspace:
             updated['revision'] += 1
             json.dumps(updated, allow_nan=False)
             self.state = updated
+            self.authority_epoch += 1
+            return self.read()
+
+    def check_revision(self, revision):
+        if revision != self.state['revision']:
+            raise ValueError('Superseded input revision: reload this session state')
+
+    def clear_recognition(self):
+        self.state['compilation'] = None
+        self.state['course_assignments'] = {}
+        self.state['approval'] = None
+        run = self.state['run_draft']
+        run['waypoints'] = []
+        run.pop('generation_identity', None)
+        run['shared_crossings'] = []
+        for step in run.get('steps', []):
+            step['setup']['course_confirmed'] = False
+
+    def import_course(self, value, revision):
+        with self.lock:
+            self.edit({'map': value['map'], 'new_import': True, 'revision': revision})
+            self.state.update(original_map=deepcopy(value['original_map']), compiler_hints=deepcopy(value['hints']),
+                              course_assignments=deepcopy(value['assignments']))
+            return self.read()
+
+    def history(self, direction, revision):
+        with self.lock:
+            self.check_revision(revision)
+            if direction not in ('undo', 'redo') or not self.state['map_history'][direction]:
+                raise ValueError('No map edit to '+str(direction))
+            history = deepcopy(self.state['map_history'])
+            target = history[direction].pop()
+            other = 'redo' if direction == 'undo' else 'undo'
+            history[other].append(deepcopy(self.state['map']))
+            self.edit({'revision': revision, 'map': target})
+            self.state['map_history'] = history
+            self.clear_recognition()
+            return self.read()
+
+    def set_hints(self, hints, revision):
+        with self.lock:
+            self.check_revision(revision)
+            checked = validate_hints(self.state['map'], hints)
+            self.clear_recognition()
+            self.state['compiler_hints'] = checked
+            self.state['revision'] += 1
+            self.authority_epoch += 1
+            return self.read()
+
+    def begin_compilation(self, revision):
+        with self.lock:
+            self.check_revision(revision)
+            if not self.state['map']:
+                raise ValueError('Import a map first')
+            self.clear_recognition()
+            self.state['revision'] += 1
+            self.authority_epoch += 1
+            return self.read(), (self.state['revision'], self.authority_epoch)
+
+    def publish_compilation(self, result, token):
+        with self.lock:
+            if token != (self.state['revision'], self.authority_epoch) or result['binding'] != binding(self.state['map'], self.state['compiler_hints']):
+                raise ValueError('Superseded compilation discarded; review current map and compile again')
+            self.state['compilation'] = deepcopy(result)
+            self.state['revision'] += 1
+            return self.read()
+
+    def select_compilation(self, task, candidate_id, revision):
+        with self.lock:
+            self.check_revision(revision)
+            result = self.state['compilation']
+            if candidate_id:
+                if not result or result['binding'] != binding(self.state['map'], self.state['compiler_hints']):
+                    raise ValueError('Compile the current map first')
+                candidate = next((c for c in result['candidates'] if c['id'] == candidate_id), None)
+                if not candidate or task not in candidate['tasks']:
+                    raise ValueError('Task is unresolved in this interpretation')
+                roles = candidate['tasks'][task]
+            else:
+                value = self.state['course_assignments'].get(task)
+                if not value:
+                    raise ValueError('No restored assignment to review')
+                roles = value['roles']
+            selected = {t:v['roles'] for t,v in self.state['course_assignments'].items()}
+            selected[task] = roles
+            validate_assignments(self.state['map'], selected, self.state['compiler_hints'])
+            updated = deepcopy(self.state)
+            updated['course_assignments'][task] = {'roles': deepcopy(roles), 'status': 'accepted'}
+            updated['approval'] = None
+            run = updated['run_draft']
+            run['waypoints'] = []
+            run.pop('generation_identity', None)
+            run['shared_crossings'] = []
+            for step in run.get('steps', []):
+                if step['type'] == task:
+                    from .course_setup import prepare_task
+                    step['setup'] = prepare_task(updated['map'], task, run['settings'], roles)['draft']
+            updated['revision'] += 1
+            self.state = updated
+            self.authority_epoch += 1
+            return self.read()
+
+    def clear_assignment(self, task, revision):
+        with self.lock:
+            self.check_revision(revision)
+            self.state['course_assignments'].pop(task, None)
+            self.state['approval'] = None
+            self.state['run_draft']['waypoints'] = []
+            self.state['run_draft'].pop('generation_identity', None)
+            self.state['run_draft']['shared_crossings'] = []
+            self.state['revision'] += 1
             self.authority_epoch += 1
             return self.read()
 
@@ -126,6 +253,9 @@ class SessionWorkspace:
         with self.lock:
             self.state['run_consumed'] = True
             self.state['approval'] = None
+            self.state['compilation'] = None
+            for value in self.state['course_assignments'].values():
+                value['status'] = 'review_required'
             self.authority_epoch += 1
 
     def validate(self):

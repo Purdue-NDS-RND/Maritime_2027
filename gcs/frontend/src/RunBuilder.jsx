@@ -18,7 +18,7 @@ export default function RunBuilder({workspace,draft,edit,selectedCard,onSelect,s
         if(type!=='manual'){
             const proposal=await load('course/prepare','POST',{task:type,settings:{...draft.settings,sizes_confirmed:draft.sizes_confirmed}});
             setup=proposal.draft;
-            if(!boundary?.length)boundary=setup.planning_area||[];
+            if(!boundary?.length&&proposal.recognition_source!=='accepted')boundary=setup.planning_area||[];
             notify(proposal.ready?'Review the suggested assignments for this card.':proposal.diagnostics.join(' '));
         }
         const id=crypto.randomUUID();update({steps:[...values,{id,type,setup}],planning_area:boundary});onSelect(id);

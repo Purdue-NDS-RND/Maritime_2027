@@ -15,10 +15,12 @@ from urllib.request import Request, urlopen
 from fastapi import FastAPI, HTTPException, Request as IncomingRequest
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from .sessions import SessionWorkspace, return_inputs
-from .imports import import_points
 from .planner import generate
 from .course_setup import prepare_task
+from .course_compiler import compile_course
+from .course_files import load_course, save_course
 from .attempts import capture_start
 from .run_builder import generate_run
 from .telemetry import Telemetry, TelemetryConfig
@@ -107,8 +109,40 @@ def edit(request: IncomingRequest, data: dict):
 @app.post('/api/import')
 def import_map(request: IncomingRequest, data: dict):
     w = session(request)
-    object_map = checked(import_points, data['content'], data.get('format', 'json'))
-    return checked(w.edit, {'map': object_map, 'new_import': True, 'revision': data.get('revision')})
+    value = checked(load_course, data['content'], data.get('format', 'json'))
+    return checked(w.import_course, value, data.get('revision'))
+
+
+@app.post('/api/map/history')
+def map_history(request: IncomingRequest, data: dict):
+    return checked(session(request).history, data.get('direction'), data.get('revision'))
+
+
+@app.put('/api/course/hints')
+def course_hints(request: IncomingRequest, data: dict):
+    return checked(session(request).set_hints, data.get('hints', {}), data.get('revision'))
+
+
+@app.post('/api/course/compile')
+async def compile_map(request: IncomingRequest, data: dict):
+    w = session(request)
+    state, token = checked(w.begin_compilation, data.get('revision'))
+    result = await run_in_threadpool(checked, compile_course, state['map'], state['compiler_hints'])
+    if await request.is_disconnected():
+        raise HTTPException(409, 'Interrupted compilation discarded')
+    return checked(w.publish_compilation, result, token)
+
+
+@app.post('/api/course/select')
+def select_course(request: IncomingRequest, data: dict):
+    if data.get('clear'):
+        return checked(session(request).clear_assignment, data.get('task'), data.get('revision'))
+    return checked(session(request).select_compilation, data.get('task'), data.get('candidate_id'), data.get('revision'))
+
+
+@app.get('/api/course/file')
+def course_file(request: IncomingRequest):
+    return checked(save_course, session(request).read())
 
 
 @app.get('/api/examples/competition')
@@ -122,7 +156,9 @@ def prepare(request: IncomingRequest, data: dict):
     state = session(request).read()
     if not state['map']:
         raise HTTPException(422, 'Load a map first')
-    return checked(prepare_task, state['map'], data['task'], {**state['run_draft']['settings'], **data.get('settings', {})})
+    assignment = state['course_assignments'].get(data['task'])
+    accepted = assignment['roles'] if assignment and assignment['status']=='accepted' else None
+    return checked(prepare_task, state['map'], data['task'], {**state['run_draft']['settings'], **data.get('settings', {})}, accepted)
 
 
 @app.post('/api/course/geometry')

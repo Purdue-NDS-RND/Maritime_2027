@@ -1,6 +1,8 @@
 # Project documentation
 
 - [System design](design.md): workflow, application boundaries and open decisions.
+- [Map compiling](map_compiling.md): implemented survey cleanup, object labeling
+  and automatic gate/slalom/channel recognition workflow.
 - [Milestone 1](milestone1.md): scope, acceptance criteria, reproduction settings,
   measured simulator results and evidence locations. Selected simulator acceptance
   is complete; physical-boat performance remains unverified.
@@ -11,7 +13,7 @@
 - [Simulator guide](../simulation/README.md): setup, operation, manual GCS tracking,
   performance, optional cameras, troubleshooting and maintenance.
 - [Hardware knowledge](hardware.md): retained configuration and hardware notes.
-- [Competition course](<competition_docs/AIMM-ICC Competition Course Details 12-13 2025.pdf>)
+- [Competition course](<competition_docs/Course and Competition Details.pdf>)
   and [rules](<competition_docs/Rules and Regulations _ AIMM ICC.pdf>): source documents.
 
 ## Maintaining documentation

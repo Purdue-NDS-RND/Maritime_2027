@@ -160,6 +160,44 @@ are generated within the imported list. Provide one consolidated row per object.
 The bundled full map has 23 buoys and six prop points and is unverified practice
 input. Native simulator formats remain supported with alignment checks.
 
+To try the simple JSON import on the full course, choose **Import JSON / CSV**
+and select `gcs/examples/competition-gps-points.json`. It contains only color,
+latitude and longitude for the same 29 objects as `competition-gps-map.json`,
+representing a minimal drone export without known IDs or object classifications.
+Coordinates are copied exactly from the practice map; survey noise is not
+simulated. The importer generates IDs such as `point_1` and sets object types to
+`unknown`. It converts these points to a version 3 map; review and assign task
+geometry in the GCS after import. No task labels or station annotations are
+included.
+
+### Clean up, compile and save a course
+
+Map now shows **Clean up → Find course → Review tasks**, with the next action
+fixed at the bottom of the panel.
+
+1. Import the survey. When needed, **Mark N red/green detections as buoys**
+   explicitly types unknown red/green observations together. Existing towers and
+   obstacles are preserved. Click individual objects for corrections; bulk color
+   selection, original comparison and position details are optional controls.
+2. Click **I reviewed the map — continue**, then **Compile course**. The manual
+   assignment link is available when course recognition is not appropriate.
+3. Preview **Option 1–5** on the map and **Confirm** the tasks you want. A task
+   row shows its confirmation directly. Unresolved tasks can be assigned later.
+   Hints, object lists, measurements and search diagnostics stay collapsed.
+4. **Continue to Configure**, then build your chosen run. Task geometry, finish,
+   boundary, shared crossing and route still require their existing reviews.
+   Confirming assignments never generates or approves a boat route.
+
+**Save course → Download course JSON** retains observations, profile, hints and
+selected roles. Use **Change map / source details → Import JSON / CSV** to reload.
+Review the map and existing assignments again; confirmations and routes are never
+restored. Map edits invalidate recognition and routes; settings changes preserve
+recognition while invalidating routes. **Measurements & search details** reports
+bounded-search limits and costs, which are not probabilities.
+
+See [map compiling](../docs/map_compiling.md) for the complete workflow, profile
+measurements, scoring assumptions, file format and session APIs.
+
 The browser first calls `POST /api/session`, keeps the returned `session_id` only
 in memory, and sends `X-Planner-Session` on planner requests. Unknown sessions
 are rejected after restart. `PUT /api/workspace` and `POST /api/import` require
