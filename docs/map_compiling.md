@@ -44,14 +44,18 @@ The next action stays at the bottom of the panel while longer details scroll.
    observations and clears a selection; **Wrong objects? Add a hint** pins a
    selected observation before recompiling; **Measurements & search details**
    exposes costs, unusual spacing, incomplete results and resource limits.
-   The starting gate aliases the slalom entrance roles. Recompilation clears
+   The starting pair retains the historical `slalom.entrance.*` role names as
+   recognition anchors; its crossing belongs only to the separate Gate task.
+   Slalom's object list and map overlay show the turns and exit gate.
+   Recompilation clears
    earlier confirmations. Costs are not probabilities; bounded searches may
    omit other interpretations.
 8. **Continue to Configure** opens navigation settings after at least one task
    is confirmed. The explicit manual-assignment link can bypass recognition.
    Choose start, boundary, clearance and budget; then add cards in **Build run**.
    Review local directions, suggested finish and channel water, and confirm
-   each task card. Shared Gate → Slalom crossing confirmation remains separate.
+   each task card. Add Gate then Slalom to include both, or Slalom alone to
+   start with its turns. They remain separate blocks without crossing sharing.
    **Generate → Validate → Approve → Upload/readback → Start** remain separate.
 
 **Save course** at the bottom opens **Download course JSON**. It saves the
@@ -76,6 +80,8 @@ concept document is design context, not confirmed final event rules.
 - Slalom: entrance gate, four alternating red/green turns, exit gate; nominal
   successive spacing **30 ft = 9.144 m**.
 - Starting gate aliases the same physical slalom entrance pair.
+  This recognition alias does not require a crossing in the Slalom route;
+  the separate Gate task owns that crossing.
 - Channel: three red and three green observations, width **40 ft = 12.192 m**,
   length **60 ft = 18.288 m**, nominal adjacent boundary spacing 30 ft.
 - Connection: illustrated **15 ft = 4.572 m** gap between the near slalom-exit

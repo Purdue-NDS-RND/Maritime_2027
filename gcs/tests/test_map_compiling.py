@@ -10,7 +10,7 @@ from gcs.app.sessions import SessionWorkspace
 from gcs.app.course_compiler import compile_course
 from gcs.app.course_files import load_course, save_course
 from gcs.app.course_setup import prepare_task
-from shared.geometry import to_gps
+from shared.geometry import to_gps, to_local
 
 
 class CleanupTests(unittest.TestCase):
@@ -104,7 +104,8 @@ class CleanupTests(unittest.TestCase):
         self.w.edit({'revision':state['revision'],'run_draft':draft})
         self.select('slalom')
         setup=self.w.read()['run_draft']['steps'][0]['setup']
-        self.assertEqual(setup['passages'][1]['buoy'],'dodge_turn_1')
+        self.assertEqual(setup['passages'][0]['buoy'],'dodge_turn_1')
+        self.assertEqual([p['kind'] for p in setup['passages']],['turn']*4+['gate'])
         self.assertFalse(setup['course_confirmed'])
         self.assertFalse(setup['planning_area'])
         self.select('gate')
@@ -136,6 +137,36 @@ class CleanupTests(unittest.TestCase):
             self.assertTrue(validate_run(m,generated['draft'])['valid'])
             self.assertEqual(generated['draft']['clearance_m'],1.5)
         self.assertEqual(coordinates,[o['centre'] for o in m['buoys']])
+
+    def test_full_map_gate_then_slalom_keeps_starting_pair_out_of_slalom(self):
+        from gcs.app.run_builder import new_run, generate_run
+        from shared.run_builder import validate_run
+        m=self.original
+        for assignments in (None,compile_course(m)['candidates'][0]['tasks']):
+            gate=prepare_task(m,'gate',{'clearance_m':1.5},assignments and assignments['gate'])['draft']
+            slalom=prepare_task(m,'slalom',{'clearance_m':1.5},assignments and assignments['slalom'])['draft']
+            self.assertEqual([p['kind'] for p in gate['passages']],['gate'])
+            self.assertEqual([p['kind'] for p in slalom['passages']],['turn']*4+['gate'])
+            starting_pair={gate['passages'][0][key] for key in ('red','green')}
+            self.assertTrue(starting_pair.isdisjoint({p[key] for p in slalom['passages'] for key in ('red','green','buoy') if key in p}))
+            gate['course_confirmed']=slalom['course_confirmed']=True
+            run=new_run(m)
+            run['settings'].update(clearance_m=1.5,preferred_buffer_m=1.5)
+            run.update(start=to_gps(0,0,m['geographic_reference']),sizes_confirmed=True,
+                       attempt={'mode':'full','start_source':'manual'},
+                       planning_area=[to_gps(x,y,m['geographic_reference']) for x,y in ((-95,-40),(20,-40),(20,30),(-95,30))],
+                       steps=[{'id':'gate','type':'gate','setup':gate},{'id':'slalom','type':'slalom','setup':slalom}])
+            result=generate_run(m,run)
+            self.assertTrue(result['success'],result)
+            self.assertEqual([b['instances'] for b in result['draft']['blocks']],[['gate'],['slalom']])
+            self.assertTrue(validate_run(m,result['draft'])['valid'])
+            centres={o['id']:to_local(o['centre'],m['geographic_reference']) for o in m['buoys']}
+            a,b=[centres[gate['passages'][0][key]] for key in ('red','green')]
+            centre=[(a[i]+b[i])/2 for i in (0,1)]
+            lo=result['draft']['blocks'][1]['waypoint_start']
+            for point in result['draft']['waypoints'][lo-1:]:
+                position=to_local(point,m['geographic_reference'])
+                self.assertGreater(sum((position[i]-centre[i])*gate['direction'][i] for i in (0,1)),0)
 
     def test_failed_template_preparation_does_not_partially_publish_selection(self):
         self.compile();state=self.w.read()
@@ -169,6 +200,7 @@ class CompilerApiTests(unittest.TestCase):
         response=self.client.post('/api/course/select',json={'revision':state['revision'],'task':'slalom','candidate_id':candidate['id']});self.assertEqual(response.status_code,200,response.text)
         prepared=self.client.post('/api/course/prepare',json={'task':'slalom'}).json()
         self.assertEqual(prepared['recognition_source'],'accepted')
+        self.assertEqual([p['kind'] for p in prepared['draft']['passages']],['turn']*4+['gate'])
         self.assertFalse(prepared['draft']['planning_area'])
         exported=self.client.get('/api/course/file').json()
         other=self.client.post('/api/session').json()

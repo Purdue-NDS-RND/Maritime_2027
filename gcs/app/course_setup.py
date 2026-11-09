@@ -51,14 +51,17 @@ def prepare_task(object_map, task, settings=None, assignments=None):
             if sum(delta[i]*direction[i]for i in (0,1))<0:direction=tuple(-v for v in direction)
         origin=centre(first); end=centre(pairs[-1]) if task=='slalom' else origin
         passage=lambda pair,index:{'id':f'gate_{index}','kind':'gate','red':pair[0]['id'],'green':pair[1]['id']}
-        passages=[passage(first,1)]
+        # The starting pair belongs to the Gate task. Slalom begins at its
+        # first turn; the pair remains a recognition/direction anchor only.
+        passages=[passage(first,1)] if task=='gate' else []
         if task=='slalom':
             if not assignments:
                 turns=sorted((o for o in candidates if re.search(r'(^|_)turn_[0-9]+',o['id'])),key=lambda o:int(re.search(r'turn_([0-9]+)',o['id']).group(1)))
             passages.extend({'id':f'turn_{i+1}','kind':'turn','buoy':o['id'],'side':'left' if o.get('category')=='red' else 'right' if o.get('category')=='green' else None}for i,o in enumerate(turns))
             if len(pairs)>1:passages.append(passage(pairs[-1],2))
         draft['passages']=passages
-        for red,green in (pairs if task=='slalom' else pairs[:1]):
+        assigned_pairs=pairs[:1] if task=='gate' else pairs[-1:] if len(pairs)>1 else []
+        for red,green in assigned_pairs:
             opening=math.dist(points[red['id']],points[green['id']])-red.get('radius_m',0)-green.get('radius_m',0)
             needed=sum(zones(obj,draft)[0] for obj in (red,green))
             if opening<needed:

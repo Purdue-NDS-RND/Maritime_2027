@@ -57,6 +57,19 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(r.json()['success'],r.text)
         return r.json()
 
+    def test_gate_then_slalom_and_standalone_slalom_generate_without_sharing(self):
+        _,run,gps=fixture()
+        for standalone in (False,True):
+            draft=deepcopy(run)
+            draft['steps']=draft['steps'][1:2] if standalone else draft['steps'][:2]
+            if standalone:draft['start']=gps(4,0)
+            self.w.edit({'revision':self.w.read()['revision'],'run_draft':draft})
+            self.generate()
+            out=self.w.read()['run_draft']
+            self.assertEqual([b['instances'] for b in out['blocks']],[['slalom']] if standalone else [['gate'],['slalom']])
+            self.assertTrue(self.client.post('/api/validate').json()['valid'])
+        self.assertFalse(self.calls)
+
     def approve(self):
         self.generate();self.assertTrue(self.client.post('/api/validate').json()['valid'])
         r=self.client.post('/api/approve');self.assertEqual(r.status_code,200,r.text);return r.json()

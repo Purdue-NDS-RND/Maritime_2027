@@ -56,6 +56,9 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    remain available for corrections. Changing extra room takes effect only on
    **Regenerate**, which replaces the current outline and fits it in the map.
 3. **Build run:** use the direct **＋ Gate / Slalom / Channel / Manual** buttons.
+   To include the starting gate, add **Gate** first, then **Slalom**. Gate owns
+   that crossing; Slalom contains the four turn buoys and exit gate. Slalom can
+   also run on its own from the selected start, without a Gate card.
    The sequence sits above a persistent map (about 60%) and task editor (about
    40%). **Expand map** gives more room to the map while retaining an inspector.
    The application fits the browser window: the page and map do not scroll.
@@ -75,7 +78,7 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    buoy names, a gate label and crossing arrow. Clicking a buoy shows its identity
    and assignment. **1st buoy / 2nd buoy** selects an endpoint
    for map-click replacement; **Done / cancel tool** cancels the tool. Replacements
-   revoke task review, derived geometry, sharing and generated authority. Duplicate
+   revoke task review, derived geometry and generated authority. Duplicate
    endpoints, towers and polygon objects are rejected as replacements. Task accents match selected map geometry: teal
    Gate, amber Slalom, cyan Channel and slate Manual. Actual buoy colors and
    purple tower zones retain their meanings. **Shared settings** returns to
@@ -88,8 +91,8 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
 
 Drag a task’s grip to reorder, or select it and use **↑ / ↓**. **Duplicate** copies only that
 card's current configuration into a new independent instance. **Remove** deletes
-that instance. These edits revoke the route, approval and shared-crossing
-confirmation. Task cards always include all required passages; partial-task
+that instance. These edits revoke the route and approval.
+Task cards always include all required passages; partial-task
 recovery and per-card speeds are not part of Run builder.
 
 Manual cards contain exact ordered waypoints. **Draw manual waypoints** appends
@@ -112,11 +115,12 @@ object chains, review/correct permitted water and use **Finish past last gate**.
 Uneven, staggered, rotated and curved courses are supported. The full competition
 map is the primary operator scene; the small slalom map is regression coverage.
 
-Only adjacent compatible Gate → Slalom instances can share an entrance. Use
-**Review adjacent shared crossings**, then explicitly confirm the named instances.
-Without confirmation both crossing requirements remain. Reordering, assignment,
-map, boundary or settings edits revoke confirmation. Sharing describes planned
-semantics and does not establish official scoring credit.
+Gate and Slalom always produce separate task blocks. There is no shared-crossing
+confirmation or second starting-gate requirement inside Slalom. A combined run
+continues from the Gate endpoint into Slalom; only its final task stops in HOLD.
+For a stop between tasks, generate and execute a Gate-only run, then separately
+review and generate Slalom from the boat's fresh position. Earlier Slalom cards
+that still begin with a gate must be corrected and reviewed before generation.
 
 ## Boat controls and Return now
 
@@ -206,7 +210,7 @@ fixed at the bottom of the panel.
    row shows its confirmation directly. Unresolved tasks can be assigned later.
    Hints, object lists, measurements and search diagnostics stay collapsed.
 4. **Continue to Configure**, then build your chosen run. Task geometry, finish,
-   boundary, shared crossing and route still require their existing reviews.
+   boundary and route still require their existing reviews.
    Confirming assignments never generates or approves a boat route.
 
 **Save course → Download course JSON** retains observations, profile, hints and

@@ -465,9 +465,12 @@ boundary clearance, route invalidation and execution approval checks still apply
 Generation captures a fresh start and plans each complete task from its preceding
 endpoint. Manual waypoints are retained exactly and all joins checked. One shared
 60-second deadline covers search, simplification and final segment validation;
-no partial or previous executable route survives failure. Adjacent compatible
-Gate → Slalom instances may share only after instance-bound confirmation. Changes
-to those inputs or their order revoke sharing. Channel entry, ordered sections,
+no partial or previous executable route survives failure. The starting gate is
+a separate Gate task; Slalom begins with the first turn and retains its exit
+gate. Add Gate before Slalom to include both, or run Slalom on its own. Each card
+produces its own block; there is no shared crossing or repeated starting-gate
+requirement in Slalom. Recognition retains the starting pair as a geometric
+reference, without adding it to Slalom's required passages. Channel entry, ordered sections,
 containment and actual final-gate exit are retained wherever its card appears.
 
 The complete run uses one ordinary ≤500-waypoint boat mission, one speed and

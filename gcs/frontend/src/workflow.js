@@ -47,6 +47,7 @@ export function missingSetup(draft) {
     if(draft.planner_task==='channel'&&(draft.channel||[]).length<3&&!(draft.channel_chains?.left?.length>=2&&draft.channel_chains?.right?.length>=2))missing.push('Channel boundary');
     if(draft.planner_task==='gate'&&!draft.passages?.some(p=>p.kind==='gate'))missing.push('Gate pair');
     if(draft.planner_task==='slalom'&&!draft.passages?.some(p=>p.kind==='turn'))missing.push('Slalom turns');
+    if(draft.planner_task==='slalom'&&draft.passages?.[0]?.kind==='gate')missing.push('Move the starting gate to a separate Gate task');
     if(draft.passages?.some(p=>p.kind==='turn'&&!['left','right'].includes(p.side)))missing.push('Passing sides');
     return missing;
 }
