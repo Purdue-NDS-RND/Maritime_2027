@@ -14,6 +14,8 @@ import BoatControls from './BoatControls';
 import {configuration,heading,friendly} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 import {api,newSession} from './api';
+import {addedObject} from './MapReview';
+import {courseOverlay} from './courseOverlay';
 
 const blank = () => ({task:'gate_only',waypoints:[], start:{latitude:51.566151,longitude:-4.034345}, finish:{latitude:51.566151,longitude:-4.034345},speed_m_s:0.5,clearance_m:1.8,finish_radius_m:1,passages:[]});
 const mapBounds = map => [latlng(map.start_pose?.position||map.geographic_reference),...map.buoys.map(b=>latlng(b.centre)),...(map.obstacles||[]).flatMap(o=>o.footprint?.map(latlng)||[latlng(o.centre)]),...(map.stations||[]).map(s=>latlng(s.position))];
@@ -45,6 +47,7 @@ function headingLabel(heading) {
     return `${compass} ${String(Math.round(heading)%360).padStart(3,'0')}°`;
 }
 function App() {
+    const [originalOverlay,setOriginalOverlay]=useState(false),[candidateId,setCandidateId]=useState('');
     const [mapPreview,setMapPreview]=useState(false),[expandedMap,setExpandedMap]=useState(false),[sequenceHost,setSequenceHost]=useState(null),[focusedPassage,setFocusedPassage]=useState(null);
     const [step,setStep]=useState(1), [selected,setSelected]=useState('');
     const [mode,setMode]=useState('inspect'), [labels,setLabels]=useState(false), [stations,setStations]=useState(false), [overlays,setOverlays]=useState(true);
@@ -85,7 +88,14 @@ function App() {
         if(mapEdit){invalidateRoute();mapChanged.current=true;for(const config of Object.values(w.course||{})){config.sizes_confirmed=false;config.course_confirmed=false;}if(w.draft){w.draft.sizes_confirmed=false;w.draft.course_confirmed=false;}if(w.run_draft){w.run_draft.generation_identity=null;w.run_draft.waypoints=[];}}
         setWorkspace(w);setDirty(isDirty);setValidation(null);
     }
-    current.current={workspace,draft,activeTask,edit,mode,changeWorkspace,setMode,setSelected,busy,selectObject};
+    current.current={workspace,draft,activeTask,edit,mode,changeWorkspace,setMode,setSelected,busy,selectObject,addObservation};
+    async function addObservation(position){await run(async()=>{
+        const currentMap=current.current.workspace;
+        const object=addedObject(position,'observed_'+crypto.randomUUID().replaceAll('-',''));
+        await save({...currentMap,map:{...currentMap.map,buoys:[...currentMap.map.buoys,object]}},true);
+        invalidateRoute();setSelected(object.id);setMode('inspect');
+        setMessage('Object added at the clicked GPS position. Set its color and type, then compile again.');
+    });}
     function edit(next) {
         if(competition&&['start','planning_area','settings','steps','shared_crossings'].some(key=>next[key]!==draft[key]))invalidateRoute();
         setWorkspace(w=>{
@@ -106,7 +116,7 @@ function App() {
         }
         setSelected(object.id);
         if(step===3)setMessage(`${friendly(object.id)} · ${draft.steps?.flatMap(s=>(s.setup.passages||[]).filter(p=>[p.red,p.green,p.buoy].includes(object.id)).map(p=>`${friendly(s.type)}: ${p.kind==='gate'?'gate pair':'turn'}`)).join(', ')||'not assigned to a passage'}`);
-        else if(object.object_type==='detector')setStep(2);
+        else if(step===2&&object.object_type==='detector')setStep(2);
     }
     function focusPassage(id){
         setFocusedPassage(id);setMode('inspect');
@@ -120,6 +130,7 @@ function App() {
         mapRef.current=map; layers.current=L.layerGroup().addTo(map); vehicleLayer.current=L.layerGroup().addTo(map);
         map.on('click',e=>{const {draft,edit,workspace,activeTask,mode,changeWorkspace,setMode}=current.current;
             if(current.current.busy||mode==='inspect'||mode.startsWith('replace:'))return;
+            if(mode==='add-object'){current.current.addObservation(point(e.latlng));return;}
             if(mode.startsWith('card:')){
                 const key=mode.slice(5),card=draft.steps?.find(s=>s.id===activeTask);if(!card)return;
                 const setup={...card.setup,course_confirmed:false,derived_sections:[]};
@@ -185,6 +196,9 @@ function App() {
     useEffect(()=>{
         if(!ready)return; const group=layers.current;group.clearLayers();
         const {map}=workspace;
+        if(originalOverlay&&workspace.original_map)for(const obj of [...workspace.original_map.buoys,...(workspace.original_map.obstacles||[])]){
+            L.circleMarker(latlng(obj.centre),{radius:10,color:'#b3bac6',weight:1.5,dashArray:'3 3',fillOpacity:0,interactive:false}).addTo(group).bindTooltip(document.createTextNode('Original: '+obj.id));
+        }
         if(map) for(const [i,b] of map.buoys.entries()){
             const colour={red:'#e74b50',green:'#35c78b',white:'#dfe7f2',blue:'#4e9feb',orange:'#fa8b24',purple:'#b15ce5',yellow:'#eed831',cyan:'#25d9df',black:'#151515',zebra:'#ffffff'}[b.category]||'#999';
             (b.type==='point'?(b.object_type==='detector'?L.marker(latlng(b.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(b.centre),{radius:6,color:colour,fillOpacity:0.8})):L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7})).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(b);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
@@ -197,6 +211,18 @@ function App() {
             shape.addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(obj);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
 
         }
+        if(map&&step===1&&overlays&&(workspace.compilation||Object.keys(workspace.course_assignments||{}).length)){
+            const result=workspace.compilation;
+            const proposal=result?.candidates.find(c=>c.id===candidateId)||result?.candidates[0];
+            const tasks=proposal?.tasks||Object.fromEntries(Object.entries(workspace.course_assignments||{}).map(([task,value])=>[task,value.roles]));
+            const geometry=courseOverlay(map,tasks);
+            for(const line of geometry.lines){
+                L.polyline(line.points,{color:TASK_STYLE[line.task].color,weight:line.kind==='gate'?4:3,dashArray:line.kind==='travel'?'5 4':undefined,interactive:false}).addTo(group);
+                if(line.label){const a=line.points[0],b=line.points[1];L.tooltip({permanent:true,direction:'top'}).setLatLng([(a[0]+b[0])/2,(a[1]+b[1])/2]).setContent(document.createTextNode(line.label)).addTo(group);}
+            }
+            for(const label of geometry.labels)L.marker(label.position,{interactive:false,icon:icon(label.text,TASK_STYLE[label.task].color)}).addTo(group);
+        }
+
         if(map&&(buffers||step===2)&&Number.isFinite(previewSettings.clearance_m)&&previewSettings.clearance_m>=0){
             const ref=map.geographic_reference,required=previewSettings.clearance_m,preferred=previewSettings.preferred_buffer_m??required;
             const levels=[{radius:required,color:'#e9ac53',name:'Required'}];
@@ -296,7 +322,7 @@ function App() {
         if(workspace.return_target)L.circle(latlng(workspace.return_target),{radius:1,color:'#43e5d3',fillOpacity:.2}).addTo(group).bindTooltip('Frozen run start · return stopping area (1 m)',{permanent:true});
 
         for(const failure of [...(validation?.errors||[]),...(draft.generation_errors||[]),...(focusedFailure?[focusedFailure]:[])])if(failure.location&&map){const [x,y]=failure.location;const ref=map.geographic_reference;const lat=ref.latitude+y/111319.49079327357;const lon=ref.longitude+x/(111319.49079327357*Math.cos(lat*Math.PI/180));L.circleMarker([lat,lon],{radius:10,color:'#ff5d68',failureReason:failure.reason}).addTo(group).bindTooltip(failure.reason,{permanent:failure===focusedFailure,direction:'top',className:'failure-tooltip'});}
-    },[workspace,validation,ready,labels,stations,overlays,buffers,mode,step,activeTask,routeVisible,selected,focusedFailure,busy,focusedPassage]);
+    },[workspace,validation,ready,labels,stations,overlays,buffers,mode,step,activeTask,routeVisible,selected,focusedFailure,busy,focusedPassage,originalOverlay,candidateId]);
     useEffect(()=>{
         if(!ready||(!telemetry?.position&&!boatMarker.current))return;
         if(!boatMarker.current)boatMarker.current=L.marker(latlng(telemetry.position),{zIndexOffset:1000,title:'Boat position and heading'})
@@ -328,7 +354,7 @@ function App() {
         await initializeMap(value);setMessage('Map imported. Review its objects before building a run.');
     });event.target.value='';}
     async function initializeMap(value){invalidateRoute();setActiveTask(null);settingsChanged.current=false;mapChanged.current=false;
-        setWorkspace(value);setDirty(false);setValidation(null);setStep(1);setSelected('');setMode('inspect');
+        setWorkspace(value);setDirty(false);setValidation(null);setStep(1);setSelected('');setMode('inspect');setCandidateId('');setOriginalOverlay(false);
         mapRef.current.fitBounds(mapBounds(value.map),{padding:[40,40],maxZoom:22});
     }
     async function loadCompetition(){await run(async()=>{
@@ -350,7 +376,8 @@ function App() {
         mapRef.current.setView(centre,Math.max(mapRef.current.getZoom(),22));setBuffers(true);setFocusedFailure(failure);
     }
     async function load(path,...args){
-        if(path==='generate')setWorkLabel('Generating route');
+        if(path==='course/compile')setWorkLabel('Compiling observed course');
+        else if(path==='generate')setWorkLabel('Generating route');
         else if(path==='course/geometry')setWorkLabel('Checking task geometry');
         return api(path,...args);
     }
@@ -367,10 +394,10 @@ function App() {
           {(buffers||step===2)&&<div className="buffer-legend"><strong>Buffer preview · required {previewSettings.clearance_m} m · preferred {previewSettings.preferred_buffer_m??previewSettings.clearance_m} m</strong><span>Amber: required clearance. Blue: preferred room. Purple: tower hard exclusion and fading soft avoidance. Tower distances follow each GPS point. Shared settings apply to every card. Preview updates before validation; Validate checks the route.</span>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],previewSettings.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],previewSettings.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
           <div id="course-map"/>
           {step===3&&selected&&<div className="selected-object-info"><strong>{friendly(selected)}</strong><span>{selectedCard?.setup.passages?.filter(p=>[p.red,p.green,p.buoy].includes(selected)).map(p=>p.kind==='gate'?`Gate ${selectedCard.setup.passages.indexOf(p)+1} · ${p.red===selected?'first':'second'} buoy`:'Turn buoy').join(' · ')||'Not assigned to the selected task'}</span></div>}
-          <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode.startsWith('replace:')?'Choose a replacement buoy · click its point on the map.':mode==='inspect'?(step===2?'Configuration · click a purple tower to adjust its zones.':'Inspect mode · click an object for details.'):mode==='card:waypoint'?'Manual task · click to append exact waypoints.':mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel','card:channel'].includes(mode)?`Drawing ${mode.includes('channel')?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
+          <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode.startsWith('replace:')?'Choose a replacement buoy · click its point on the map.':mode==='add-object'?'Add observation · click its GPS position, then set color and type.':mode==='inspect'?(step===2?'Configuration · click a purple tower to adjust its zones.':'Inspect mode · click an object for details.'):mode==='card:waypoint'?'Manual task · click to append exact waypoints.':mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel','card:channel'].includes(mode)?`Drawing ${mode.includes('channel')?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
           <div className="map-caption"><span>{routeVisible?'Blue: generated route · amber: approach · L/R: reviewed passing sides':'No route displayed · Build your run, then generate'}</span>{tileError&&<span>Street background unavailable; planning still works.</span>}</div>
         </section>
-        <aside aria-label="Mission workflow"><Planner sequenceHost={sequenceHost} onPassageSelected={focusPassage} focusedPassage={focusedPassage} showMap={()=>{setMapPreview(true);fitMap(true);}} selectedCard={activeTask} workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>{if(task!=='run')setActiveTask(task);setGeneratedTasks(tasks=>[...new Set([...tasks,task])]);}} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
+        <aside aria-label="Mission workflow"><Planner originalOverlay={originalOverlay} setOriginalOverlay={setOriginalOverlay} candidateId={candidateId} setCandidateId={setCandidateId} sequenceHost={sequenceHost} onPassageSelected={focusPassage} focusedPassage={focusedPassage} showMap={()=>{setMapPreview(true);fitMap(true);}} selectedCard={activeTask} workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>{if(task!=='run')setActiveTask(task);setGeneratedTasks(tasks=>[...new Set([...tasks,task])]);}} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={status} dirty={dirty} operations={operations} results={results}/></aside>
       </div>
       <Feedback notice={notice} busy={busy} label={workLabel} elapsed={Math.max(0,Math.floor((now-startedAt)/1000))} onDismiss={()=>{setNotice(null);setFocusedFailure(null);}} onReview={step=>{setStep(step);setMode('inspect');setNotice(null);if(step===4)requestAnimationFrame(()=>{const details=document.getElementById('command-results');if(details){details.open=true;details.scrollIntoView({block:'center'});}});}} onFocus={focusFailure}/>
       <section className="feedback" aria-live="polite"><p title={message}>{message}</p><details><summary>Connection details</summary><div className="connection-popover"><p>Boat API: {stale?'offline or stale':status?.state}. Position: {telemetryStale?'unavailable or stale':'live'}. Speed: {telemetry?.speed_m_s?.toFixed(2)??'—'} m/s. Heading: {telemetry?.heading_deg?.toFixed(1)??'—'}°.</p><p>{workspace.map?.schema_version===3?'GPS map · unverified':workspace.map?'Simulator map · alignment required':'No map loaded'}</p><code>{workspace.map?.scene_id||''}</code></div></details></section>

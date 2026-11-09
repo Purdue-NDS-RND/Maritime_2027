@@ -1227,3 +1227,90 @@ were preserved. No vehicle commands or new movement acceptance were performed.
 Evidence: `compact-workspace-tests.log`, `compact-workspace-build.log`, image
 build logs, `compact-layout-checks.json`, `compact-configuration.png` and
 `compact-builder.png` under ignored `simulation/logs/mission-run-builder/`.
+
+#### Map cleanup and course compilation (2026-11-08)
+
+Map now supports cleanup, bulk navigation-buoy classification, additions,
+remove/undo/redo and an original-observation overlay. A pure bounded Python
+compiler matches the versioned reference course using local relationships,
+returns ranked joint/partial proposals, and accepts optional role pins. Accepted
+per-task assignments supply unconfirmed builder templates without changing GPS
+positions or creating a run sequence. Course JSON retains original/cleaned maps,
+profile, hints and roles; reimport requires fresh review and carries no route or
+execution authority. See [map compiling](map_compiling.md) for scoring assumptions,
+search limits, file/API details and operator instructions.
+
+All **131 backend/API tests**, frontend request/workflow/render checks, production
+frontend build, Python compilation and whitespace checks passed. Full-map
+fixtures cover row/ID independence, rotation, curves/stagger, skewed/variable-width
+geometry, arbitrary task connections, absent/extra towers, unspecified gate
+widths, competing patterns, missing observations, pins and structural conflicts.
+Session checks cover edit history/original preservation, settings versus map
+invalidation, file reference/geometry checks, stale publication and atomic task
+selection. Compiled opaque-ID GPS assignments for Gate, Slalom and Channel each
+reach Generate → Validate at an explicitly selected 1.5 m required/preferred
+buffer without moving observations or relaxing clearance.
+
+Chrome on the isolated localhost:8083 preview exercised the unlabeled 29-object
+full-course import, bulk typing, object correction/add/remove/undo/redo, original
+overlay, ranked alternatives, a pinned role, per-task selection, actual JSON
+download/reimport and renewed review. A restored Gate template generated and
+validated a **2-waypoint / 42.1 m** route at the unchanged **0.5 m/s / 1.8 m
+required and preferred** settings, with an explicit manual start and four-corner
+boundary. It was left unapproved, unuploaded and unstarted. A subsequent edit
+cleared recognition/overlays; undo required fresh compilation. The final preview
+shows five interpretations and accepted task templates with map/card review
+still required. Boat connectivity is isolated, and no vehicle commands were sent.
+
+Search truncation is explicit, including per-task candidate pool limits; costs
+are not probabilities and neither uniqueness nor optimality is asserted. These
+checks establish compilation and planning behavior, not measured survey-error
+tolerance, physical-boat performance or radio acceptance. Simulator pins,
+dynamics, parameters, calibration and direct MAVLink ports remain unchanged.
+Raw logs, downloaded JSON, DOM and screenshots are under ignored
+`simulation/logs/map-compiling/`. The operator runtime was not replaced; no
+commit or push was performed.
+
+The usability follow-up replaces the long Map form with **Clean up → Find
+course → Review tasks** and a fixed next-action footer. Unknown red/green
+detections get an explicit bulk-label prompt; compilation is unavailable until
+navigation buoys are typed and the map is reviewed. Each task has one confirmation
+row. Object corrections, hints, measurements, source metadata and saving stay in
+secondary controls. Manual assignment remains explicit. Frontend checks and
+production build pass; Chrome follows the unlabeled full map through classification,
+compilation, three confirmations and an unconfirmed Gate card with the expected
+objects. All three Map confirmation buttons and Continue fit at 1640×750 without
+page scrolling. Changing a preview does not transfer confirmation to different
+objects. The prior tab is retained; a separate preview shows the simpler flow.
+This presentation change adds no new route or movement acceptance. Evidence is
+`ux-frontend-tests.log`, `ux-frontend-build.log`, `ux-cleanup.png`, `ux-review.png`,
+`ux-final-dom.txt` and `ux-layout.json` in the same ignored evidence directory.
+
+#### Seeded full-course layout testing (2026-11-08)
+
+`simulation/` now offers `make random-course SEED=45` for repeatable full-course
+preview bundles and `SCENARIO=competition COURSE_SEED=45 make run` for matching
+Gazebo geometry. Mild/moderate/strong development bounds vary rotation, local
+spacing/bends/stagger, gate skew/width, channel widths and connection angle.
+All 23 buoys and six props remain, with rotated footprints/stations. Samples
+with overlap, insufficient surface/spawn separation or invalid progression are
+rejected within 100 attempts. The boat spawn/heading, fixed default course,
+source pins, parameters, dynamics, calibration and MAVLink ports are preserved.
+
+Generated GPS observations have shuffled opaque IDs, colors/types and no task
+assignments; separate truth is used only for optional `CHECK=1` recognition
+evaluation. Bundles record generator version/source hash and refuse overwrite.
+See [random course testing](../simulation/docs/USING_THE_SIM.md#random-full-course-layouts)
+for commands, bounds and the distinction from fixed-truth survey-error tests.
+
+Simulator `make validate` passed, including Gazebo SDF validation for a strong
+random course. Nine generator tests cover 90 full-course layouts across presets,
+physical/role geometry, source preservation, arbitrary rotation, shuffled
+observations, rendered/exported footprints, deterministic CLI-to-launch replay,
+overwrite refusal and unhinted recognition. All nine existing compiler
+regressions also pass. Chrome imported seed 43 / strong / 73 degrees on isolated
+8083 and showed all three tasks in the intended first interpretation, with
+review still required and no console errors. The prior operator tab and running
+simulator were retained. No new motion or physical-boat acceptance is claimed.
+Raw logs, generated examples, DOM and screenshot are under ignored
+`simulation/logs/random-courses/`.

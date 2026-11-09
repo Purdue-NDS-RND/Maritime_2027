@@ -193,14 +193,20 @@ the vehicle-GCS protocol or final clearance/acceptance settings.
 
 - [Simulator setup](../simulation/docs/SETUP.md)
 - [Hardware knowledge](hardware.md)
-- [Local course details](<competition_docs/AIMM-ICC Competition Course Details 12-13 2025.pdf>)
+- [Local course details](<competition_docs/Course and Competition Details.pdf>)
 - [Local rules](<competition_docs/Rules and Regulations _ AIMM ICC.pdf>)
 - [Official rules and competition document links](https://www.trine.edu/innovation-one/aimm/rules.aspx)
 
-The local course filename is dated December 2025. Rules may change; these
+The supplied course concept document is historical. Rules may change; these
 documents provide design context rather than a guarantee of final event rules.
 
 ## GPS assisted planning extension
+
+The implemented [map compiling workflow](map_compiling.md) adds observation cleanup,
+bounded local-geometry gate/slalom/channel recognition, ranked proposals, operator
+hints and reviewed task templates. Original observations remain separate; JSON
+save/reload restores assignments for review without routes or execution authority.
+Recognition does not change navigation clearance or physical-boat acceptance.
 
 The accepted next scope adds backend planning for separate gate, slalom and
 channel missions, using one page-session reviewed GPS object map and task-specific

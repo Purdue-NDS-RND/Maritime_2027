@@ -325,3 +325,45 @@ main > .feedback { position: relative; display: flex; align-items: center; gap: 
     #builder-sequence-host .task-palette { grid-column: 1 / -1; }
     #builder-sequence-host .run-card { flex-basis: auto; }
 }
+/* Map preparation shows one decision at a time, with its next action pinned. */
+.workspace-layout.view-1 > aside {display:flex;flex-direction:column;overflow:hidden;scrollbar-gutter:auto;}
+.view-1 .map-step {display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden;}
+.map-entry-header {padding:16px;flex-shrink:0;border-bottom:1px solid var(--line);}
+.compact-map-source {padding:10px 14px;font-size:12px;}
+.compact-map-source details {margin-top:6px;padding-top:5px;max-height:170px;overflow:auto;}
+.guided-map-review {flex:1;min-height:0;gap:0;}
+.map-stage-nav {display:flex;gap:4px;padding:10px 12px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.map-stage-nav button {flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 5px;font-size:12px;}
+.map-stage-nav b {font-size:10px;opacity:.7;}
+.map-stage-nav [aria-current=step],.course-options [aria-pressed=true] {background:#454545;border-color:#9dbed2;}
+.map-review-body {flex:1;min-height:0;overflow:auto;padding:14px;overscroll-behavior:contain;}
+.map-phase-heading h2 {font-size:18px;margin:0 0 6px;}
+.map-phase-heading p {font-size:12px;color:var(--muted);margin:0 0 14px;}
+.object-type-summary {font-size:12px;color:var(--muted);}
+.map-next-action {padding:12px;border:1px solid #8b8057;background:#39372c;border-radius:5px;margin:12px 0;font-size:12px;}
+.map-next-action p {margin:6px 0 10px;}
+.map-next-action button {width:100%;}
+.map-ready-note {padding:12px;border-left:3px solid #82b59d;font-size:13px;background:#303b35;}
+.guided-map-review .cleanup-toolbar button {font-size:11px;padding:6px 8px;}
+.guided-map-review details {margin-top:12px;padding-top:10px;}
+.map-review-footer {flex-shrink:0;padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);}
+.map-review-footer .wide {margin-top:4px;}
+.map-review-footer .text-button {display:block;margin-top:6px;font-size:11px;}
+.map-review-footer details {margin-top:5px;padding-top:5px;border:0;}
+.map-review-footer details[open] {max-height:130px;overflow:auto;}
+.course-options {display:flex;align-items:center;gap:8px;font-size:12px;margin:8px 0;flex-wrap:wrap;}
+.course-options .button-row {margin-top:0;}
+.map-review-body[data-phase=review] .map-phase-heading p {margin-bottom:8px;}
+.map-review-body .compact-search-note {margin:4px 0 8px;font-size:11px;}
+.course-options button {font-size:11px;padding:5px 8px;}
+.guided-tasks article {padding:8px 0;}
+.task-choice-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.task-choice-heading h3 {font-size:14px;margin:0 0 4px;}
+.task-choice-heading p {font-size:11px;color:var(--muted);margin:0 0 8px;}
+.task-choice-status {font-size:11px;white-space:nowrap;color:#d9c17f;}
+.task-choice-status.confirmed {color:#91c5ac;}
+.task-choice-action {display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;}
+.task-choice-action button {padding:5px 9px;font-size:12px;}
+.guided-tasks details summary {font-size:10px;}
+.guided-tasks article>button {font-size:12px;}
+.guided-tasks details {margin-top:6px;padding-top:5px;border:0;}

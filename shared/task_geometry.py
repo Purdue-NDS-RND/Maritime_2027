@@ -65,7 +65,7 @@ def segment_within(a, b, polygon):
 
 def channel_geometry(object_map, draft):
     ref = object_map['geographic_reference']
-    objects = {o['id']: o for o in object_map['buoys']}
+    objects = {o['id']: o for o in [*object_map['buoys'], *object_map.get('obstacles', [])]}
     chains = draft.get('channel_chains', {})
     left, right = [[to_local(objects[key]['centre'], ref) for key in chains.get(side, [])]
                    for side in ('left', 'right')]
@@ -100,7 +100,7 @@ def resolve_geometry(object_map, draft):
     if result.get('geometry_version') != 2 or not result.get('planner_task'):
         return result
     ref = object_map['geographic_reference']
-    ids = {o['id']: o for o in object_map['buoys']}
+    ids = {o['id']: o for o in [*object_map['buoys'], *object_map.get('obstacles', [])]}
     gps = lambda p: to_gps(*p, ref)
     result.pop('entry', None)
     result.pop('exit', None)

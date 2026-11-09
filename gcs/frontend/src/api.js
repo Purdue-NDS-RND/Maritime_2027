@@ -11,8 +11,8 @@ export async function newSession(){
 export async function api(path, method='GET', body, {generationTimeoutMs=75000}={}) {
     const session=pageSession;
     const revision=method!=='GET'?++requestRevision:requestRevision;
-    const controller=['generate','return/prepare'].includes(path)?new AbortController():null;
-    const timer=controller?setTimeout(()=>controller.abort(),path==='return/prepare'?generationTimeoutMs+20000:generationTimeoutMs):null;
+    const controller=['generate','return/prepare','course/compile'].includes(path)?new AbortController():null;
+    const timer=controller?setTimeout(()=>controller.abort(),path==='course/compile'?10000:path==='return/prepare'?generationTimeoutMs+20000:generationTimeoutMs):null;
     try {
         const response=await fetch('/api/'+path, {
             method, headers:{'Content-Type':'application/json',...(session?{'X-Planner-Session':session}:{})},

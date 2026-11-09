@@ -7,7 +7,7 @@ from shared.course import gap
 from shared.avoidance import zones
 
 
-def prepare_task(object_map, task, settings=None):
+def prepare_task(object_map, task, settings=None, assignments=None):
     if task not in ('gate','slalom','channel'):
         raise ValueError('select gate, slalom or channel')
     settings=settings or {}
@@ -35,6 +35,11 @@ def prepare_task(object_map, task, settings=None):
             if green:
                 pairs.append((red,green))
         pairs.sort(key=lambda pair:pair[0]['id'])
+        turns=[]
+        if assignments:
+            ids={o['id']:o for o in objects}
+            pairs=[tuple(ids[assignments[f'slalom.{gate}.{colour}']] for colour in ('red','green')) for gate in (('entrance','exit') if task=='slalom' else ('entrance',))]
+            turns=[ids[assignments[f'slalom.turn.{i}']] for i in range(1,5)] if task=='slalom' else []
         if not pairs:
             return {'draft':draft,'diagnostics':['No labeled gate assignment found. Select the gate objects and direction on the map.'],'ready':False}
         first=pairs[0]; a,b=[points[o['id']] for o in first]
@@ -48,7 +53,8 @@ def prepare_task(object_map, task, settings=None):
         passage=lambda pair,index:{'id':f'gate_{index}','kind':'gate','red':pair[0]['id'],'green':pair[1]['id']}
         passages=[passage(first,1)]
         if task=='slalom':
-            turns=sorted((o for o in candidates if re.search(r'(^|_)turn_[0-9]+',o['id'])),key=lambda o:int(re.search(r'turn_([0-9]+)',o['id']).group(1)))
+            if not assignments:
+                turns=sorted((o for o in candidates if re.search(r'(^|_)turn_[0-9]+',o['id'])),key=lambda o:int(re.search(r'turn_([0-9]+)',o['id']).group(1)))
             passages.extend({'id':f'turn_{i+1}','kind':'turn','buoy':o['id'],'side':'left' if o.get('category')=='red' else 'right' if o.get('category')=='green' else None}for i,o in enumerate(turns))
             if len(pairs)>1:passages.append(passage(pairs[-1],2))
         draft['passages']=passages
@@ -66,6 +72,9 @@ def prepare_task(object_map, task, settings=None):
         for label in ('left','right'):
             chain=sorted((o for o in boundary if f'_{label}_' in o['id']),key=lambda o:o['id'])
             chains.append(chain)
+        if assignments:
+            ids={o['id']:o for o in objects}
+            chains=[[ids[assignments[f'channel.{colour}.{i}']] for i in range(1,4)] for colour in ('red','green')]
         if any(len(c)<2 for c in chains):
             return {'draft':draft,'diagnostics':['Channel boundaries need operator assignment. Draw its permitted area and choose entry/exit.'],'ready':False}
         midpoint=lambda index:tuple(sum(points[c[index]['id']][i]for c in chains)/2 for i in (0,1))
@@ -77,6 +86,13 @@ def prepare_task(object_map, task, settings=None):
         draft.update(direction=list(direction),channel=[gps(p) for p in polygon],
                      channel_chains={name:[o['id'] for o in c] for name,c in zip(('left','right'),chains)})
     finish_direction=direction
+    if task=='slalom' and assignments:
+        a,b=[points[o['id']] for o in pairs[-1]]
+        tangent=(b[0]-a[0],b[1]-a[1]);width=math.hypot(*tangent)
+        finish_direction=(tangent[1]/width,-tangent[0]/width)
+        delta=tuple(end[i]-points[turns[-1]['id']][i] for i in (0,1))
+        if sum(delta[i]*finish_direction[i] for i in (0,1))<0:
+            finish_direction=tuple(-v for v in finish_direction)
     if task=='channel':
         # Stop beyond the actual last pair, along its local forward normal.
         a,b=[points[c[-1]['id']] for c in chains]
@@ -109,4 +125,9 @@ def prepare_task(object_map, task, settings=None):
         draft['derived_sections']=resolve_geometry(object_map,draft)['derived_sections']
     except (ValueError,KeyError) as error:
         notes.append(str(error))
-    return {'draft':draft,'diagnostics':notes,'ready':True}
+    if assignments:
+        # Recognition supplies roles and a finish suggestion, never an approved
+        # water boundary. The operator draws/reviews the shared planning area.
+        draft['planning_area']=[]
+        notes.append('Compiled assignment template. Review local directions, finish, water and settings; confirm this card separately.')
+    return {'draft':draft,'diagnostics':notes,'ready':True,'recognition_source':'accepted' if assignments else 'manual_or_labels'}

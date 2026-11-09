@@ -1,41 +1,26 @@
-import React,{useEffect,useState} from 'react';
+import React from 'react';
 import RunBuilder from './RunBuilder';
 import Configuration from './Configuration';
+import MapReview from './MapReview';
 import {DiagnosticList} from './Feedback';
 import {reviewBlocks} from './readiness';
 import {friendly} from './workflow';
 export default function Planner(props) {
     const {workspace,draft,edit,mode,setMode,save,notify,load,step,setStep,selected,setSelected,onImport,loadCompetition,validation,action,busy,run,stale,status,dirty,operations,results,routeVisible,onFocusFailure}=props;
-    const [objectEdit,setObjectEdit]=useState(null);
     const objects=[...(workspace.map?.buoys||[]),...(workspace.map?.obstacles||[])];
-    const object=objects.find(o=>o.id===selected);
-    useEffect(()=>setObjectEdit(object?structuredClone(object):null),[object]);
     const approved=routeVisible&&!!workspace.approval&&!dirty&&!workspace.run_consumed;
     const mission=workspace.approval?.envelope.mission.mission_id||(workspace.execution?.generation_identity===draft.generation_identity?workspace.execution?.mission_id:null);
     const uploaded=approved&&status?.mission_id===mission&&status?.state==='uploaded';
     const pending=operations.map(id=>results[id]).filter(r=>r&&r.mission_id===mission&&['pending','running'].includes(r.state)).at(-1);
     const blocks=reviewBlocks({draft,routeVisible,dirty,validation,approved,uploaded,stale,status,busy,pending,mission});
     const manual=false,competition=true;
-    function setObject(key,value){setObjectEdit(o=>({...o,[key]:value}));}
-    async function applyObject(){await run(async()=>{
-        const name=workspace.map.buoys.some(o=>o.id===selected)?'buoys':'obstacles';
-        const corrected={...objectEdit};
-        if(corrected.footprint&&object){const dy=corrected.centre.latitude-object.centre.latitude,dx=corrected.centre.longitude-object.centre.longitude;corrected.footprint=corrected.footprint.map(p=>({latitude:p.latitude+dy,longitude:p.longitude+dx}));}
-        await save({...workspace,map:{...workspace.map,[name]:workspace.map[name].map(o=>o.id===selected?corrected:o)}},true);
-        props.invalidateRoute();notify('Object correction saved. Review the map and card assignments again.');
-    });}
     return <>
-      <fieldset className={"step-content"+(step===3?" build-step":step===2?" configuration-step":"")} disabled={busy}>
+      <fieldset className={"step-content"+(step===3?" build-step":step===2?" configuration-step":step===1?" map-step":"")} disabled={busy}>
       {step===1&&<>
-        {workspace.map&&<p className="hint">Survey captured: {workspace.map.survey_time_source==='source'?(workspace.map.captured_at||'unknown / unverified'):'unknown / unverified (legacy survey time)'} · Imported: {workspace.map.imported_at||'unknown / legacy import'}. Survey age alone does not establish expiry or accuracy.</p>}
-        <div className="step-heading"><span className="eyebrow">COURSE REVIEW</span><h2>Check your object map</h2><p>Load the course once. All tasks and retries share this map.</p></div>
-        <div className="map-source"><strong>{workspace.map?.name||(workspace.map?'Imported course map':'No map loaded')}</strong><span>{objects.length} mapped objects · {workspace.map?.schema_version===3?'GPS map · unverified':'Simulator map'}</span></div>
-        <div className="button-row"><button onClick={loadCompetition} disabled={busy}>Load full competition map</button><label className="button quiet">Import JSON / CSV<input aria-label="Import object map" type="file" accept=".json,.csv" onChange={onImport} hidden/></label></div>
-        <p className="hint">The full competition course is the primary practice map. Import another survey when you need one.</p>
-        {workspace.map&&<><details open={!!object}><summary>Inspect or correct an object</summary><p className="hint">Click an object on the map, or select one below.</p><select aria-label="Object to inspect" value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Select an object</option>{objects.map(o=><option key={o.id} value={o.id}>{friendly(o.id)}</option>)}</select>
-        {objectEdit&&<div className="object-editor"><div className="fields"><label>Color<input value={objectEdit.category||''} onChange={e=>setObject('category',e.target.value)}/></label><label>Object type<select value={objectEdit.object_type||'unknown'} onChange={e=>setObject('object_type',e.target.value)}>{['unknown','buoy','detector','obstacle','dock'].map(t=><option key={t}>{t}</option>)}</select></label>{['radius_m','height_m'].filter(k=>k in objectEdit).map(key=><label key={key}>{key==='radius_m'?'Radius (m)':'Height (m)'}<input type="number" step="0.05" value={objectEdit[key]} onChange={e=>setObject(key,Number(e.target.value))}/></label>)}</div><details><summary>Position and original observation</summary>{['latitude','longitude'].map(key=><label key={key}>{friendly(key)}<input type="number" step="0.0000001" value={objectEdit.centre[key]} onChange={e=>setObject('centre',{...objectEdit.centre,[key]:Number(e.target.value)})}/></label>)}{objectEdit.footprint&&<label>Polygon vertices<textarea key={selected} defaultValue={JSON.stringify(objectEdit.footprint)} onBlur={e=>{try{setObject('footprint',JSON.parse(e.target.value));}catch{notify('Polygon vertices must be a GPS point list.');}}}/></label>}<pre>{JSON.stringify([...(workspace.original_map?.buoys||[]),...(workspace.original_map?.obstacles||[])].find(o=>o.id===selected),null,2)}</pre></details><button onClick={applyObject} disabled={busy}>Apply object correction</button></div>}</details>
-        <label className="check-card"><input type="checkbox" checked={!!draft.sizes_confirmed} onChange={e=>edit({...draft,sizes_confirmed:e.target.checked})}/><span><strong>I reviewed object positions and types</strong><small>Hard and soft distances are measured from each GPS point. Unknown objects still block routes.</small></span></label>
-        <button className="primary wide" title={!draft.sizes_confirmed?'Review the object map above to continue.':undefined} disabled={busy||!draft.sizes_confirmed} onClick={()=>run(async()=>{await save();setStep(2);setMode('inspect');notify('Configure shared distances, start and execution limits.');})}>Continue to Configure →</button>{!draft.sizes_confirmed&&<p className="action-reason">Review the object map above to continue.</p>}</>}
+        {!workspace.map?<div className="map-entry-header"><span className="eyebrow">MAP PREPARATION</span><h2>Import your observations</h2><p>Load a survey, then check its objects before finding the course.</p><div className="button-row"><button onClick={loadCompetition}>Load full competition map</button><label className="button quiet">Import JSON / CSV<input aria-label="Import object map" type="file" accept=".json,.csv" onChange={onImport} hidden/></label></div></div>:<>
+          <div className="map-entry-header compact-map-source"><strong>{objects.length} objects · {workspace.map.name||'Imported survey'}</strong><details><summary>Change map / source details</summary><div className="button-row"><button onClick={loadCompetition}>Load full competition map</button><label className="button quiet">Import JSON / CSV<input aria-label="Import object map" type="file" accept=".json,.csv" onChange={onImport} hidden/></label></div><p className="hint">Survey captured: {workspace.map.survey_time_source==='source'?(workspace.map.captured_at||'unknown'):'unknown / unverified'}. Imported: {workspace.map.imported_at||'unknown'}. {workspace.map.schema_version===3?'GPS map · unverified':'Simulator map'}.</p></details></div>
+          <MapReview {...props}/>
+        </>}
       </>}
       {step===2&&<Configuration {...props}/>}
       {step===3&&<RunBuilder {...props} selectedCard={props.selectedCard} onSelect={props.onTaskSelected}/>}
