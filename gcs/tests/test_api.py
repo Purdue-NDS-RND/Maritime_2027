@@ -28,7 +28,8 @@ class ApiTests(unittest.TestCase):
         self.run['steps'] = self.run['steps'][:1]
         self.w.edit({'revision':0,'map':self.m,'new_import':True})
         self.w.edit({'revision':1,'run_draft':self.run})
-        self.vehicle = {'position':self.run['start'],'position_age_s':0,'heartbeat_age_s':0,'state':'idle','armed':False,'mode':4,'speed_m_s':0}
+        self.vehicle = {'position':self.run['start'],'position_age_s':0,'heartbeat_age_s':0,'state':'idle','armed':False,'mode':4,'speed_m_s':0,
+                        'available_modes': {'MANUAL':0,'HOLD':4,'LOITER':5,'AUTO':10,'RTL':11}}
         self.calls=[];self.ops={};self.fail_stop=False;self.fail_upload=False
         def boat(path,method='GET',body=None):
             self.calls.append((path,method,body))
@@ -46,6 +47,8 @@ class ApiTests(unittest.TestCase):
                 self.vehicle.update(state='stopped',mode=4,speed_m_s=0)
                 if self.fail_stop:op.update(state='failed',detail='HOLD rejected')
             if command == 'disarm':self.vehicle['armed']=False
+            if command == 'mode' and self.vehicle['mode'] != self.vehicle['available_modes'][body['mode']]:
+                self.vehicle.update(mode=self.vehicle['available_modes'][body['mode']],state='stopped')
             self.ops[key]=op
             # Real transport returns a receipt; reconciliation needs polling.
             return {**op,'state':'pending'}
@@ -106,6 +109,69 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/disarm').status_code,200)
         self.assertEqual(self.client.post('/api/stop',headers={'Origin':'https://example.com'}).status_code,403)
 
+    def test_armed_loiter_upload_and_start_remain_separate(self):
+        self.approve();self.vehicle.update(armed=True,mode=5)
+        self.command('upload')
+        self.assertEqual(self.vehicle['mode'],5)
+        self.assertTrue(self.vehicle['armed'])
+        self.assertFalse(any(c[0].endswith('/start') for c in self.calls))
+        self.command('start')
+        self.assertFalse(any(c[0]=='/disarm' for c in self.calls))
+
+    def test_upload_rejects_armed_hold_manual_and_auto(self):
+        self.approve()
+        for mode in (0,4,10,15):
+            self.vehicle.update(armed=True,mode=mode)
+            self.assertEqual(self.client.post('/api/upload').status_code,409)
+        self.vehicle.update(armed=False,mode=10)
+        self.assertEqual(self.client.post('/api/upload').status_code,409)
+        self.assertFalse(any(c[1]=='PUT' for c in self.calls))
+
+    def test_mode_switch_and_auto_approval_gate(self):
+        for body,code in (({'mode':'BAD'},409),({'mode':5},422),({'mode':'LOITER','extra':1},422)):
+            self.assertEqual(self.client.post('/api/mode',json=body).status_code,code)
+        self.assertEqual(self.client.post('/api/mode',json={'mode':'AUTO'}).status_code,422)
+        self.approve()
+        self.assertEqual(self.client.post('/api/mode',json={'mode':'AUTO'}).status_code,409)
+        self.vehicle['armed']=True
+        response=self.client.post('/api/mode',json={'mode':'LOITER'})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(self.vehicle['mode'],5)
+        self.assertIsNotNone(self.w.read()['approval'])
+        self.command('upload')
+        response=self.client.post('/api/mode',json={'mode':'AUTO'})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(self.vehicle['mode'],10)
+        self.assertIsNone(self.w.read()['approval'])
+
+    def test_mode_change_after_upload_requires_new_approval_but_same_mode_does_not(self):
+        original=self.approve();self.vehicle.update(armed=True,mode=5)
+        self.command('upload')
+        same=self.client.post('/api/mode',json={'mode':'LOITER'})
+        self.assertEqual(same.status_code,200,same.text)
+        self.assertEqual(self.w.read()['approval']['envelope']['approval_id'],original['envelope']['approval_id'])
+        self.assertEqual(self.vehicle['state'],'uploaded')
+        changed=self.client.post('/api/mode',json={'mode':'MANUAL'})
+        self.assertEqual(changed.status_code,200,changed.text)
+        self.assertIsNone(self.w.read()['approval'])
+        self.assertEqual(self.client.post('/api/upload').status_code,422)
+        self.assertEqual(self.client.post('/api/start').status_code,422)
+        self.assertFalse(self.w.read()['run_consumed'])
+        self.client.post('/api/mode',json={'mode':'LOITER'})
+        renewed=self.client.post('/api/approve').json()
+        self.assertNotEqual(renewed['envelope']['approval_id'],original['envelope']['approval_id'])
+        self.command('upload');self.command('start')
+
+    def test_mode_requires_fresh_status_and_rejects_cross_origin(self):
+        self.vehicle['heartbeat_age_s']=4
+        self.assertEqual(self.client.post('/api/mode',json={'mode':'LOITER'}).status_code,409)
+        self.assertEqual(self.client.post('/api/mode',json={'mode':'LOITER'},headers={'Origin':'https://example.com'}).status_code,403)
+        self.assertFalse(any(c[1]!='GET' for c in self.calls))
+        self.vehicle.update(heartbeat_age_s=0,system_id=1,component_id=1)
+        with patch.object(self.main.manager, 'telemetry_snapshot', return_value={'stale':False,'system_id':2,'component_id':1}):
+            self.assertEqual(self.client.post('/api/mode',json={'mode':'LOITER'}).status_code,409)
+            self.assertEqual(self.client.post('/api/stop').status_code,200)
+
     def test_live_start_stale_and_actual_position_change(self):
         d=deepcopy(self.run);d['attempt']['start_source']='live'
         self.w.edit({'revision':self.w.read()['revision'],'run_draft':d})
@@ -128,8 +194,8 @@ class ApiTests(unittest.TestCase):
             self.assertTrue(self.client.post('/api/validate').json()['valid'])
             a=self.client.post('/api/approve');self.assertEqual(a.status_code,200,a.text)
             self.assertEqual(a.json()['envelope']['mission']['finish_settle_s'],5)
-            self.assertEqual(self.client.post('/api/upload').status_code,409)
-            self.command('disarm');self.command('upload');self.command('start')
+            self.vehicle['mode']=5
+            self.command('upload');self.command('start')
             self.assertEqual(self.w.read()['return_target'],target)
 
     def test_return_inside_channel_exits_only_through_beginning(self):

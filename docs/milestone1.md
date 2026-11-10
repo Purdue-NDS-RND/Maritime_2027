@@ -9,6 +9,61 @@ This establishes simulator acceptance; physical-boat performance is unverified.
 See [recorded results](#recorded-simulator-results) below and
 [boat execution](boat_execution.md) for interfaces and fault behavior.
 
+Armed Loiter uploads and flight modes (2026-11-10, feature branch): the header
+now provides a Rover mode dropdown and explicit Set mode, with actual mode and
+heartbeat-confirmed operation results. Upload/readback and explicit Start accept
+an armed boat in LOITER; disarmed upload outside AUTO remains available. Upload
+preserves arming and the Loiter target. AUTO uses the reviewed Start path;
+other mode changes cancel older commands and require fresh upload/start.
+Normal completion verifies finish settling in HOLD and then confirms LOITER.
+Stop remains priority HOLD; Disarm still requires HOLD and low reported speed.
+Returns use the same armed-Loiter/disarmed upload choice after review/approval.
+
+All **175 GCS tests** and **37 boat tests** pass, including ROS construction,
+armed Loiter upload/start without arm/disarm commands, takeover during transfer,
+readback/speed failures, unconfirmed mode rejection, command cancellation and
+return replacement. Frontend readiness/render checks, production build and
+separately tagged boat/GCS review image builds pass; all 37 boat tests also pass
+from the packaged image without source overlays. An isolated instance of the
+retained Rover SITL firmware, using its builtin
+motorboat model plus standard Rover calibration defaults and the unchanged
+project parameter file, completed two 6 m supplied missions: the second was
+uploaded/read back and explicitly started while remaining armed in LOITER.
+Both verified finish settling and ended armed in LOITER; Manual/Loiter switching
+and final HOLD/disarm cleanup were confirmed. No force-arm or disabled checks
+were used. Chrome loaded the full 23-buoy/6-prop map in the isolated 8088 synthetic
+preview and verified Manual → Loiter selection and confirmed results.
+
+Revalidation on the same branch found and fixed an upload-authority edge case:
+re-selecting current LOITER now preserves the uploaded mission/Start authority;
+requesting a different mode after upload clears GCS approval and requires a new
+Validate/Approve/Upload identity, avoiding replay of a historical upload receipt.
+Both regression tests failed before the fix and pass afterward. The fresh full
+175-test GCS suite, packaged 37-test boat suite, frontend checks/build, separate
+review image builds, Python compilation and whitespace checks pass.
+
+A fresh real boat HTTP server/serialized command queue against isolated Rover
+SITL completed two 6 m missions, including armed LOITER replacement upload/start
+without any arm/disarm command in the second cycle. Armed HOLD upload was refused;
+re-selecting LOITER after upload preserved Start and its target, with 0.0131 m
+reported GPS drift over a one-second wait. Manual/LOITER mode confirmations and
+final HOLD/disarm cleanup passed. Chrome on the synthetic 8088 preview exercised
+full-map manual generation, validation, approval and armed upload; same-mode
+selection kept Start enabled, different-mode selection cleared approval, and
+Validate/Approve/new Upload restored Start. No Start was sent by that browser.
+Fresh evidence uses `recheck-*` under the same ignored evidence directory.
+
+These are protocol, builtin-SITL movement and browser checks, not a new Gazebo
+full-course/hull-clearance acceptance or physical station-keeping qualification.
+Loiter permits drift inside its configured radius and propulsion outside it;
+no radius or firmware tuning was changed. Armed Start enters AUTO before the
+immediately following speed acknowledgement, so initial navigation can use the
+firmware's initial waypoint speed briefly. Normal runtime containers were retained;
+rebuild/restart both boat and GCS to deploy this branch. Evidence is under ignored
+`simulation/logs/loiter-upload/`; commands and operating limits are maintained in
+the [GCS guide](../gcs/README.md#boat-controls-and-return-now) and
+[boat execution reference](boat_execution.md).
+
 Manual field-map capture (2026-11-10): the standalone Linux Python helper
 `gcs/scripts/record_buoys.py` records a selected color and fresh boat GPS position
 on Space into an importable simple points JSON. It reuses `GET /api/telemetry`,

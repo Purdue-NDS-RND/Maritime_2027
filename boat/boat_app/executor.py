@@ -55,6 +55,8 @@ class Executor:
             "mission_sha256": self.mission.sha256 if self.mission else None,
             "system_id": self.system, "component_id": self.component,
             "mode": self.mode, "armed": self.armed,
+            "available_modes": {name: number for name, number in (self.link.mode_mapping() or {}).items()
+                                if name != "INITIALISING"} if self.system is not None else {},
             "position": vars(self.position) if self.position else None,
             "heading_deg": self.heading, "speed_m_s": self.speed, "gps_fix": self.fix,
             "heartbeat_age_s": self.age(self.last_heartbeat),
@@ -95,6 +97,8 @@ class Executor:
             self.last_heartbeat = now
             self.mode = msg.custom_mode
             self.armed = bool(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
+            if self.state == "uploading":
+                self.check_upload_mode()
             if self.state == "disconnected":
                 self.transition("ready", "connected; no mission authorized")
         elif kind == "GLOBAL_POSITION_INT":
@@ -178,8 +182,9 @@ class Executor:
     def upload(self, mission):
         self.drain()
         self.fresh()
-        if self.armed or self.mode == (self.link.mode_mapping() or {}).get("AUTO"):
-            raise MissionError("upload requires disarmed vehicle outside AUTO")
+        self.check_upload_mode()
+        if self.state in ("starting", "executing", "stopping"):
+            raise MissionError("stop active mission or select LOITER before replacement")
         # A failed replacement must invalidate the previous local authorization.
         self.mission, self.items = mission, []
         self.transition("uploading", "awaiting mission requests and final acceptance")
@@ -223,10 +228,37 @@ class Executor:
             else:
                 raise MissionError("mission upload deadline exceeded")
             self.verify_download()
+            self.fresh()
+            self.check_upload_mode()
             self.transition("uploaded", "ArduPilot accepted mission; stored items verified; start required")
         except Exception as error:
             self.transition("failed", str(error))
             raise
+
+    def check_upload_mode(self):
+        modes = self.link.mode_mapping() or {}
+        if self.mode is None or self.mode == modes.get("AUTO") or (self.armed and self.mode != modes.get("LOITER")):
+            raise MissionError("upload requires armed LOITER, or a disarmed vehicle outside AUTO")
+
+    def change_mode(self, name):
+        """Explicit operator takeover; AUTO always uses the verified start path."""
+        self.drain()
+        if self.system is None or self.clock() - self.last_heartbeat > 3:
+            raise MissionError("cannot change mode without a fresh ArduPilot heartbeat")
+        if name == "AUTO":
+            raise MissionError("use mission Start for AUTO after upload/readback")
+        if name == "INITIALISING" or name not in (self.link.mode_mapping() or {}):
+            raise MissionError(f"ArduPilot mode {name} is unavailable")
+        if name in ("LOITER", "RTL", "SMART_RTL", "GUIDED"):
+            self.fresh()
+        if self.mode == self.link.mode_mapping()[name]:
+            self.transition(self.state, f"{name} already active; arming and mission authorization unchanged")
+            return
+        # Changing an uploaded/running mission's mode consumes start authority,
+        # even if the firmware refuses or the confirmation times out.
+        self.transition("interrupted", f"operator requested {name}; fresh upload/start required")
+        self.set_mode(name)
+        self.transition("stopped", f"{name} confirmed; arming unchanged; fresh upload/start required")
 
     def addressed(self, msg):
         return (getattr(msg, "target_system", self.link.source_system) == self.link.source_system
@@ -271,29 +303,34 @@ class Executor:
             raise MissionError("start requires a freshly uploaded and verified mission")
         self.drain()
         self.fresh()
-        if self.armed:
-            raise MissionError("start requires disarmed vehicle")
+        was_armed = self.armed
+        if was_armed and self.mode != (self.link.mode_mapping() or {}).get("LOITER"):
+            raise MissionError("armed start requires LOITER")
         if distance_m(self.position, self.mission.waypoints[0]) > self.mission.max_start_distance_m:
             raise MissionError("first waypoint exceeds max_start_distance_m")
-        self.transition("starting", "checking stored mission and end behavior before arming")
+        self.transition("starting", "checking stored mission and end behavior before AUTO")
         try:
             self.verify_download()
             done_behavior = self.parameter("MIS_DONE_BEHAVE")
             if done_behavior not in (0, 1):
                 raise MissionError(f"MIS_DONE_BEHAVE={done_behavior} must be stop (0) or loiter (1); no parameter was changed")
-            self.set_mode("HOLD")
+            if not was_armed:
+                self.set_mode("HOLD")
             self.link.mav.mission_set_current_send(self.system, self.component, 1)
             self.wait(lambda m: m.get_type() == "MISSION_CURRENT" and m.seq == 1)
             self.fresh()
+            if self.armed != was_armed or self.mode != (self.link.mode_mapping() or {}).get("LOITER" if was_armed else "HOLD"):
+                raise MissionError("mode/arming changed during start; autonomy not resumed")
             self.current, self.reached = None, None
             self.final_reached = False
             self.set_mode("AUTO")
             self.command(mavutil.mavlink.MAV_CMD_DO_CHANGE_SPEED, 1, self.mission.speed_m_s, -1)
             self.emit({"event": "mission_speed_accepted", "speed_m_s": self.mission.speed_m_s})
             self.fresh()
-            if self.mode != (self.link.mode_mapping() or {}).get("AUTO") or self.armed:
-                raise MissionError("mode/arming changed during start; arming not requested")
-            self.command(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 1)
+            if self.mode != (self.link.mode_mapping() or {}).get("AUTO") or self.armed != was_armed:
+                raise MissionError("mode/arming changed during start; autonomy not resumed")
+            if not was_armed:
+                self.command(mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 1)
             if not self.armed:
                 self.wait(lambda m: m.get_type() == "HEARTBEAT" and self.armed)
             if self.mode != (self.link.mode_mapping() or {}).get("AUTO"):
@@ -359,7 +396,8 @@ class Executor:
                     if self.settled_since is None:
                         self.settled_since = self.clock()
                     if self.clock() - self.settled_since >= self.mission.finish_settle_s:
-                        self.transition("complete", "finish position/speed held for selected interval; HOLD confirmed")
+                        self.set_mode("LOITER")
+                        self.transition("complete", "finish position/speed held for selected interval; LOITER confirmed")
                 else:
                     self.settled_since = None
         except Exception as error:

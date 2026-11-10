@@ -19,7 +19,9 @@ test('default opening rejection and partial selection have distinct recovery ste
 });
 test('review reasons cover approval, armed upload, stale link and acknowledgement',()=>{
  const args={draft,routeVisible:true,dirty:false,validation:{valid:true},approved:true,uploaded:false,stale:false,status:{armed:true,mode:4}};
- assert.match(reviewBlocks(args).upload,/Disarm/);
+ assert.match(reviewBlocks(args).upload,/Loiter/);
+ assert.equal(reviewBlocks({...args,status:{armed:true,mode:5}}).upload,'');
+ assert.match(reviewBlocks({...args,status:{armed:true,mode:10}}).upload,/Loiter/);
  assert.match(reviewBlocks(args).start,/wait for confirmation/);
  assert.match(reviewBlocks({...args,status:{armed:false,mode:4},stale:true}).upload,/Reconnect/);
  assert.equal(reviewBlocks({...args,status:{armed:false,mode:4},uploaded:true}).start,'');

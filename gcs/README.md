@@ -90,7 +90,7 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    Review route/connector sections, instance IDs, final stopping area, clearance
    findings, nominal travel time and execution budget. Then **Validate → Approve
    → Upload/readback → Start**. A receipt is not confirmation. Upload requires a
-   disarmed boat outside AUTO; Start checks the exact acknowledged approval.
+   boat armed in LOITER, or disarmed outside AUTO; Start checks the exact acknowledged approval.
 
 Drag a task’s grip to reorder, or select it and use **↑ / ↓**. **Duplicate** copies only that
 card's current configuration into a new independent instance. **Remove** deletes
@@ -120,7 +120,7 @@ map is the primary operator scene; the small slalom map is regression coverage.
 
 Gate and Slalom always produce separate task blocks. There is no shared-crossing
 confirmation or second starting-gate requirement inside Slalom. A combined run
-continues from the Gate endpoint into Slalom; only its final task stops in HOLD.
+continues from the Gate endpoint into Slalom; only its final task settles in HOLD and then enters LOITER.
 For a stop between tasks, generate and execute a Gate-only run, then separately
 review and generate Slalom from the boat's fresh position. Earlier Slalom cards
 that still begin with a gate must be corrected and reviewed before generation.
@@ -185,8 +185,32 @@ task or authorize execution. Physical GPS/radio accuracy remains unverified.
 
 The persistent panel displays actual mode, arming, speed and GPS fix. **Stop boat**
 sends priority Stop independently of planner work or approval. Hold / Stop selects
-HOLD; wait for speed ≤0.20 m/s, then **Disarm** before replacement upload. Start
-arms automatically through the existing boat controller.
+HOLD. To upload while armed, select **LOITER · position hold** in the header's
+**Flight mode** dropdown and click **Set mode**. Wait for the confirmed actual
+mode, then Upload/readback and explicitly Start the reviewed mission. Normal
+completion settles in HOLD, then selects LOITER so the next upload can retain
+arming. Upload does not reset the Loiter target or start the route.
+
+The dropdown uses the boat's advertised Rover modes. The actual mode display
+updates from vehicle status; the operation result confirms the target heartbeat.
+**AUTO · start approved mission** uses the same checked Start path and is enabled
+only for the current uploaded approval. Other modes are explicit operator
+takeover: requesting a different mode after upload clears approval; Validate,
+Approve and Upload again before Start. Re-selecting the current mode preserves
+the uploaded mission and its Start authorization. Interrupting a running mission
+requires fresh generation/review/approval.
+Mode changes preserve arming. Manual/RTL and other modes have their ordinary
+firmware behavior, including movement; RTL is the firmware's direct return,
+whereas **Return now** below plans a reviewed route around mapped obstacles.
+
+[Loiter](https://ardupilot.org/rover/docs/loiter-mode.html) allows drift within
+`LOIT_RADIUS` and uses propulsion to return when outside it; it does not hold
+an exact GPS point or establish obstacle clearance. Firmware settings are
+unchanged. **Disarm** remains available after Hold / Stop and speed ≤0.20 m/s.
+Start arms automatically if disarmed. An armed Loiter Start enters AUTO and
+then immediately acknowledges speed; navigation may begin at the firmware's
+initial waypoint speed before that acknowledgement. A failed speed command
+requests HOLD while AUTO is still owned.
 
 **Return now** becomes available only after a run's Start operation succeeds in
 this page session. Its captured planning start is frozen as the return target;
@@ -204,9 +228,10 @@ that channel's beginning opening. It does not reverse the old route or resume a
 partial task. Relevant failures report their specific cause and initiate no
 return movement.
 
-The return opens in review. **Validate → Approve**, explicitly **Disarm** after
-preparation, then **Upload/readback → Start**. A return is an ordinary waypoint
-mission, finishing within 1 m at ≤0.20 m/s for at least five seconds, then HOLD.
+The return opens in review. **Validate → Approve**, select **Loiter** to keep
+arming (or disarm outside Auto), then **Upload/readback → Start**. A return is an
+ordinary waypoint mission, finishing within 1 m at ≤0.20 m/s for at least five
+seconds in HOLD, then selecting LOITER.
 There is no automatic final return card, automatic upload/start or interrupted
 run resume. Failed transfer leaves Start blocked.
 
