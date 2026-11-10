@@ -28,7 +28,7 @@ export function reviewBlocks({draft,routeVisible,dirty,validation,approved,uploa
     return {
         validate:working||route,
         approve:working||route||(dirty?'Save and validate the edited route first.':!validation?.valid?'Validate the route and resolve its errors first.':approved?'This route is already approved.':''),
-        upload:working||identity||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':status?.armed?'Disarm using Boat controls above before uploading. Go / Start arms automatically.':status?.mode===10?'Select Hold / Stop in Boat controls before uploading.':pending?.command==='upload'?'Upload is awaiting the boat’s acknowledgement and readback.':''),
+        upload:working||identity||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':status?.mode===10?'Select Loiter in Flight mode before uploading.':status?.armed&&status?.mode!==5?'Select Loiter for armed upload, or Hold / Stop then Disarm.':pending?.command==='upload'?'Upload is awaiting the boat’s acknowledgement and readback.':''),
         start:working||identity||route||(!approved?'Validate and approve this route first.':stale?'Reconnect the boat and wait for fresh position and heartbeat.':pending?.command==='start'?'Start request is awaiting confirmation.':execution||(!uploaded?'Upload this approved route and wait for confirmation.':'')),
     };
 }
@@ -53,7 +53,7 @@ export function explainFailure(error) {
     return {title,text,next,step};
 }
 export function operationNotice(operation) {
-    const command={upload:'Upload',start:'Start',stop:'Hold / Stop',disarm:'Disarm'}[operation.command]||'Request';
+    const command={upload:'Upload',start:'Start',stop:'Hold / Stop',disarm:'Disarm',mode:'Flight mode'}[operation.command]||'Request';
     if(['failed','unknown','cancelled'].includes(operation.state))return {
         kind:'error',title:`${command} ${operation.state==='unknown'?'outcome unknown':operation.state}`,
         text:operation.detail||`${command} was not confirmed.`,detail:operation.detail||`${command} was not confirmed.`,

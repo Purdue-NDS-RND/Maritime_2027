@@ -11,6 +11,7 @@ import Feedback from './Feedback';
 import {freshStatus,operationNotice} from './readiness';
 import {defaultSettings,effectiveSettings,towerZones,routeIsVisible,settingsError} from './settings';
 import BoatControls from './BoatControls';
+import FlightMode from './FlightMode';
 import ConnectionDetails from './ConnectionDetails';
 import ConnectionsDialog from './Connections';
 import {configuration,heading,friendly} from './workflow';
@@ -392,15 +393,25 @@ function App() {
         const value=await api('workspace','PUT',{revision:next.revision,run_draft:step!==4&&next.run_draft?.planning_mode==='return'?draft:next.run_draft,...(settingsChanged.current?{game_settings:next.game_settings}:{}),...(mapEdit?{map:next.map}:{})});
         mapChanged.current=false;settingsChanged.current=false;setWorkspace(value);setDirty(false);return value;
     }
-    async function action(name){beginWork({validate:'Validating route',approve:'Approving route',upload:'Requesting upload',start:'Requesting start',stop:'Requesting Hold / Stop',disarm:'Requesting Disarm'}[name]);try{
+    async function action(name,body){beginWork({validate:'Validating route',approve:'Approving route',upload:'Requesting upload',start:'Requesting start',stop:'Requesting Hold / Stop',disarm:'Requesting Disarm',mode:'Changing flight mode'}[name]);try{
         if(['validate','approve'].includes(name)&&dirty)await save();
-        if(['upload','start'].includes(name)&&identityMismatch)throw new Error('Vehicle identity mismatch. Correct Connections before Upload or Start.');
+        if(['upload','start','mode'].includes(name)&&identityMismatch)throw new Error('Vehicle identity mismatch. Correct Connections before Upload, Start or flight mode changes. Stop remains available.');
         if(['upload','start'].includes(name)&&dirty)throw new Error('Save, validate and approve the edited route first.');
-        const value=await api(name,'POST');
-        if(['stop','start'].includes(name)){setWorkspace(w=>({...w,approval:null,run_consumed:true}));setValidation(null);}
+        const value=await api(name,'POST',body);
+        if(['stop','start'].includes(name)||(name==='mode'&&['starting','executing','stopping'].includes(status?.state))){setWorkspace(w=>({...w,approval:null,run_consumed:true}));setValidation(null);}
+        else if(name==='mode'&&status?.state==='uploaded'&&status?.mode!==status?.available_modes?.[body.mode]){setWorkspace(w=>({...w,approval:null}));setValidation(null);}
         if(name==='validate'){setValidation(value);if(!value.valid){setMessage(value.errors.map(e=>e.reason).join('; '),'error',value.errors);return;}}
         if(name==='approve'){setWorkspace(w=>({...w,approval:value}));setValidation(value.validation);}
-        if(value.operation_id){watchedOperations.current.add(value.operation_id);setOperations(ids=>[...new Set([...ids,value.operation_id])]);}
+        if(value.operation_id){
+            setOperations(ids=>[...new Set([...ids,value.operation_id])]);
+            setResults(r=>({...r,[value.operation_id]:value}));
+            const update=operationNotice(value);
+            if(update){
+                if(name==='start'&&value.state==='succeeded')setWorkspace(await api('workspace'));
+                updateMessage(update.text);setNotice(update);return;
+            }
+            watchedOperations.current.add(value.operation_id);
+        }
         setMessage(value.operation_id?'Request received. Waiting for the boat to confirm the result; this is not execution confirmation.':name==='validate'?(value.valid?'Route validation passed.':`${value.errors.length} validation failures.`):'Route approved. Upload and Start remain separate.');
     }catch(e){reportError(e);}finally{endWork();}}
     async function importMap(event){const file=event.target.files[0];if(!file)return;await run(async()=>{
@@ -441,8 +452,8 @@ function App() {
     const identityMismatch=!stale&&!telemetryStale&&['system_id','component_id'].some(k=>status?.[k]!=null&&status[k]!==telemetry?.[k]);
     return <main>
       {connectionsOpen&&connections&&<ConnectionsDialog connections={{...connections,identity_mismatch:identityMismatch}} onClose={()=>setConnectionsOpen(false)} onUpdate={receiveConnections} load={api} status={status} vehicleStale={stale} telemetry={telemetry} telemetryStale={telemetryStale}/>}
-      <header><div><span className="eyebrow">{connections?.review_demo||'MARITIME · MISSION PLANNER'}</span><h1>Run builder</h1></div><div className="header-actions"><button onClick={()=>run(async()=>{const w=await api('reset','POST');setWorkspace(w);setOperations([]);setResults({});invalidateRoute();setActiveTask(null);setValidation(null);setDirty(false);setStep(1);settingsChanged.current=false;mapChanged.current=false;setMessage('New empty run. Uploaded boat missions are unchanged.');})}>New run</button><span className={'connection '+(stale?'offline':'')}>{identityMismatch?'Vehicle identity mismatch':stale?'Waiting for vehicle · planning available':'Boat live'}</span><button onClick={()=>setConnectionsOpen(true)} disabled={!connections}>Connections</button><button className="stop" onClick={()=>action('stop')}>Stop boat</button></div></header>
-      <BoatControls returnTarget={workspace.return_target} onReturn={()=>run(async()=>{invalidateRoute();const r=await api('return/prepare','POST',dirty?{revision:workspace.revision,run_draft:workspace.run_draft,...(settingsChanged.current?{game_settings:workspace.game_settings}:{})}:undefined);settingsChanged.current=false;setWorkspace(r.workspace);setDirty(false);setValidation(null);if(!r.success){setMessage(r.diagnostics.join('; '),'error',r.errors);return;}setGeneratedTasks(['return']);setActiveTask('return');setStep(4);setMode('inspect');setMessage('Fresh return prepared. Validate and Approve, then explicitly Disarm before replacement Upload/readback and Start.');})} status={status} stale={stale} action={action} operations={operations} results={results}/>
+      <header><div><span className="eyebrow">{connections?.review_demo||'MARITIME · MISSION PLANNER'}</span><h1>Run builder</h1></div><div className="header-actions"><FlightMode status={status} stale={stale} busy={busy||identityMismatch||operations.some(id=>['pending','running'].includes(results[id]?.state))} action={action} canStart={!identityMismatch&&!dirty&&!!workspace.approval&&status?.state==='uploaded'&&status?.mission_id===workspace.approval?.envelope?.approval_id}/><button onClick={()=>run(async()=>{const w=await api('reset','POST');setWorkspace(w);setOperations([]);setResults({});invalidateRoute();setActiveTask(null);setValidation(null);setDirty(false);setStep(1);settingsChanged.current=false;mapChanged.current=false;setMessage('New empty run. Uploaded boat missions are unchanged.');})}>New run</button><span className={'connection '+(stale?'offline':'')}>{identityMismatch?'Vehicle identity mismatch':stale?'Waiting for vehicle · planning available':'Boat live'}</span><button onClick={()=>setConnectionsOpen(true)} disabled={!connections}>Connections</button><button className="stop" onClick={()=>action('stop')}>Stop boat</button></div></header>
+      <BoatControls returnTarget={workspace.return_target} onReturn={()=>run(async()=>{invalidateRoute();const r=await api('return/prepare','POST',dirty?{revision:workspace.revision,run_draft:workspace.run_draft,...(settingsChanged.current?{game_settings:workspace.game_settings}:{})}:undefined);settingsChanged.current=false;setWorkspace(r.workspace);setDirty(false);setValidation(null);if(!r.success){setMessage(r.diagnostics.join('; '),'error',r.errors);return;}setGeneratedTasks(['return']);setActiveTask('return');setStep(4);setMode('inspect');setMessage('Fresh return prepared. Validate and Approve, then select Loiter for armed replacement Upload/readback and Start, or disarm outside Auto.');})} status={status} stale={stale} action={action} operations={operations} results={results}/>
       <div className="workspace-navigation"><WorkflowNav {...{step,setStep,setMode,busy,workspace,routeVisible}}/>{step===2&&<button className={'preview-toggle '+(mapPreview?'active-tool':'quiet')} aria-pressed={mapPreview} onClick={()=>{setMapPreview(v=>!v);setMode('inspect');}}>{mapPreview?'Hide map preview':'Show map preview'}</button>}</div>
       <div id="builder-sequence-host" ref={setSequenceHost} hidden={step!==3}/>
       <div className={'workspace-layout view-'+step+(step===3?' with-preview persistent-map'+(expandedMap?' expanded-map':''):step===2?(mapPreview?' with-preview':' without-preview'):'')}>

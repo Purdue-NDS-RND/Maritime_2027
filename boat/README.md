@@ -45,9 +45,10 @@ From `boat/`, in a third terminal:
 
 ```bash
 make status   # wait for ready, fresh position and GPS fix >= 3; Ctrl-C to exit
-make upload   # requires disarmed vehicle outside AUTO; does not arm/start
-make start    # explicitly arms and starts the accepted mission
+make upload   # armed LOITER or disarmed outside AUTO; does not arm/start
+make start    # starts accepted mission; arms only if needed
 make status   # observe executing -> stopping -> complete, or failure
+make stop     # selects HOLD before disarming after completion in LOITER
 make disarm   # requires HOLD and speed <= 0.2 m/s; no force-disarm
 make down
 ```

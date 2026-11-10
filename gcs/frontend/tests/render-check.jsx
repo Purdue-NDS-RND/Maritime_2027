@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import Planner,{WorkflowNav} from '../src/Planner.jsx';
 import BoatControls from '../src/BoatControls.jsx';
+import FlightMode from '../src/FlightMode.jsx';
 import ConnectionDetails from '../src/ConnectionDetails.jsx';
 import {moveStep,duplicateStep} from '../src/RunBuilder.jsx';
 import {defaultSettings} from '../src/settings.js';
@@ -29,7 +30,7 @@ assert.match(manual,/Draw manual waypoints/);assert.match(manual,/Duplicate/);as
 const copied=duplicateStep(cards[0],'copy');copied.setup.waypoints[0].latitude=1;assert.notEqual(copied.setup.waypoints[0].latitude,cards[0].setup.waypoints[0].latitude);assert.equal(copied.id,'copy');
 assert.deepEqual(moveStep(cards,0,1).map(s=>s.id),['two','one']);
 const returns=renderToStaticMarkup(<Planner {...props} step={4} draft={{...draft,planning_mode:'return',return_target:draft.start}}/>);
-assert.match(returns,/1 m stopping area/);assert.match(returns,/Explicitly Disarm/);
+assert.match(returns,/1 m stopping area/);assert.match(returns,/Loiter for armed replacement upload/);
 const controls=target=>renderToStaticMarkup(<BoatControls status={{armed:false,mode:4,speed_m_s:0}} stale={false} returnTarget={target}/>);
 assert.match(controls(null),/disabled=""[^>]*>Return now/);assert.doesNotMatch(controls(draft.start),/disabled=""[^>]*>Return now/);
 const source=fs.readFileSync('src/main.jsx','utf8');assert.doesNotMatch(source,/localStorage|sessionStorage/);
@@ -88,3 +89,13 @@ const editableLinks={selected_profile:'Field',active_profile:'Simulator',revisio
 const connectionsHtml=renderToStaticMarkup(<ConnectionsDialog connections={editableLinks} load={()=>{}}/>);
 for(const text of ['Connections','Mission API','Map telemetry','Test API','Save profile','Apply &amp; connect','Cancel','Corrupt saved configuration','Vehicle identity mismatch','does not reconnect'])assert.ok(connectionsHtml.includes(text),text);
 assert.equal(linkLabel('waiting'),'Waiting for vehicle');assert.equal(linkLabel('stale'),'Stale');
+
+const modeStatus={armed:true,mode:5,available_modes:{HOLD:4,LOITER:5,MANUAL:0,AUTO:10}};
+const modesHtml=renderToStaticMarkup(<FlightMode status={modeStatus} stale={false}/>);
+assert.match(modesHtml,/Flight mode/);assert.match(modesHtml,/>LOITER<\/span>/);
+assert.match(modesHtml,/value="LOITER" selected=""/);assert.match(modesHtml,/value="AUTO" disabled=""/);
+assert.doesNotMatch(modesHtml,/disabled=""[^>]*>Set mode/);
+const offlineModes=renderToStaticMarkup(<FlightMode status={modeStatus} stale={true}/>);
+assert.match(offlineModes,/Unknown/);assert.match(offlineModes,/disabled=""[^>]*>Set mode/);
+const armedLoiter=renderToStaticMarkup(<BoatControls status={{...modeStatus,speed_m_s:0}} stale={false}/>);
+assert.match(armedLoiter,/Upload the approved route/);assert.match(armedLoiter,/disabled=""[^>]*>Disarm/);

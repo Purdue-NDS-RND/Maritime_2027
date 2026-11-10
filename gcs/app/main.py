@@ -76,7 +76,7 @@ async def same_origin(request: IncomingRequest, call_next):
         generation = manager.generation
         target = manager.active
     token = request_target.set((target, generation))
-    command = request.method == 'POST' and request.url.path in ('/api/upload', '/api/start', '/api/stop', '/api/disarm', '/api/return/prepare')
+    command = request.method == 'POST' and request.url.path in ('/api/upload', '/api/start', '/api/stop', '/api/disarm', '/api/mode', '/api/return/prepare')
     try:
         expected = request.headers.get('x-connection-generation')
         if expected is not None and expected != str(generation):
@@ -330,8 +330,6 @@ def reconcile(operation_id, value):
             w.start_succeeded(approval)
         elif command == 'upload' and epoch == w.authority_epoch:
             w.uploaded_id = approval['envelope']['approval_id']
-        elif command == 'disarm' and epoch == w.authority_epoch:
-            w.disarm_epoch = epoch
         forget_operation(operation_id, entry)
     elif value.get('state') in ('failed', 'cancelled', 'unknown'):
         forget_operation(operation_id, entry)
@@ -343,10 +341,8 @@ def upload(request: IncomingRequest):
     w = session(request)
     approval = checked(w.approved)
     status = validate_actual_start(approval)
-    if status.get('armed') is not False or status.get('mode') == 10:
-        raise HTTPException(409, 'Explicitly disarm outside AUTO before replacement upload')
-    if approval['inputs']['draft'].get('planning_mode') == 'return' and getattr(w, 'disarm_epoch', None) != w.authority_epoch:
-        raise HTTPException(409, 'Explicit Disarm confirmation required after preparing this return')
+    if status.get('mode') == 10 or (status.get('armed') is not False and not (status.get('armed') is True and status.get('mode') == 5)):
+        raise HTTPException(409, 'Select LOITER for armed upload, or disarm outside AUTO')
     envelope = approval['envelope']
     return record(boat('/missions/'+quote(envelope['mission']['mission_id'], safe=''), 'PUT', envelope), w, 'upload', approval)
 
@@ -395,6 +391,34 @@ def disarm(request: IncomingRequest):
     value = boat('/disarm', 'POST')
     w = sessions.get(request.headers.get('x-planner-session'))
     return record(value, w, 'disarm') if w else value
+
+
+@app.post('/api/mode')
+def change_mode(body: dict, request: IncomingRequest):
+    if set(body) != {'mode'} or not isinstance(body['mode'], str):
+        raise HTTPException(422, 'Provide a mode name')
+    # AUTO must retain approval, actual-start checks and mission readback.
+    if body['mode'] == 'AUTO':
+        return start(request)
+    status = boat('/status')
+    if not fresh(status):
+        raise HTTPException(409, 'Fresh boat status required to change flight mode')
+    if manager.mismatch(status, manager.telemetry_snapshot()):
+        raise HTTPException(409, 'Vehicle identity mismatch. Correct Connections before changing flight mode; Stop remains available.')
+    if body['mode'] == 'INITIALISING' or body['mode'] not in status.get('available_modes', {}):
+        raise HTTPException(409, 'Requested flight mode is unavailable')
+    w = sessions.get(request.headers.get('x-planner-session'))
+    if w and status.get('state') in ('starting', 'executing', 'stopping'):
+        w.consume_run()
+    elif w and status.get('state') == 'uploaded' and status.get('mode') != status['available_modes'][body['mode']]:
+        # Upload IDs are immutable/idempotent. After takeover, require a new
+        # approval ID rather than accepting the old upload's historical receipt.
+        with w.lock:
+            w.state['approval'] = None
+            w.uploaded_id = None
+            w.authority_epoch += 1
+    value = boat('/mode', 'POST', body)
+    return record(value, w, 'mode') if w else value
 
 
 def return_water(object_map, run):

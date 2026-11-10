@@ -21,7 +21,8 @@ class FakeController:
     def close(self): pass
     def status(self):
         return {'state':self.state,'mission_id':self.mission.mission_id if self.mission else None,
-                'detail':self.detail,'armed':self.armed,'heartbeat_age_s':0,'position_age_s':0}
+                'detail':self.detail,'armed':self.armed,'heartbeat_age_s':0,'position_age_s':0,
+                'available_modes': {'LOITER':5,'HOLD':4,'MANUAL':0,'AUTO':10}}
     def tick(self): pass
     def upload(self,mission):
         self.calls.append(('upload',threading.get_ident()));self.mission=mission;self.state='uploaded'
@@ -33,6 +34,8 @@ class FakeController:
     def stop(self):
         self.calls.append(('stop',threading.get_ident()));self.state='stopped'
     def disarm(self):self.armed=False
+    def change_mode(self, name):
+        self.calls.append(('mode:'+name, threading.get_ident()));self.state='stopped'
     def fail(self,detail):self.state='failed'
 
 
@@ -80,6 +83,33 @@ class ControlTests(unittest.TestCase):
         self.control=Control(FakeController(),self.temp.name)
         self.assertEqual(start['operation_id'],self.control.submit('start',mission_id=self.mission.mission_id)['operation_id'])
         self.assertEqual(self.control.controller.calls,[])
+
+    def test_mode_interrupts_start_and_shares_single_command_owner(self):
+        self.wait(self.upload());self.fake.block=True
+        start=self.control.submit('start',mission_id=self.mission.mission_id)
+        self.assertTrue(self.fake.waiting.wait(1))
+        mode=self.control.submit('mode',{'mode':'LOITER'})
+        self.assertEqual(self.wait(start)['state'],'failed')
+        self.assertEqual(self.wait(mode)['state'],'succeeded')
+        self.assertEqual(self.fake.calls[-1][0],'mode:LOITER')
+        self.assertEqual(len({c[1] for c in self.fake.calls}),1)
+        self.assertFalse(self.fake.armed)
+
+    def test_mode_http_validation_and_operation_receipt(self):
+        server=serve(self.control,0)
+        base='http://127.0.0.1:'+str(server.server_port)
+        try:
+            for body in ({'mode':'AUTO'},{'mode':'BAD'},{'mode':5},{'mode':'LOITER','extra':True}):
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(Request(base+'/mode', data=json.dumps(body).encode(), method='POST'))
+                self.assertEqual(error.exception.code,409)
+            with urlopen(Request(base+'/mode',data=b'{"mode":"LOITER"}',method='POST')) as response:
+                self.assertEqual(response.status,202)
+                operation=json.load(response)
+            self.assertEqual(self.wait(operation)['state'],'succeeded')
+            self.assertEqual(self.fake.calls[-1][0],'mode:LOITER')
+        finally:
+            server.shutdown();server.server_close()
     def test_status_exposes_read_only_operation_summary_for_lost_receipts(self):
         self.wait(self.upload())
         self.fake.block = True

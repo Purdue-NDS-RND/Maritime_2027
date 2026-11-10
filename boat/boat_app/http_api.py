@@ -36,6 +36,12 @@ def serve(control, port=8091, host='127.0.0.1'):
                     envelope = json.loads(self.rfile.read(length))
                     return self.reply(202, control.submit('upload', envelope, parts[1]))
                 if self.command == 'POST':
+                    if parts == ['mode']:
+                        length = int(self.headers.get('Content-Length', '0'))
+                        if not 0 < length <= 256:
+                            raise ValueError('mode request size must be 1..256 bytes')
+                        self.connection.settimeout(5)
+                        return self.reply(202, control.submit('mode', json.loads(self.rfile.read(length))))
                     if len(parts) == 3 and parts[0] == 'missions' and parts[2] == 'start':
                         return self.reply(202, control.submit('start', mission_id=parts[1]))
                     if parts in (['stop'], ['disarm']):

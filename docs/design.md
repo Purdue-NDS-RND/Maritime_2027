@@ -486,7 +486,7 @@ containment and actual final-gate exit are retained wherever its card appears.
 
 The complete run uses one ordinary ≤500-waypoint boat mission, one speed and
 one editable 10–7200 s execution budget. Intermediate endpoints are transit;
-only the final endpoint settles and HOLDs. Review shows route/connectors, instance
+only the final endpoint settles in HOLD, then enters LOITER. Review shows route/connectors, instance
 progress, clearance findings and time budget. Validate → Approve → Upload/readback
 → Start remain explicit. Start consumes authority and rechecks actual position;
 interrupted runs require fresh generation and approval. Asynchronous results
@@ -504,10 +504,10 @@ retain side buffers/containment until exiting through the beginning opening.
 Unsafe targets, telemetry/HOLD failures, search failures and transfer failures
 initiate no return movement and report a specific cause.
 
-Return is opened for review and requires Validate → Approve, explicit Disarm
-before replacement Upload/readback, then explicit Start. It uses the existing
+Return is opened for review and requires Validate → Approve, LOITER for armed
+replacement upload (or disarm outside AUTO), Upload/readback, then explicit Start. It uses the existing
 boat waypoint executor, with finish radius 1 m, speed ≤0.20 m/s for at least 5 s,
-then HOLD. There is no automatic return card or interrupted task resume. Reset
+then LOITER after HOLD settling. There is no automatic return card or interrupted task resume. Reset
 and restart remove the target. Boat-only manual mission operation is unchanged.
 Physical-boat/radio qualification, controller tuning and continuous replanning
 remain outside this revamp. See the GCS guide and milestone for evidence limits.
@@ -523,3 +523,18 @@ channel containment and stopped settling. Missing physics/contact proof makes
 acceptance inconclusive. See the simulator guide for isolated commands and the
 milestone for measured results and limits. Controller tuning, curves, physical
 qualification, drone flight automation and official scoring remain deferred.
+
+### Operator flight modes and armed Loiter uploads
+
+The header offers the boat-advertised Rover modes with an explicit Set mode
+action and heartbeat-confirmed results. AUTO retains reviewed mission Start
+checks. Requests for a different mode preserve arming, cancel older boat
+commands and consume local uploaded start authority; the GCS clears approval
+after uploaded takeover so Validate/Approve/Upload produces a fresh identity.
+Re-selecting the current mode preserves uploaded authorization and Loiter target. Armed upload/start is permitted only
+in LOITER; disarmed upload outside AUTO remains supported. Mission completion
+verifies finish settling in HOLD, then enters LOITER. Stop remains priority HOLD,
+and disarm requires HOLD and low reported speed. Loiter allows motion within its
+configured target area and does not establish exact-position/hull clearance.
+For armed Start, AUTO navigation begins before the immediately following speed
+acknowledgement; no firmware settings are changed. See the boat/GCS guides.
