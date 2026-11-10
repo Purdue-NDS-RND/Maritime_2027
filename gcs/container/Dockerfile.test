@@ -3,6 +3,7 @@ FROM ${GCS_TEST_BASE}
 COPY gcs/requirements-test.txt /tmp/requirements-test.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-test.txt
 COPY gcs/tests /app/gcs/tests
+COPY gcs/scripts /app/gcs/scripts
 COPY gcs/app /app/gcs/app
 COPY gcs/examples /app/gcs/examples
 COPY shared /app/shared

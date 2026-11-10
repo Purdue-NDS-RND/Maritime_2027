@@ -9,6 +9,19 @@ This establishes simulator acceptance; physical-boat performance is unverified.
 See [recorded results](#recorded-simulator-results) below and
 [boat execution](boat_execution.md) for interfaces and fault behavior.
 
+Manual field-map capture (2026-11-10): the standalone Linux Python helper
+`gcs/scripts/record_buoys.py` records a selected color and fresh boat GPS position
+on Space into an importable simple points JSON. It reuses `GET /api/telemetry`,
+requires a fresh 3D-or-better fix, saves each capture atomically, resumes existing
+files and limits undo to this invocation. No vehicle commands or planner changes
+are made. Six focused tests cover quality/freshness rejection, full 29-object
+map append/import, failed/external writes, writer exclusion, resume/undo and real
+pseudo-terminal Space/color/undo interaction with a synthetic HTTP source,
+including GPS and HTTP failures. Python compilation and whitespace checks pass.
+These are helper/file/protocol checks; outdoor GPS/radio operation and
+antenna-to-buoy offset accuracy remain unverified. Commands and review limits are
+in the [field capture guide](../gcs/README.md#capture-a-field-buoy-map-with-space).
+
 Field connection configuration (2026-11-09) adds a startup-selected Jetson
 HTTP URL, boat IPv4 bind interface/port, serial baud/device overrides and
 separate mission/telemetry connection diagnostics. RFD remains passive map

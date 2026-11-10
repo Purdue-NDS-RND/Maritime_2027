@@ -125,6 +125,62 @@ For a stop between tasks, generate and execute a Gate-only run, then separately
 review and generate Slalom from the boat's fresh position. Earlier Slalom cards
 that still begin with a gate must be corrected and reviewed before generation.
 
+## Capture a field buoy map with Space
+
+The Linux terminal helper `gcs/scripts/record_buoys.py` saves the boat's current
+GPS position into the same simple points JSON accepted by **Import JSON / CSV**.
+It needs only Python 3 on the desktop and a running GCS with live passive
+telemetry. The boat mission API can be offline; the helper only makes
+`GET /api/telemetry` requests and writes the selected local file.
+
+1. In the GCS **Connections** dialog, select/apply the intended Simulator or
+   Field telemetry profile. For outdoor use, configure the RFD device/baud and
+   vehicle IDs, and verify the live boat position and GPS fix. Keep the usual
+   manual driving controls available. The helper shares the GCS reader, so it
+   does not open another radio/UDP consumer or require a new MAVLink output.
+2. In a separate terminal, from the repository root, run:
+
+   ```bash
+   python3 gcs/scripts/record_buoys.py \
+     --output simulation/logs/field-survey/buoys.json
+   ```
+
+   The default GCS is `http://127.0.0.1:8080`. Use `--gcs-url http://HOST:PORT`
+   for another running GCS. Focus this terminal while recording; Space does not
+   need Enter. No GCS rebuild is needed for this standalone helper.
+3. Drive to the intended observation position, settle, select the buoy color,
+   then tap **Space** once. `r` = red, `g` = green, `b` = blue, `y` = yellow,
+   `o` = orange, `p` = purple, `c` = cyan, `k` = black, `w` = white,
+   `z` = zebra, `n` = brown, `?` = unknown. Red is initially selected;
+   `--color green` changes the initial choice. The color remains selected until
+   changed. Each successful capture prints its count, coordinates, GPS fix and
+   vehicle IDs and immediately saves the file.
+4. Press **u** to undo the last capture from this invocation. Press **q** or
+   **Ctrl-C** to exit. Restart with the same `--output` to append more points;
+   undo never removes points that existed when this invocation started.
+5. In the browser's Map step, import `simulation/logs/field-survey/buoys.json`.
+   Review/correct positions and classify objects, then use **Find course** and
+   review task suggestions through the normal full-map workflow. The helper
+   does not modify an already-open GCS map; reimport the file after more captures.
+
+Space requests the latest GCS position and requires live telemetry, a 3D GPS
+fix or better, and heartbeat/position/GPS ages within three seconds including
+the HTTP request duration. Failed requests or quality checks leave the file
+unchanged. Holding Space is suppressed; keys queued during a capture request
+are discarded. File replacement is atomic, failed saves retain the previous
+JSON, and another recorder using the same output is blocked. If an external
+editor changes the file, quit/reopen the helper before continuing. A persistent
+`.json.lock` sidecar coordinates recorders; leave it in place. Existing simple
+point lists and `{"points": [...]}` files are supported; native maps and saved
+course files are refused. A new file is created on the first successful capture.
+
+**The coordinates describe the GPS antenna, not the buoy centre.** Driving
+alongside a buoy introduces antenna-to-buoy offset as well as GPS uncertainty,
+drift and buoy movement. The helper does not correct offsets, average fixes or
+establish survey accuracy. Review the recorded positions before planning and
+account for these errors in required clearance. Color alone does not assign a
+task or authorize execution. Physical GPS/radio accuracy remains unverified.
+
 ## Boat controls and Return now
 
 The persistent panel displays actual mode, arming, speed and GPS fix. **Stop boat**
