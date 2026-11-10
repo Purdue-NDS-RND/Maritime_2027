@@ -1316,6 +1316,18 @@ Evidence: `compact-workspace-tests.log`, `compact-workspace-build.log`, image
 build logs, `compact-layout-checks.json`, `compact-configuration.png` and
 `compact-builder.png` under ignored `simulation/logs/mission-run-builder/`.
 
+Task review control update (2026-11-10): task and manual-card checkboxes are
+replaced with full-width **Mark task as reviewed** toggle buttons. Reviewed
+state shows a green checkmark and **Task reviewed**; clicking again undoes it.
+Existing prerequisites and edit invalidation are retained. Frontend checks,
+production build and GCS image build passed. Chrome on localhost:8080 loaded
+the full 23-buoy/6-prop map and verified task confirmation, Space/Enter support,
+undo, geometry-review prerequisites, empty manual-card blocking and manual
+waypoint edit invalidation. The reviewed target measured 631 × 58 px at
+1640 × 750. Frontend assets were applied without restarting the GCS, boat or
+simulator, and the existing operator tab was preserved. No route was generated
+or executed. Screenshot: ignored `simulation/logs/task-review-button/`.
+
 #### Map cleanup and course compilation (2026-11-08)
 
 Map now supports cleanup, bulk navigation-buoy classification, additions,

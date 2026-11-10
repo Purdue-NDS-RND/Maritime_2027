@@ -73,7 +73,10 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    together to avoid scrolling through repeated settings.
    Assignments, local headings, passing sides, channel chains and endpoints belong
    to that instance. **Review geometry on map** opens the preview; explicitly
-   confirm each complete task. Selecting a task frames its geometry automatically.
+   select the full-width **Mark task as reviewed** button for each complete task.
+   It turns green with **Task reviewed** and a checkmark; click it again to undo.
+   Manual waypoint cards use the same button. Task edits require a fresh review.
+   Selecting a task frames its geometry automatically.
    Click **Gate N · show pair on map** to focus that exact pair, with persistent
    buoy names, a gate label and crossing arrow. Clicking a buoy shows its identity
    and assignment. **1st buoy / 2nd buoy** selects an endpoint

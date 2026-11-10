@@ -229,10 +229,18 @@ h2 { font-size: 19px; letter-spacing: 0; }
 .channel-section-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; border-bottom: 1px solid var(--line); padding: 5px 0; font-size: 11px; }
 .task-editor-panel .task-review-footer { flex-shrink: 0; border-top: 1px solid var(--line); padding: 7px 0; }
 .task-review-footer button { font-size: 11px; padding: 5px 8px; }
-.task-review-footer .inline-check { font-size: 11px; margin-top: 7px; }
+.task-editor-panel .task-review-button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; margin-top: 7px; padding: 10px 12px; text-align: left; border: 1px solid #7795af; border-radius: 6px; background: #304355; color: #f1f6fa; }
+.task-review-button .task-review-icon { display: grid; place-items: center; flex: 0 0 28px; height: 28px; font-size: 24px; }
+.task-review-button strong { display: block; font-size: 13px; }
+.task-review-button small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.4; }
+.task-editor-panel .task-review-button:hover:not(:disabled) { background: #3b546a; border-color: #b5d2eb; }
+.task-editor-panel .task-review-button[aria-pressed=true] { background: #244b3e; border-color: #7ec9a7; color: #dbf7e9; }
+.task-editor-panel .task-review-button[aria-pressed=true]:hover:not(:disabled) { background: #2f604f; }
+.task-editor-panel .task-review-button:focus-visible { outline: 2px solid #b5d2eb; outline-offset: 2px; }
 .task-review-footer .action-reason { margin: 4px 0; font-size: 10px; }
 .manual-editor-content p { font-size: 11px; margin: 5px 0 10px; }
 .task-editor-panel .manual-review { flex-shrink: 0; padding: 8px 0; border-top: 1px solid var(--line); margin-top: 5px; }
+.manual-review .task-review-button { margin-top: 0; }
 .shared-crossing-controls:empty { display: none; }
 .shared-crossing-controls { flex-shrink: 0; max-height: 100px; overflow: auto; padding: 4px 0; border-top: 1px solid var(--line); }
 .shared-crossing-controls > button { font-size: 10px; padding: 4px 7px; }

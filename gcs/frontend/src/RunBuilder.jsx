@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import TaskEditor from './TaskEditor';
 import {settingsError} from './settings';
 import BoundaryControls from './BoundaryControls';
+import TaskReviewButton from './TaskReviewButton';
 
 export function moveStep(steps,from,to){const next=[...steps];const [step]=next.splice(from,1);next.splice(to,0,step);return next;}
 export function duplicateStep(step,id){return {id,type:step.type,setup:structuredClone(step.setup)};}
@@ -45,7 +46,7 @@ export default function RunBuilder({workspace,draft,edit,selectedCard,onSelect,s
       {card.type==='manual'?<>
             <div className="manual-editor-content"><p>Exact ordered waypoints; connecting segments are validated. Click the map to append points or edit their coordinates below.</p><button onClick={()=>setMode('card:waypoint')}>Draw manual waypoints</button>
             {(card.setup.waypoints||[]).map((p,j)=><div key={j} className="fields">{['latitude','longitude'].map(k=><label key={k}>{j+1}. {k}<input type="number" step="0.0000001" value={p[k]} onChange={e=>updateCard(card.id,{...card.setup,course_confirmed:false,waypoints:card.setup.waypoints.map((v,n)=>n===j?{...v,[k]:Number(e.target.value)}:v)})}/></label>)}<button onClick={()=>updateCard(card.id,{...card.setup,course_confirmed:false,waypoints:card.setup.waypoints.filter((_,n)=>n!==j)})}>Remove waypoint</button></div>)}
-            </div><label className="manual-review inline-check"><input type="checkbox" checked={!!card.setup.course_confirmed} disabled={!card.setup.waypoints?.length} onChange={e=>updateCard(card.id,{...card.setup,course_confirmed:e.target.checked})}/>I reviewed these ordered manual waypoints</label>
+            </div><div className="manual-review"><TaskReviewButton reviewed={!!card.setup.course_confirmed} disabled={!card.setup.waypoints?.length} onChange={confirmed=>updateCard(card.id,{...card.setup,course_confirmed:confirmed})}>I reviewed these ordered manual waypoints.</TaskReviewButton></div>
         </>:<TaskEditor key={card.id} {...{workspace,setMode,load,save,run,notify,showMap,onPassageSelected,focusedPassage}} instanceId={card.id} draft={{...card.setup,...draft.settings,planner_task:card.type,planning_area:draft.planning_area,sizes_confirmed:draft.sizes_confirmed}} edit={next=>updateCard(card.id,next)}/>}
       </>:<div className="empty-state"><span aria-hidden="true">⌖</span><h3>Select a task</h3><p>Select a task in your sequence to edit assignments, direction and endpoints here.</p></div>}
       </section></div>
