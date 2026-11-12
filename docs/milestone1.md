@@ -645,7 +645,7 @@ The five-passage Slalom assignment panel fits without scrolling; Advanced uses
 one content scroll pane with review controls visible. Map cleanup fits with
 closed optional tools at the tested desktop sizes. Keyboard adjustment of panel
 width reached 720 px. Checks also covered 1024×768 and 390×844 layouts; narrow
-screens retain scrolling for longer forms. Frontend tests (35), the render check
+screens retain scrolling for longer forms. All eight frontend test files, the render check
 and production build passed. No vehicle commands or mission execution were
 performed for this UI check. Raw screenshots and test logs are ignored under
 `simulation/logs/gcs-tactical-layout/`. This is UI validation only.
