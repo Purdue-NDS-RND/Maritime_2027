@@ -8,7 +8,7 @@ validate:
 	docker compose -f container/compose.yaml config --quiet
 
 build:
-	docker compose -f container/compose.yaml build
+	../scripts/with-build-provenance.sh docker compose -f container/compose.yaml build
 
 test:
 	docker run --rm --network none "$${BOAT_IMAGE:-maritime-boat:latest}" python3 -m unittest discover -s /ws/src/boat_app/tests -v

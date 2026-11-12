@@ -238,11 +238,11 @@ camera_model_dir=blueboat_rgbd
 case $build_mode in
     no-cache)
         echo "Rebuilding $SIM_IMAGE without cache..."
-        docker compose "${compose_files[@]}" build --no-cache
+        ../scripts/with-build-provenance.sh docker compose "${compose_files[@]}" build --no-cache
         ;;
     always)
         echo "Rebuilding $SIM_IMAGE..."
-        docker compose "${compose_files[@]}" build
+        ../scripts/with-build-provenance.sh docker compose "${compose_files[@]}" build
         ;;
     if-missing)
         need_build=0
@@ -253,7 +253,7 @@ case $build_mode in
         fi
         if [[ $need_build == 1 ]]; then
             echo "Building required simulator images (the first build can take several minutes)..."
-            docker compose "${compose_files[@]}" build
+            ../scripts/with-build-provenance.sh docker compose "${compose_files[@]}" build
         else
             echo "Reusing existing images"
         fi

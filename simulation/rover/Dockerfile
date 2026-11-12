@@ -13,3 +13,11 @@ ENV GZ_PARTITION=maritime_rover_sitl \
 WORKDIR /sim
 ENTRYPOINT ["/usr/bin/tini", "--", "python3", "/opt/rover/start.py"]
 HEALTHCHECK --interval=5s --timeout=8s --start-period=90s CMD python3 /opt/rover/probe.py
+
+# Stamp the source used by this build; upstream dependency pins remain separate.
+ARG MARITIME_SOURCE_REVISION=unknown
+ARG MARITIME_SOURCE_BRANCH=unknown
+ARG MARITIME_SOURCE_DIRTY=unknown
+LABEL org.opencontainers.image.revision="${MARITIME_SOURCE_REVISION}" \
+      io.maritime.source.branch="${MARITIME_SOURCE_BRANCH}" \
+      io.maritime.source.dirty="${MARITIME_SOURCE_DIRTY}"

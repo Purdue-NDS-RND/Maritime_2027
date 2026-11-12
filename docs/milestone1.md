@@ -589,3 +589,42 @@ boat tests. The boat container alone was rebuilt/replaced while disarmed in
 HOLD; Chrome then confirmed LOITER and HOLD through the header, with arming
 unchanged. The rover/GCS remained running, and final status was disarmed HOLD.
 Evidence is in `rover-sitl/flight-mode-{tests.log,build.log,live-status.json}`.
+
+### Self-contained rover-validation GCS and live map verification
+
+`dev/rover-validation` now owns the complete run-builder GCS and shared planner
+support needed to reproduce the running interface. Source reconciliation used
+immutable `d1ae60fa211199e4c233f73d4b613fc9323463ac` as read-only reference;
+no other branch was checked out or merged. All 28 running backend/shared files
+matched that reference, and rebuilt frontend HTML/JS/CSS matched the existing
+interface byte-for-byte before deployment. The dual-heartbeat reader change was
+retained with source filtering, passive transport and freshness checks.
+The prior running GCS image had the newer interface but the old boat-only
+telemetry filter: mission HTTP was live while `/api/telemetry` remained waiting.
+Replacing the GCS from this branch restored live rover map position/heading and
+the same vehicle icon used for boats, without a rover-specific UI path.
+
+Validation passed 176 GCS backend tests, 35 frontend tests and render check,
+production frontend build, 35 boat tests and retained simulator validation.
+Chrome on `localhost:8080` then loaded the full 23-buoy/six-prop map and reviewed
+a single manual waypoint approximately 8 m north of the live rover start.
+The first generation correctly rejected the finish at the synthetic practice
+boundary. Extending boundary padding from 10 to 20 m into the empty flat test
+world allowed it; required/preferred clearance stayed 1.8 m, speed 0.5 m/s,
+and the stopped finish radius stayed 1 m. Validate, Approve, Upload/readback,
+and explicit Start succeeded. Independent Gazebo displacement was 8.27504 m;
+maximum reported speed was 0.49 m/s. All 256 recorded GCS telemetry samples were
+live with positions. Observed modes were HOLD, AUTO and LOITER, and the mission
+completed through finish settling. The header confirmed HOLD afterward; browser
+Hold/Stop and Disarm succeeded. This is short-route GCS integration evidence,
+not buoy-course clearance, physical dynamics or physical radio acceptance.
+
+Runtime evidence is ignored under
+`simulation/logs/rover-sitl/20261112T072540Z-6QF2pM/reconciled-browser-20261112T080627/`;
+source comparison/test logs are in `rover-sitl/gcs-reconciliation/`, and build,
+configuration and runtime image inventories are in `rover-sitl/reconciliation/`.
+The existing GCS data mount was backed up and retained; the page's planning
+session still follows the existing fresh-on-reload policy. All four application
+build paths now stamp project revision, branch and dirty status separately from
+upstream dependency pins. Image tags must be compared to actual container IDs;
+`latest` alone is not proof of source freshness. See simulator usage for commands.

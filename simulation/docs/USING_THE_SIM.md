@@ -311,3 +311,36 @@ and manually review a short clear route at the rover's actual position. Validate
 Approve, Upload, and Start remain separate actions. The competition objects are
 an overlay in this flat rover world: this checks GCS integration, not physical
 buoy-course clearance or the dynamics/firmware of a real vehicle.
+
+## Verify which source an image runs
+
+Build from the checked-out branch using `make -C gcs build`,
+`make -C boat build`, `make -C simulation build-cached`, and
+`make -C simulation rover-build` from the repository root. The normal build
+entrypoints stamp the actual Git commit, branch, and dirty status through
+`scripts/with-build-provenance.sh`. The cached simulator build retains verified
+upstream source pins. These labels identify project source separately from
+ArduPilot/Gazebo/model dependency revisions. Direct Docker builds without the
+wrapper record `unknown`, rather than claiming to match the checkout.
+
+```bash
+docker image inspect maritime-gcs:latest --format '{{json .Config.Labels}}'
+docker inspect maritime-course-gcs-gcs-1 --format '{{.Image}}'
+docker image inspect maritime-gcs:latest --format '{{.Id}}'
+```
+
+The last two IDs must match to establish that the running container uses the
+current tag. Check `org.opencontainers.image.revision`,
+`io.maritime.source.branch`, and `io.maritime.source.dirty` in the first output.
+A clean source build reports `false` for dirty status. A `latest` tag alone
+proves neither code freshness nor that a running container has been replaced.
+After a rebuild, recreate the affected application with Compose; preserve its
+existing bind-mounted workspace. Do not replace an executing vehicle backend.
+
+`dev/rover-validation` contains the complete GCS run-builder source, connection
+profiles, map workflow, header mode controls, and shared planner dependencies.
+It requires no checkout or merge of another development branch to build or run.
+Both accepted ArduPilot vehicle types use the same map marker and mission
+workflow; source IDs, autopilot identity and independent freshness checks remain
+required. The map uses passive MAVLink on 14550; command/status HTTP on 8091
+being live alone does not prove the map feed is live.

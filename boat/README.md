@@ -90,3 +90,7 @@ The sole boat command worker applies the change and confirms it through a
 heartbeat; a different mode consumes previous start authorization. AUTO remains
 behind reviewed mission Start. Status includes recent operation receipts so
 browser reconnection can reconcile commands without repeating them.
+
+Normal builds record their source commit, branch and dirty status in image
+labels. See [image identity checks](../simulation/docs/USING_THE_SIM.md#verify-which-source-an-image-runs)
+before assuming that an existing `latest` container matches this checkout.

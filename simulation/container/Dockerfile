@@ -206,3 +206,11 @@ ENV GZ_VERSION=harmonic \
 
 WORKDIR /sim
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start-sim.sh"]
+
+# Stamp the source used by this build; upstream dependency pins remain separate.
+ARG MARITIME_SOURCE_REVISION=unknown
+ARG MARITIME_SOURCE_BRANCH=unknown
+ARG MARITIME_SOURCE_DIRTY=unknown
+LABEL org.opencontainers.image.revision="${MARITIME_SOURCE_REVISION}" \
+      io.maritime.source.branch="${MARITIME_SOURCE_BRANCH}" \
+      io.maritime.source.dirty="${MARITIME_SOURCE_DIRTY}"

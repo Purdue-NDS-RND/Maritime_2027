@@ -213,7 +213,7 @@ class TelemetryTests(unittest.TestCase):
     def test_stream_ages_latest_snapshot_without_queued_history(self):
         from gcs.app.main import telemetry_events
         async def check():
-            stream = telemetry_events(self.reader)
+            stream = telemetry_events()
             first = json.loads((await anext(stream))[6:])
             self.assertTrue(first['stale'])
             self.reader.ingest(heartbeat())
@@ -226,12 +226,15 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual(value['position_age_s'], 4)
             self.assertTrue(value['stale'])
             await stream.aclose()
-        asyncio.run(check())
+        from gcs.app import main
+        with patch.object(main.manager, 'reader', self.reader):
+            asyncio.run(check())
 
     def test_api_lifespan_telemetry_does_not_call_boat(self):
         from fastapi.testclient import TestClient
         from gcs.app.main import app
-        with patch('gcs.app.main.boat', side_effect=AssertionError('boat API called')):
+        import tempfile
+        with tempfile.TemporaryDirectory() as data, patch.dict(os.environ, {'GCS_DATA': data}), patch('gcs.app.main.boat', side_effect=AssertionError('boat API called')):
             with TestClient(app) as client:
                 value = client.get('/api/telemetry').json()
                 self.assertEqual(value['source'], 'mavlink')
@@ -252,7 +255,8 @@ class TelemetryTests(unittest.TestCase):
             http_port = http_socket.getsockname()[1]
             server = uvicorn.Server(uvicorn.Config(app, log_level='error'))
             thread = threading.Thread(target=server.run, kwargs={'sockets': [http_socket]})
-            with patch.dict(os.environ, {'GCS_MAVLINK_CONNECTION': f'udpin:127.0.0.1:{udp_port}'}), \
+            import tempfile
+            with tempfile.TemporaryDirectory() as data, patch.dict(os.environ, {'GCS_DATA': data, 'GCS_MAVLINK_CONNECTION': f'udpin:127.0.0.1:{udp_port}'}), \
                     patch('gcs.app.main.boat', side_effect=AssertionError('boat API called')):
                 thread.start()
                 try:

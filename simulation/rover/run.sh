@@ -5,7 +5,7 @@ export HOST_UID=$(id -u) HOST_GID=$(id -g)
 export ROVER_RUN_DIR="$PWD/logs/rover-sitl"
 compose=(docker compose -f rover/compose.yaml)
 case "${1:-run}" in
-    build) "${compose[@]}" build ;;
+    build) ../scripts/with-build-provenance.sh "${compose[@]}" build ;;
     down) "${compose[@]}" down ;;
     logs) "${compose[@]}" logs -f ;;
     run)

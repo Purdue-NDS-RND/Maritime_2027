@@ -16,3 +16,11 @@ RUN source /opt/ros/jazzy/setup.bash \
 COPY --chmod=0755 container/entrypoint.sh /boat-entrypoint.sh
 ENTRYPOINT ["/boat-entrypoint.sh"]
 CMD ["python3", "-m", "boat_app.node"]
+
+# Stamp the source used by this build; upstream dependency pins remain separate.
+ARG MARITIME_SOURCE_REVISION=unknown
+ARG MARITIME_SOURCE_BRANCH=unknown
+ARG MARITIME_SOURCE_DIRTY=unknown
+LABEL org.opencontainers.image.revision="${MARITIME_SOURCE_REVISION}" \
+      io.maritime.source.branch="${MARITIME_SOURCE_BRANCH}" \
+      io.maritime.source.dirty="${MARITIME_SOURCE_DIRTY}"

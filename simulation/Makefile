@@ -11,7 +11,8 @@ build:
 # Rebuild application/plugin sources over verified immutable source checkouts.
 # Uses the installed canonical runtime as its verified dependency base.
 build-cached:
-	docker build -f container/Dockerfile.cached \
+	../scripts/with-build-provenance.sh docker build -f container/Dockerfile.cached \
+		--build-arg MARITIME_SOURCE_REVISION --build-arg MARITIME_SOURCE_BRANCH --build-arg MARITIME_SOURCE_DIRTY \
 		--build-arg BASE_IMAGE="$${BASE_IMAGE:-maritime-sim:latest}" \
 		-t "$${SIM_IMAGE:-maritime-sim:latest}" .
 

@@ -24,3 +24,11 @@ RUN python3 /opt/boat_sim/scripts/augment_blueboat_model.py --source /opt/SITL_M
  && python3 /opt/boat_sim/scripts/augment_blueboat_model.py --source /opt/SITL_Models/Gazebo/models/blueboat/model.sdf \
  --payload /opt/boat_sim/models/blueboat_dual_rgbd/camera_payload.sdf --output /opt/boat_sim/models/blueboat_dual_rgbd/model.sdf \
  --boat-model dual --expected-sha256 fc651a9d4aff258fe675d94aeb24b91d82439cc441f99b00f921e316fbc3de57
+
+# Stamp the source used by this build; upstream dependency pins remain separate.
+ARG MARITIME_SOURCE_REVISION=unknown
+ARG MARITIME_SOURCE_BRANCH=unknown
+ARG MARITIME_SOURCE_DIRTY=unknown
+LABEL org.opencontainers.image.revision="${MARITIME_SOURCE_REVISION}" \
+      io.maritime.source.branch="${MARITIME_SOURCE_BRANCH}" \
+      io.maritime.source.dirty="${MARITIME_SOURCE_DIRTY}"
