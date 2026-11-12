@@ -1,8 +1,14 @@
-# Drone
+# Drone sensing and perception
 
-Future independently runnable, containerized Jetson application using ROS 2
-for survey coordination, object detection, and geolocation. Its Pixhawk controls
-the vehicle; firmware and host hardware drivers stay outside the application.
+Implemented on `feature/cv-raycast`: a source-independent pixel/state -> ENU observation
+-> correlated uncertainty -> physical-instance tracking -> WGS84 JSON pipeline, with
+seeded synthetic survey generation, withheld evaluation and deterministic recording/replay.
+The default tracker is static/random-walk. No constant-velocity or moving-object claim
+is made. The supplied hardware bag demonstrates camera/FCU topic flow on the user's
+Jetson/ROS host. Trained detection, full raw-source normalization, Docker deployment,
+sustained onboard performance and physical accuracy remain unvalidated. The IMU recorder feeds the processing/replay
+boundary when paired with verified same-time navigation. Existing GCS import and boat
+behavior are unchanged.
 
 Send estimated object GPS locations and types to the GCS and report status.
 Test generated maps independently against measured object locations. No direct

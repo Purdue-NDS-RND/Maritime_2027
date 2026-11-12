@@ -142,11 +142,22 @@ command. Detailed takeover mechanics are a small integration requirement,
 not the focus of initial development. Positioning/vehicle faults are separate
 from GCS link loss; their responses remain to be decided.
 
-For drone mapping, a fixed downward-facing camera is the working assumption,
-pending confirmation. Camera model, lens, altitude range, geolocation method
-and timing/calibration approach remain open. A homemade gimbal is not assumed
-to improve geolocation accuracy. Survey altitude should be configurable and
-its usable range established through testing.
+For drone mapping, the user's direction is a fixed Arducam IMX519,
+ordinary GNSS (RTK explicitly removed on 2026-11-04) and YOLO water-object detection
+on an Orin Nano 8GB, ideally below
+5 m above water. Downward orientation is the working assumption; actual mount,
+lens/focus, usable altitude range, timing and water/position datums need measurement.
+Keep geolocation and instance fusion in a fixed ENU frame and derive WGS84
+coordinates at export. Aerial color classification is optional; the operator
+assigns colors/course roles at the GCS. See [sensing context](../drone/LLM.md),
+[architecture](sensing_perception.md) and [geolocation](geolocation.md).
+The 2026-11-04 portable milestone now implements pixel/state geolocation, correlated
+uncertainty, static object identities and WGS84 reports on deterministic synthetic input.
+See drone/README.md for runnable commands. Real sensor/ROS/Jetson integration and physical
+accuracy remain unverified; these reports are not yet consumed by the GCS importer.
+Boat camera support for later missions
+remains separate; exact ZED model and two-camera compatibility are unresolved.
+A homemade gimbal is not assumed to improve geolocation accuracy.
 
 ## Competition scene extension
 
@@ -190,7 +201,7 @@ the vehicle-GCS protocol or final clearance/acceptance settings.
 
 - First-milestone mission input, progress and completion semantics.
 - Route geometry, turning behavior, operating speed and clearance validation.
-- Error measurements, numeric margins and GPS/RTK hardware availability.
+- Error measurements, numeric margins and ordinary-GNSS performance (no RTK planned).
 - Drone camera, geolocation, survey settings and map quality evaluation.
 - Map freshness limits and when an additional survey is necessary.
 - Mission transfer/acknowledgement and vehicle-GCS transport.

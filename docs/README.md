@@ -40,3 +40,4 @@ tests passed with host visibility); no final live rebuild/control acceptance was
 claimed at that checkpoint. Evidence: `simulation/logs/revamp-final-validate.log`
 and `revamp-verify-rgbd*.log`. Later milestone results supersede that checkpoint;
 drone remains a scaffold. Removed migration reports remain in Git history.
+

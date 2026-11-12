@@ -308,9 +308,46 @@ per-run evidence in the ignored logs rather than creating task handoffs.
 
 ## Deferred work and limits
 
+The separate 2026-11-04 drone portable milestone now supplies a tested synthetic
+pixel/state-to-GPS demonstration with uncertainty and identities; see
+[drone commands](../drone/README.md). It does not change this historical boat milestone,
+its perfect simulator-map assumption or its acceptance results. No boat motion/simulator
+trial was rerun for the drone implementation. Real sensing and GCS map import remain open.
+Portable evidence: 74 drone tests and 11 unchanged GCS workspace tests passed; both
+demonstrations and independent recorded replay ran. Three same-class identities persisted
+with zero synthetic identity errors, and configured shared GNSS variance was retained.
+Python package build/install and a packaged analytic demo passed. ROS/Docker/Jetson,
+trained inference and physical acceptance were not exercised.
+
+The separate 2026-11-08 IMU review/integration adds lossless IMU recording, an exact-time
+navigation bridge and replay support on the same drone branch. All 104 drone tests pass
+(30 new IMU cases); analytic heading/ENU projection and shared-error retention are checked.
+Both synthetic demos remain passing. ROS lifecycle/QoS is checked with structural doubles,
+not a live DDS/MAVROS/FCU connection. Real heading, clocks, position/height and joint error
+models are still required. This does not change or rerun boat motion/simulator acceptance.
+
 No drone application, detection model, geolocation from images, marker landing,
 automatic route generation, Evade detector strategy, stitched aerial imagery,
 or other competition task mechanisms are required here.
+
+The 2026-11-08 camera extension adds configurable Arducam/Argus image capture,
+historical CUASC intrinsics, consistent raw/rectified/resize geometry, recording and
+optional ROS publication. Validation: 147 drone tests (43 new camera cases) and 11 GCS
+workspace tests pass. Camera/GStreamer/ROS behavior uses structural doubles; real GI,
+Argus/Jetson, lens/mode calibration and exposure/rolling-shutter timing remain untested.
+This work neither changes boat execution nor repeats the historical simulator trial.
+
+The subsequent asynchronous bench harness and completion-plan update add normalized
+input buffering, controlled delay/loss replay, ROS test endpoints and a bag audit.
+Validation: 160 drone tests and 11 GCS workspace tests pass. The normal analytic arrival
+test produced 4 reports/12 observations; complete state loss produced zero observations.
+Native ROS/bag tests and physical sensing remain unexecuted; boat acceptance is unchanged.
+
+The Python 3.10 host install blocker is corrected with version-selected dependency
+pins and portable timestamp/checksum handling. Both Python 3.10 and 3.12 pass 161
+drone tests; 11 GCS workspace tests pass on 3.10. Analytic/delay/loss and camera dry-run
+checks pass; ARM64 binary-wheel resolution succeeds. Native ROS/GI/Argus/Jetson
+execution remains unverified. The higher-Python pins and boat behavior are preserved.
 
 This uses a perfect simulator map and does not establish camera-free feasibility
 on the real boat. Subsequent experiments introduce survey/GPS errors and buoy
