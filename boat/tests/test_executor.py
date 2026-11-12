@@ -19,7 +19,7 @@ class Message(SimpleNamespace):
         return getattr(self, "source_system", 1)
 
     def get_srcComponent(self):
-        return 1
+        return getattr(self, "source_component", 1)
 
 
 class Link:
@@ -37,7 +37,7 @@ class Link:
         self.reject_speed = False
 
     def mode_mapping(self):
-        return {"MANUAL": 0, "AUTO": 10, "HOLD": 4}
+        return {"MANUAL": 0, "AUTO": 10, "HOLD": 4, "LOITER": 5, "RTL": 11}
 
     def put(self, kind, **values):
         self.messages.append(Message(kind=kind, **values))
@@ -115,6 +115,33 @@ class ExecutorTests(unittest.TestCase):
         self.executor.last_position = self.executor.last_gps = self.link.time
         self.mission = Mission.load(Path(__file__).resolve().parents[1] / "examples/mission.json")
 
+    def test_vehicle_discovery_filters_and_heartbeat_freshness(self):
+        for vehicle_type in (mavutil.mavlink.MAV_TYPE_GROUND_ROVER,
+                             mavutil.mavlink.MAV_TYPE_SURFACE_BOAT):
+            with self.subTest(vehicle_type=vehicle_type):
+                self.setUp()
+                self.executor.system = None
+                self.link.put("GLOBAL_POSITION_INT")
+                self.assertFalse(self.executor.receive())
+                self.link.put("HEARTBEAT", autopilot=3, type=2)
+                self.assertFalse(self.executor.receive())
+                self.assertIsNone(self.executor.system)
+                self.link.put("HEARTBEAT", autopilot=3, type=vehicle_type,
+                              custom_mode=4, base_mode=0)
+                self.executor.receive()
+                accepted = self.executor.last_heartbeat
+                for fields in ({"type": 2}, {"autopilot": 0},
+                               {"source_system": 2}, {"source_component": 2}):
+                    values = dict(autopilot=3, type=vehicle_type, custom_mode=10, base_mode=128)
+                    values.update(fields)
+                    self.link.put("HEARTBEAT", **values)
+                    self.assertFalse(self.executor.receive())
+                self.assertEqual(self.executor.last_heartbeat, accepted)
+                self.assertEqual(self.executor.mode, 4)
+                self.link.time += 4
+                with self.assertRaisesRegex(MissionError, "heartbeat is stale"):
+                    self.executor.fresh()
+
     def test_upload_acceptance_and_duplicate_request(self):
         self.link.repeat_request = True
         self.executor.upload(self.mission)
@@ -139,6 +166,97 @@ class ExecutorTests(unittest.TestCase):
         with self.assertRaises(MissionError):
             self.executor.upload(self.mission)
         self.assertFalse(self.link.stored)
+
+    def loiter(self):
+        self.link.armed = True
+        self.link.mode = 5
+        self.link.put("HEARTBEAT", custom_mode=5, base_mode=128, autopilot=3, type=11)
+        self.executor.drain()
+
+    def test_armed_loiter_upload_and_start_never_disarm_or_rearm(self):
+        self.loiter()
+        self.executor.upload(self.mission)
+        self.assertEqual(self.executor.state, "uploaded")
+        self.assertEqual(self.executor.mode, 5)
+        self.assertTrue(self.executor.armed)
+        self.assertFalse(any(command == "mode" for command, _ in self.link.commands))
+        self.executor.start()
+        self.assertEqual(self.executor.state, "executing")
+        self.assertTrue(self.executor.armed)
+        self.assertFalse(any(command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
+                             for command, _ in self.link.commands))
+        self.assertNotIn(("mode", 4), self.link.commands)
+        self.assertTrue(any(command == mavutil.mavlink.MAV_CMD_DO_CHANGE_SPEED
+                            for command, _ in self.link.commands))
+
+    def test_auto_upload_is_rejected_even_when_disarmed(self):
+        for armed in (False, True):
+            self.executor.mode, self.executor.armed = 10, armed
+            with self.assertRaises(MissionError):
+                self.executor.upload(self.mission)
+        self.assertFalse(self.link.stored)
+
+    def test_takeover_during_armed_upload_fails_without_overriding_manual(self):
+        self.loiter()
+        original = self.link.mission_count_send
+        def takeover(*args):
+            original(*args)
+            self.link.put("HEARTBEAT", custom_mode=0, base_mode=128, autopilot=3, type=11)
+        self.link.mission_count_send = takeover
+        with self.assertRaisesRegex(MissionError, "upload requires"):
+            self.executor.upload(self.mission)
+        self.assertEqual(self.executor.state, "failed")
+        self.assertEqual(self.executor.mode, 0)
+        self.assertFalse(any(command == "mode" for command, _ in self.link.commands))
+
+    def test_armed_start_speed_failure_stops_in_hold_without_disarming(self):
+        self.loiter()
+        self.executor.upload(self.mission)
+        self.link.reject_speed = True
+        with self.assertRaises(MissionError):
+            self.executor.start()
+        self.assertEqual(self.executor.state, "failed")
+        self.assertEqual(self.executor.mode, 4)
+        self.assertTrue(self.executor.armed)
+
+    def test_mode_change_confirms_heartbeat_and_consumes_upload(self):
+        self.executor.upload(self.mission)
+        self.executor.change_mode("LOITER")
+        self.assertEqual(self.executor.mode, 5)
+        self.assertEqual(self.executor.state, "stopped")
+        with self.assertRaises(MissionError):
+            self.executor.start()
+        commands = list(self.link.commands)
+        self.executor.change_mode("LOITER")
+        self.assertEqual(self.link.commands, commands)
+        for name in ("AUTO", "BAD", "INITIALISING"):
+            with self.assertRaises(MissionError):
+                self.executor.change_mode(name)
+
+    def test_reselecting_loiter_preserves_uploaded_start_authority(self):
+        self.loiter()
+        self.executor.upload(self.mission)
+        self.executor.change_mode("LOITER")
+        self.assertEqual(self.executor.state, "uploaded")
+        self.executor.start()
+        self.assertEqual(self.executor.state, "executing")
+
+    def test_unconfirmed_mode_is_never_reported_successful(self):
+        self.link.set_mode_send = lambda *args: None
+        with self.assertRaisesRegex(MissionError, "timed out"):
+            self.executor.change_mode("LOITER")
+        self.assertEqual(self.executor.state, "interrupted")
+        self.assertEqual(self.executor.mode, 4)
+
+    def test_corrupt_armed_readback_keeps_loiter_and_blocks_start(self):
+        self.loiter()
+        self.link.corrupt = True
+        with self.assertRaises(MissionError):
+            self.executor.upload(self.mission)
+        self.assertEqual(self.executor.mode, 5)
+        self.assertTrue(self.executor.armed)
+        with self.assertRaises(MissionError):
+            self.executor.start()
 
     def running(self):
         self.executor.mission = self.mission
@@ -226,6 +344,7 @@ class ExecutorTests(unittest.TestCase):
             self.executor.last_position = self.executor.last_gps = self.executor.last_heartbeat = self.link.time
             self.executor.tick()
         self.assertEqual(self.executor.state, "complete")
+        self.assertEqual(self.executor.mode, 5)
 
     def test_stale_telemetry_fails_without_claiming_stop(self):
         self.running()

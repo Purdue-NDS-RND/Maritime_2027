@@ -13,9 +13,9 @@ from pymavlink import mavutil
 from gcs.app.telemetry import Telemetry, TelemetryConfig, open_connection
 
 
-def heartbeat(system=1, component=1):
+def heartbeat(system=1, component=1, vehicle_type=mavutil.mavlink.MAV_TYPE_SURFACE_BOAT):
     message = mavutil.mavlink.MAVLink_heartbeat_message(
-        mavutil.mavlink.MAV_TYPE_SURFACE_BOAT,
+        vehicle_type,
         mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA, 128, 10, 4, 3)
     return source(message, system, component)
 
@@ -115,6 +115,21 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(value['gps_age_s'], 2)
         self.assertEqual(value['heartbeat_age_s'], 0)
         self.assertEqual(value['gps_fix'], 3)
+
+    def test_both_vehicle_types_and_unrelated_heartbeat_cannot_refresh(self):
+        for vehicle_type in (mavutil.mavlink.MAV_TYPE_GROUND_ROVER,
+                             mavutil.mavlink.MAV_TYPE_SURFACE_BOAT):
+            with self.subTest(vehicle_type=vehicle_type):
+                self.setUp()
+                self.reader.ingest(heartbeat(vehicle_type=vehicle_type))
+                self.reader.ingest(position())
+                self.assertFalse(self.reader.snapshot()['stale'])
+                self.now += 4
+                for invalid in (mavutil.mavlink.MAV_TYPE_QUADROTOR,
+                                mavutil.mavlink.MAV_TYPE_GCS):
+                    self.reader.ingest(heartbeat(vehicle_type=invalid))
+                self.assertTrue(self.reader.snapshot()['stale'])
+                self.assertEqual(self.reader.snapshot()['heartbeat_age_s'], 4)
 
     def test_configuration(self):
         with patch.dict(os.environ, {'GCS_MAVLINK_CONNECTION': '/dev/ttyUSB0',

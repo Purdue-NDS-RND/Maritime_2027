@@ -96,7 +96,8 @@ class Telemetry:
         with self.lock:
             if kind == 'HEARTBEAT':
                 if (message.autopilot != mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
-                        or message.type != mavutil.mavlink.MAV_TYPE_SURFACE_BOAT):
+                        or message.type not in (mavutil.mavlink.MAV_TYPE_SURFACE_BOAT,
+                                                mavutil.mavlink.MAV_TYPE_GROUND_ROVER)):
                     return
                 if self.times['heartbeat'] is not None and now - self.times['heartbeat'] > 3:
                     self.reset()
