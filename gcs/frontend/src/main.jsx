@@ -18,6 +18,7 @@ import {configuration,heading,friendly} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 import {api,newSession,setConnectionGeneration} from './api';
 import {addedObject} from './MapReview';
+import {displayColour,isUnknownObject} from './mapReviewState';
 import {courseOverlay} from './courseOverlay';
 import {suggestBoundary,DEFAULT_BOUNDARY_PADDING_M} from './planningBoundary';
 
@@ -248,13 +249,13 @@ function App() {
             L.circleMarker(latlng(obj.centre),{radius:10,color:'#b3bac6',weight:1.5,dashArray:'3 3',fillOpacity:0,interactive:false}).addTo(group).bindTooltip(document.createTextNode('Original: '+obj.id));
         }
         if(map) for(const [i,b] of map.buoys.entries()){
-            const colour={red:'#e74b50',green:'#35c78b',white:'#dfe7f2',blue:'#4e9feb',orange:'#fa8b24',purple:'#b15ce5',yellow:'#eed831',cyan:'#25d9df',black:'#151515',zebra:'#ffffff'}[b.category]||'#999';
+            const colour=displayColour(b,{red:'#e74b50',green:'#35c78b',white:'#dfe7f2',blue:'#4e9feb',orange:'#fa8b24',purple:'#b15ce5',yellow:'#eed831',cyan:'#25d9df',black:'#151515',zebra:'#ffffff'}[b.category]||'#999');
             (b.type==='point'?(b.object_type==='detector'?L.marker(latlng(b.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(b.centre),{radius:6,color:colour,fillOpacity:0.8})):L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7})).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(b);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
-            if(b.category==='zebra')L.marker(latlng(b.centre),{interactive:false,icon:L.divIcon({className:'zebra-marker',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(group);
+            if(b.category==='zebra'&&!isUnknownObject(b))L.marker(latlng(b.centre),{interactive:false,icon:L.divIcon({className:'zebra-marker',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(group);
 
         }
         if(map)for(const obj of map.obstacles||[]){
-            const style={color:obj.task==='launch'?'#20252b':obj.task==='recover'?'#edcc35':obj.task==='evade'?'#bd79e4':'#99724d',fillOpacity:0.65,weight:2};
+            const style={color:displayColour(obj,obj.task==='launch'?'#20252b':obj.task==='recover'?'#edcc35':obj.task==='evade'?'#bd79e4':'#99724d'),fillOpacity:0.65,weight:2};
             const shape=obj.type==='point'?(obj.object_type==='detector'?L.marker(latlng(obj.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(obj.centre),{...style,radius:6})):obj.type==='polygon'?L.polygon(obj.footprint.map(latlng),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m});
             shape.addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(obj);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
 

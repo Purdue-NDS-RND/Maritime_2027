@@ -56,12 +56,10 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    Loading also suggests a four-corner planning boundary rotated to fit the
    entire map, with **10 m extra room** on each side. It includes mapped objects,
    native physical footprints, station annotations and any known start (fresh
-   live position when available). Review this amber outline before **I reviewed
-   the map — continue**; the same action confirms the objects and boundary.
-   **Extra room (m)** and **Regenerate** rebuild it after corrections;
-   **Edit corners** lets you drag numbered corners, and **Draw manually** starts
-   a replacement polygon. **Undo corner** removes its last point. Crossing or
-   collapsed outlines must be corrected before confirming the map.
+   live position when available). The amber outline appears immediately; Map
+   confirms object review only. Unknown-type objects display gray regardless of
+   their recorded color; assigning a known type restores their normal display
+   color. This does not change their stored observations or clearance geometry.
    The suggestion cannot infer shorelines or permitted water from observations.
    Reviewed boundaries stay fixed as the boat moves or tasks change; correcting
    them revokes the generated route and requires fresh validation/approval.
@@ -75,8 +73,11 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    **Speed & clearance / LiDAR towers / Start & limits** categories; selecting a
    tower on the map opens its category. Continue stays pinned below the settings.
    Drawing tools open the map automatically; inputs remain in this page session.
-   The map-reviewed boundary is already populated here. The same boundary tools
-   remain available for corrections. Changing extra room takes effect only on
+   The automatically suggested boundary is already populated here. Boundary
+   controls appear only in Configure: **Extra room (m)** and **Regenerate** rebuild
+   the suggestion; **Edit corners** moves existing corners; **Draw manually**
+   replaces the polygon; **Undo corner** removes its last point. Correct crossing
+   or collapsed outlines before continuing to Build run. Changing extra room takes effect only on
    **Regenerate**, which replaces the current outline and fits it in the map.
 3. **Build run:** use the direct **＋ Gate / Slalom / Channel / Manual** buttons.
    To include the starting gate, add **Gate** first, then **Slalom**. Gate owns

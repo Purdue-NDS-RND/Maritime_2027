@@ -1,8 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {friendly} from './workflow';
 import {isPoint,isNavigation,untypedNavigation,sameRoles,roleName} from './mapReviewState';
-import BoundaryControls from './BoundaryControls';
-import {boundaryProblem} from './planningBoundary';
 
 export const COURSE_ROLES=[...['entrance.red','entrance.green','turn.1','turn.2','turn.3','turn.4','exit.red','exit.green'].map(r=>'slalom.'+r),...Array.from({length:3},(_,i)=>['red','green'].map(c=>`channel.${c}.${i+1}`)).flat()];
 const typeNames={unknown:'Unknown object',buoy:'Navigation buoy',detector:'Lidar / detector tower',obstacle:'Other obstacle',dock:'Dock / obstacle'};
@@ -43,7 +41,6 @@ export default function MapReview(props){
     const candidate=result?.candidates.find(c=>c.id===candidateId)||result?.candidates[0];
     const untyped=untypedNavigation(objects),navigation=objects.filter(isNavigation);
     const accepted=Object.values(assignments).filter(a=>a.status==='accepted').length;
-    const boundaryError=boundaryProblem(draft.planning_area,workspace.map.geographic_reference);
     async function publish(path,method,body,message,nextPhase){await run(async()=>{
         const current=await save();
         try{
@@ -55,13 +52,12 @@ export default function MapReview(props){
     });}
     async function mapEdit(map,message){await run(async()=>{await save({...workspace,map},true);invalidateRoute();setPhase('cleanup');notify(message);});}
     async function confirmMap(manual=false){await run(async()=>{
-        if(boundaryError)throw new Error(boundaryError);
         await save({...workspace,run_draft:{...draft,sizes_confirmed:true}});
         setMode('inspect');
         if(manual){setStep(2);notify('Map checked. Configure navigation, then assign your tasks manually.');}
         else {setPhase('find');notify('Map checked. Find the course, or review saved assignments.');}
     });}
-    async function continuePlanning(){await run(async()=>{await save();setStep(2);setMode('inspect');notify('Map and boundary ready. Choose shared clearance and a start, then build your run.');});}
+    async function continuePlanning(){await run(async()=>{await save();setStep(2);setMode('inspect');notify('Map ready. Review the planning boundary, shared clearance and start in Configure, then build your run.');});}
     async function applyObject(){
         const corrected={...objectEdit};
         if(corrected.footprint&&object){const dy=corrected.centre.latitude-object.centre.latitude,dx=corrected.centre.longitude-object.centre.longitude;corrected.footprint=corrected.footprint.map(p=>({latitude:p.latitude+dy,longitude:p.longitude+dx}));}
@@ -81,7 +77,6 @@ export default function MapReview(props){
       {phase==='cleanup'&&<>
         <div className="map-phase-heading"><h2>Check the detections</h2><p>Correct anything misplaced or mislabeled, then continue.</p></div>
         <p className="object-type-summary"><strong>{navigation.length}</strong> navigation buoys · <strong>{objects.filter(o=>o.object_type==='detector').length}</strong> towers · <strong>{objects.filter(o=>!isNavigation(o)&&o.object_type!=='detector').length}</strong> other / unknown</p>
-        <BoundaryControls {...props}/>
         {!!untyped.length&&<div className="map-next-action"><strong>{untyped.length} red/green detections need a type</strong><p>Are these navigation buoys? Confirm them together, or edit them individually below.</p><button className="primary" onClick={()=>mapEdit(editObjects(workspace.map,untyped.map(o=>o.id),{object_type:'buoy'}),'Red/green detections marked as navigation buoys. Check their positions, then continue.')}>Mark {untyped.length} red/green detections as buoys</button></div>}
         <div className="cleanup-toolbar button-row"><button aria-pressed={mode==='add-object'} onClick={()=>setMode('add-object')}>Add object on map</button><button className="quiet" disabled={!workspace.map_history?.undo.length} onClick={()=>publish('map/history','POST',{direction:'undo'},'Map edit undone. Check the map again.','cleanup')}>Undo map edit</button><button className="quiet" disabled={!workspace.map_history?.redo.length} onClick={()=>publish('map/history','POST',{direction:'redo'},'Map edit redone. Check the map again.','cleanup')}>Redo map edit</button></div>
         <details open={!!object}><summary>{object?`Edit ${friendly(object.id)}`:'Edit an individual object'}</summary><select aria-label="Object to inspect" value={object?.id||''} onChange={e=>setSelected(e.target.value)}><option value="">Select an object or click it on the map</option>{objects.map(o=><option key={o.id} value={o.id}>{friendly(o.id)} · {typeNames[o.object_type]||o.object_type}</option>)}</select>
@@ -113,7 +108,7 @@ export default function MapReview(props){
       </>}
       </div>
       <footer className="map-review-footer">
-        {phase==='cleanup'&&<>{navigation.length<2&&<p className="action-reason">Mark the navigation buoys above, or assign tasks manually.</p>}<p className="hint">Continuing confirms the objects and displayed planning boundary.</p><button className="primary wide" disabled={navigation.length<2||!!boundaryError} onClick={()=>confirmMap()}>I reviewed the map — continue →</button><button className="text-button" disabled={!!boundaryError} onClick={()=>confirmMap(true)}>Map checked — assign tasks manually</button></>}
+        {phase==='cleanup'&&<>{navigation.length<2&&<p className="action-reason">Mark the navigation buoys above, or assign tasks manually.</p>}<p className="hint">Continuing confirms the objects. Review the suggested boundary in Configure.</p><button className="primary wide" disabled={navigation.length<2} onClick={()=>confirmMap()}>I reviewed the map — continue →</button><button className="text-button" onClick={()=>confirmMap(true)}>Map checked — assign tasks manually</button></>}
         {phase==='find'&&<><button className="primary wide" disabled={!draft.sizes_confirmed||navigation.length<2} onClick={()=>publish('course/compile','POST',{},'Course found. Check and confirm the highlighted tasks.')}>Compile course →</button><button className="text-button" onClick={()=>setPhase('cleanup')}>← Back to cleanup</button></>}
         {phase==='review'&&<><span className="hint">{accepted?`${accepted} of 3 tasks confirmed · remaining tasks can be assigned later`:'Confirm at least one task, or choose manual assignment.'}</span><button className="primary wide" disabled={!draft.sizes_confirmed||!accepted} onClick={continuePlanning}>Continue to Configure →</button>{!draft.sizes_confirmed&&<button className="text-button" onClick={()=>setPhase('cleanup')}>Check the map first →</button>}</>}
         <details><summary>Save course</summary><button onClick={download}>Download course JSON</button><p className="hint">Saves observations and assignments. Import the file from Change map to review it later.</p></details>

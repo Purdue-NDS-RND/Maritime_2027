@@ -19,8 +19,8 @@ for(const step of [1,2,3,4]){
  const nav=renderToStaticMarkup(<WorkflowNav {...props} step={step}/>);
  assert.match(nav,/Map/);assert.match(nav,/Configure/);assert.match(nav,/Build run/);assert.match(nav,/Review &amp; execute/);
  assert.doesNotMatch(html,/Planning mode|Single task|Competition run|Saved queue|Optional task overrides/);
- if(step===1){assert.match(html,/Load full competition map/);assert.match(html,/I reviewed the map — continue/);assert.match(html,/Map preparation/);assert.doesNotMatch(html,/Selected task templates|expanded_states/);assert.match(html,/Boundary extra room/);assert.match(html,/Regenerate/);assert.match(html,/Edit corners/);assert.doesNotMatch(html,/disabled=""[^>]*>I reviewed the map — continue/);}
- if(step===2){assert.match(html,/Hard exclusion/);assert.match(html,/Start, boundary/);assert.match(html,/Continue to Build run/);}
+ if(step===1){assert.match(html,/Load full competition map/);assert.match(html,/I reviewed the map — continue/);assert.match(html,/Map preparation/);assert.doesNotMatch(html,/Selected task templates|expanded_states/);assert.doesNotMatch(html,/Boundary extra room|Regenerate|Edit corners/);assert.doesNotMatch(html,/disabled=""[^>]*>I reviewed the map — continue/);}
+ if(step===2){assert.match(html,/Boundary extra room/);assert.match(html,/Regenerate/);assert.match(html,/Edit corners/);assert.match(html,/Hard exclusion/);assert.match(html,/Start, boundary/);assert.match(html,/Continue to Build run/);}
  if(step===3){assert.match(html,/Your run is empty/);for(const name of ['Gate','Slalom','Channel','Manual'])assert.match(html,new RegExp('＋ '+name));assert.doesNotMatch(html,/Task type|Hard exclusion/);assert.match(html,/disabled=""[^>]*>Generate run/);}
  if(step===4){assert.match(html,/disabled=""[^>]*>1. Validate route/);}
 }
@@ -75,8 +75,8 @@ assert.match(cleanupHtml,/Mark 14 red\/green detections as buoys/);
 assert.match(cleanupHtml,/disabled=""[^>]*>I reviewed the map — continue/);
 assert.doesNotMatch(cleanupHtml,/Compile course →|Confirm Slalom|search details/);
 const missingBoundaryHtml=renderToStaticMarkup(<Planner {...props} step={1} draft={{...draft,planning_area:[]}}/>);
-assert.match(missingBoundaryHtml,/disabled=""[^>]*>I reviewed the map — continue/);
-assert.match(missingBoundaryHtml,/disabled=""[^>]*>Map checked — assign tasks manually/);
+assert.doesNotMatch(missingBoundaryHtml,/disabled=""[^>]*>I reviewed the map — continue/);
+assert.doesNotMatch(missingBoundaryHtml,/disabled=""[^>]*>Map checked — assign tasks manually/);
 const invalidBoundaryConfiguration=renderToStaticMarkup(<Planner {...props} step={2} draft={{...draft,planning_area:[]}}/>);
 assert.match(invalidBoundaryConfiguration,/disabled=""[^>]*>Continue to Build run/);
 const confirmedHtml=renderToStaticMarkup(<AssignmentReview candidate={proposal} assignments={{slalom:{roles:roles.slalom,status:'accepted'}}}/>);

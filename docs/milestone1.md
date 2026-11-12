@@ -654,3 +654,14 @@ The UI preview subsequently restored the original black/gray/blue palette at
 the operator’s request, retaining the adjustable panel, compact controls and
 scrolling improvements. Only display colors changed; semantic warning, task and
 vehicle-state colors remain intact. Frontend tests and production build passed.
+
+Boundary editing now belongs exclusively to Configure. Import still suggests
+and displays an outline immediately, while Map confirmation covers object
+review only. Invalid boundary geometry blocks Configure continuation and route
+validation remains unchanged. Unknown or untyped objects display gray, including
+observations with a red/green/zebra color; recorded colors, physical footprints
+and classification shortcuts remain intact. Chrome verified no boundary controls
+in Map, controls present in Configure, and a red buoy changing to a gray marker
+when classified Unknown (the test edit was undone). Frontend tests/render check
+and production build passed; no vehicle commands were issued. Evidence is under
+`simulation/logs/gcs-tactical-layout/` (`boundary-object-*`, `unknown-gray-map.png`).
