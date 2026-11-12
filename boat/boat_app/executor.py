@@ -55,8 +55,6 @@ class Executor:
             "mission_sha256": self.mission.sha256 if self.mission else None,
             "system_id": self.system, "component_id": self.component,
             "mode": self.mode, "armed": self.armed,
-            "available_modes": {name: number for name, number in (self.link.mode_mapping() or {}).items()
-                                if name != "INITIALISING"} if self.system is not None else {},
             "position": vars(self.position) if self.position else None,
             "heading_deg": self.heading, "speed_m_s": self.speed, "gps_fix": self.fix,
             "heartbeat_age_s": self.age(self.last_heartbeat),

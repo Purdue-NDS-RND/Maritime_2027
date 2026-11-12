@@ -46,3 +46,7 @@ down:
 
 logs:
 	docker compose -f container/compose.yaml logs -f
+
+.PHONY: rover-build rover-run rover-down rover-logs rover-smoke
+rover-build rover-run rover-down rover-logs rover-smoke:
+	./rover/run.sh $(patsubst rover-%,%,$@)

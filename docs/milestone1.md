@@ -512,3 +512,68 @@ inventory, exact removed tags and output remain in `canonical-runtime/`
 `legacy-gcs-container.tar.gz`. Measured net host space recovered was 7.98 GB,
 subject to unrelated host activity. Historical tags/containers are not runtime
 dependencies. Physical boat/radio behavior remains unverified.
+
+### Ground-rover compatibility validation — 2026-11-12
+
+The executor and passive GCS reader accept ArduPilot `GROUND_ROVER` (10) and
+`SURFACE_BOAT` (11), retaining source filtering and independent freshness checks.
+Unrelated vehicle/autopilot heartbeats cannot refresh the selected vehicle.
+The existing LOITER execution behavior was brought onto this branch from
+`8cbd69a`: armed uploads require LOITER, Start explicitly enters AUTO, completion
+verifies HOLD/finish settling then confirms LOITER, and Stop confirms HOLD.
+Mission envelopes, HTTP endpoints and status schema are unchanged.
+
+A separate `maritime-rover-sitl:latest` image packages upstream Wild Thumper at
+SITL Models `25bc38ed8c6c0345840159a8cbc0b02781d52f3c`, over verified
+ArduPilot `1511f27194f1dcc3728270883047bdf022b3fd53` and Gazebo plugin
+`082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5`. It uses Harmonic, JSON physics,
+rover-skid defaults and `FRAME_CLASS=1` on a flat world at the existing GPS
+origin. Boat image, dynamics, defaults and 14550/14551 ownership are retained.
+Commands and lifecycle thresholds are in the simulator usage guide.
+
+Live HTTP validation passed upload/readback, AUTO start and measured motion,
+HOLD/finish settling to armed LOITER, another armed upload, and Stop into HOLD.
+The same checker and thresholds passed on the existing BlueBoat simulator:
+
+| Environment | Gazebo displacement | GPS endpoint vector separation |
+| --- | --- | --- |
+| Wild Thumper, first quantitative run | 8.44284 m | 0.01514 m |
+| Wild Thumper, final image via `make rover-smoke` | 8.43848 m | 0.03306 m |
+| BlueBoat calm open water regression | 8.46881 m | 0.01797 m |
+
+These are short 8 m commanded routes at 0.7 m/s. The checker requires at least
+4 m displacement from both sources and at most 1 m endpoint-vector separation;
+finish limits remain 3 m radius, 0.2 m/s and 5 s. Observed endpoint agreement
+includes timing and simulated navigation estimation; it does not measure real
+GPS accuracy. BlueBoat was run from the unchanged installed simulator image
+with a temporary headless-only startup copy, not altered vehicle parameters.
+
+Chrome at `localhost:8080` displayed the full 23-buoy/six-prop competition map,
+a manually supplied northward route, live rover position and heading, and
+separate Validate, Approve, Upload/readback and Start actions. Validation retained
+a 1.8 m clearance buffer and 1 m finish radius. Execution completed in armed
+LOITER; browser Stop and Disarm succeeded. The map was the retained, historically
+alignment-verified competition export, overlaid on the flat rover environment;
+this is GCS compatibility evidence, not a claim that buoys exist in that world
+or proof of physical buoy-course clearance.
+
+Validation passed 32 boat tests (including ROS construction), 29 GCS tests,
+GCS production frontend build, and simulator configuration/protected-baseline
+checks. Both launchers rejected the other running simulator without stopping
+it. Readiness required independently advancing Gazebo time plus fresh
+GROUND_ROVER heartbeat, 3D GPS and origin-aligned position. Automated movement
+checks used server-only Gazebo; visible Gazebo startup is supported but was not
+visually validated. Physical vehicle dynamics, physical firmware/RC/radio and
+station keeping remain separate acceptance work.
+
+Raw logs, pose/status streams, image build logs, operation journals, isolated
+browser workspace and failed preliminary attempts are retained under ignored
+`simulation/logs/rover-sitl/`. Quantitative runs are
+`20261112T051027Z-WjZIAw/lifecycle-20261112T051310/` and
+`boat-regression/lifecycle-20261112T051746/`; final normal-launcher smoke is
+`20261112T051830Z-5FWFb5/lifecycle-20261112T051906/`. A preliminary regression invocation
+ran before HTTP readiness and failed without starting a mission; the final
+checker now waits for HTTP startup. After confirmed disarm, terminating the owned MAVProxy process caused the
+supervisor to exit nonzero and clean up Gazebo/SITL; no ArduRover processes or
+simulator containers remained (`supervisor-check.json`). Test runtimes were
+explicitly disarmed and shut down after validation.

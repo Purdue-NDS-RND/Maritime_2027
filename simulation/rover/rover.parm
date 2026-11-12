@@ -1,0 +1,2 @@
+# Ground vehicle only; rover and rover-skid defaults precede this file.
+FRAME_CLASS 1

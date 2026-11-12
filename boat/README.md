@@ -45,9 +45,9 @@ From `boat/`, in a third terminal:
 
 ```bash
 make status   # wait for ready, fresh position and GPS fix >= 3; Ctrl-C to exit
-make upload   # requires disarmed vehicle outside AUTO; does not arm/start
+make upload   # requires disarmed outside AUTO or armed LOITER; does not arm/start
 make start    # explicitly arms and starts the accepted mission
-make status   # observe executing -> stopping -> complete, or failure
+make status   # observe executing -> stopping -> complete in LOITER, or failure
 make disarm   # requires HOLD and speed <= 0.2 m/s; no force-disarm
 make down
 ```
@@ -78,3 +78,8 @@ Mission snapshots and the operation journal live under ignored
 `simulation/logs/boat/`, with progress/events under individual session folders; ROS logs under `simulation/logs/boat/ros/`.
 Client disconnection does not affect execution. Application or MAVLink loss
 has different fault semantics, detailed in the [execution reference](../docs/boat_execution.md).
+
+ArduPilot ground-rover and surface-boat heartbeats are supported. See the
+[Gazebo rover workflow](../simulation/docs/USING_THE_SIM.md#gazebo-ground-rover-compatibility-environment)
+for the isolated Wild Thumper test environment. Physical vehicle firmware and
+performance remain unverified.

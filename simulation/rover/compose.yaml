@@ -1,0 +1,21 @@
+name: maritime-rover-sitl
+services:
+  rover:
+    image: maritime-rover-sitl:latest
+    build:
+      context: ..
+      dockerfile: rover/Dockerfile
+    network_mode: host
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      DISPLAY: ${DISPLAY:-}
+      XAUTHORITY: /tmp/rover.xauth
+      ROVER_HEADLESS: ${ROVER_HEADLESS:-0}
+      LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-0}
+      GZ_PARTITION: maritime_rover_sitl
+    volumes:
+      - ${ROVER_RUN_DIR:?use make rover-run}:/sim
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${ROVER_XAUTH:-/dev/null}:/tmp/rover.xauth:ro
+    stop_grace_period: 15s
+    restart: "no"

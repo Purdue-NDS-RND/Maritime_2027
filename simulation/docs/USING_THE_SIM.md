@@ -254,3 +254,60 @@ Historical measured-profile acceptance used explicit tuning and telemetry; see
 [milestone reproduction](../../docs/milestone1.md#implementation-and-reproduction).
 Radio setup is in the [GCS guide](../../gcs/README.md#live-map-telemetry);
 physical radio operation remains unverified.
+
+## Gazebo ground-rover compatibility environment
+
+From `simulation/`:
+
+```bash
+make rover-build
+make rover-run                    # visible Gazebo; DISPLAY/XAUTHORITY required
+# Or: ROVER_HEADLESS=1 make rover-run
+make rover-logs
+make rover-smoke                  # real boat HTTP app must be running on 8091
+make rover-down
+```
+
+`maritime-rover-sitl:latest` derives from `maritime-sim:latest` and verifies
+ArduPilot `1511f27194f1dcc3728270883047bdf022b3fd53` (Rover 4.7.0),
+ArduPilot Gazebo plugin `082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5`, and
+SITL Models `25bc38ed8c6c0345840159a8cbc0b02781d52f3c` before packaging
+`Gazebo/models/wildthumper` and its meshes/textures from that revision.
+The upstream [Wild Thumper instructions](https://github.com/ArduPilot/SITL_Models/blob/25bc38ed8c6c0345840159a8cbc0b02781d52f3c/Gazebo/docs/WildThumper.md)
+use `rover-skid` and JSON physics. This launcher starts the pinned `ardurover`
+binary with `rover.parm`, `rover-skid.parm`, then `FRAME_CLASS=1`; it never loads
+BlueBoat parameters. The flat world has no online Fuel dependencies.
+Gazebo ENU origin and SITL home are 51.566151, -4.034345, elevation 0;
+the rover spawns facing north. The boat image/defaults remain independent.
+
+Every `rover-run` creates a fresh directory beneath `logs/rover-sitl/` with
+state, Gazebo/SITL/MAVProxy logs, telemetry recording and readiness evidence.
+`latest-run.txt` identifies that directory. Startup waits for advancing physics,
+an ArduPilot GROUND_ROVER heartbeat, fresh 3D GPS and origin-aligned position.
+Gazebo, SITL and MAVProxy run in separately owned process groups; a child exit
+fails the runtime and shutdown terminates all groups. Restarting the same
+container refuses its existing state; use `rover-down` then `rover-run`.
+Existing simulator/SITL/MAVProxy processes and occupied physics/control ports
+cause rejection, not automatic termination. Stop one simulator explicitly before
+starting the other. The boat launcher also refuses a running rover container.
+UDP 14550 remains GCS-owned, 14551 boat-owned; 14559 is a private readiness output.
+The rover additionally uses UDP 9002 and TCP 5760/5762/5763.
+
+Build/run the boat application from this branch in another terminal (`cd boat`,
+`make build`, `make run`) before `rover-smoke`. Start with a disarmed rover outside
+AUTO, or armed LOITER with no active mission. The smoke sends an 8 m northward
+mission at 0.7 m/s through HTTP upload/readback and explicit Start, requires at
+least 4 m displacement in both GPS and Gazebo and at most 1 m endpoint vector
+separation, checks completion in armed LOITER, uploads a replacement while armed,
+and confirms Stop in HOLD. It leaves arming unchanged after Stop; explicitly
+Disarm when finished. The finish checks remain 3 m / 0.2 m/s / 5 s, as in the
+supplied boat-only example; it does not change any application thresholds.
+Raw pose/status streams and result JSON are stored in each run's `lifecycle-*`.
+Failure returns nonzero; inspect those files before retrying. Clear physical
+space is assumed; this tool is only for the simulation environment.
+
+For GCS integration, use the full competition object map, choose Custom route,
+and manually review a short clear route at the rover's actual position. Validate,
+Approve, Upload, and Start remain separate actions. The competition objects are
+an overlay in this flat rover world: this checks GCS integration, not physical
+buoy-course clearance or the dynamics/firmware of a real vehicle.

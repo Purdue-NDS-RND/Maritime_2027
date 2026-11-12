@@ -8,7 +8,18 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 
 scripts=(scripts/run.sh scripts/validate.sh scripts/smoke.sh scripts/gazebo_sensor_smoke.py container/start-sim.sh container/sitl-process-wrapper.sh container/healthcheck.sh)
 bash -n "${scripts[@]}"
-bash -n scripts/run-menu.sh
+bash -n scripts/run-menu.sh rover/run.sh
+python3 -m py_compile rover/start.py rover/probe.py rover/lifecycle.py
+ROVER_RUN_DIR="$PROJECT_DIR/logs/rover-sitl" docker compose -f rover/compose.yaml config --quiet
+python3 - <<'PYROVER'
+import xml.etree.ElementTree as ET
+root = ET.parse('rover/flat.sdf')
+assert root.findtext('.//include/uri') == 'model://wildthumper'
+assert root.findtext('.//spherical_coordinates/latitude_deg') == '51.566151'
+assert root.findtext('.//spherical_coordinates/longitude_deg') == '-4.034345'
+assert 'FRAME_CLASS 1' in open('rover/rover.parm').read()
+assert 'blueboat.parm' not in open('rover/start.py').read()
+PYROVER
 bash -n scripts/select-gpu.sh scripts/install-nvidia-container-toolkit.sh
 for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
     [[ -x $script ]] || { echo "ERROR: $script is not executable" >&2; exit 1; }

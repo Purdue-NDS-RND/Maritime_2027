@@ -134,7 +134,7 @@ physical vehicle networking or authentication design.
   Direct USB remapping after replug can require container recreation.
 
 Only the configured system/component is accepted. A matching ArduPilot
-surface-boat heartbeat is required before using its position or GPS messages.
+ground-rover or surface-boat heartbeat is required before using its position or GPS messages.
 `GLOBAL_POSITION_INT` supplies estimated WGS84 latitude/longitude (1e7 scale),
 heading (100 scale) and horizontal speed from velocities (100 scale). Invalid
 coordinates are rejected. Unavailable heading/velocity becomes null without

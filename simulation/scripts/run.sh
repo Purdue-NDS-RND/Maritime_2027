@@ -87,6 +87,11 @@ EOF
     exit 1
 fi
 
+if [[ $action == up ]] && docker ps --format '{{.Names}}' | grep -q '^maritime-rover-sitl-rover-'; then
+    echo 'ERROR: rover simulator is running; use make rover-down before boat startup.' >&2
+    exit 1
+fi
+
 export HOST_UID=${HOST_UID:-$(id -u)}
 export HOST_GID=${HOST_GID:-$(id -g)}
 export VIDEO_GID=${VIDEO_GID:-$(getent group video | cut -d: -f3 || true)}

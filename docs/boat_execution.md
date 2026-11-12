@@ -8,7 +8,7 @@ passage. The local-file path remains independently testable.
 ## Interfaces and ownership
 
 One ROS 2 node named `boat_mission` owns a direct `pymavlink` connection, using
-source system 245/component 191. The first ArduPilot surface-boat heartbeat
+source system 245/component 191. The first ArduPilot ground-rover or surface-boat heartbeat
 selects its target system/component. Other sources cannot change its progress
 or complete requests. The example uses the unchanged simulator port 14551.
 
@@ -37,7 +37,7 @@ and start calls on that file; GCS approval uses the HTTP interface below.
 
 ArduPilot item zero is home and items one onward are supplied waypoints, at
 zero relative altitude. Speed is a separately acknowledged start command,
-applied in AUTO while still disarmed, before the arm command. A leading mission
+applied in AUTO before arming on disarmed starts. Armed LOITER starts preserve arming. A leading mission
 speed item was observed to execute without applying its speed while AUTO was
 initially loitering; placing it after the first waypoint applied it too late
 for that leg. The start transaction therefore verifies speed acceptance before
@@ -46,16 +46,17 @@ that measured speed never overshoots.
 ArduPilot handles turns and waypoint acceptance. Lines between waypoints do
 not establish its executed path or hull clearance. No RTL or next task is added.
 
-Upload requires fresh heartbeat, 3D GPS and position, a disarmed boat outside
-AUTO, successful final `MISSION_ACK`, and matching mission readback. Duplicate
+Upload requires fresh heartbeat, 3D GPS and position, either a disarmed vehicle
+outside AUTO or an armed vehicle in LOITER, successful final `MISSION_ACK`, and matching mission readback. Duplicate
 requests are supported; timeouts fail explicitly. A failed replacement
 invalidates prior local start authorization. Start verifies stored items again
 to detect post-upload changes. Concurrent mission/control producers are not
 supported; there is no distributed command lock.
 
-Start requires `MIS_DONE_BEHAVE` to be stop (0) or loiter (1), selects HOLD and
-mission item one, enters AUTO disarmed, confirms speed acceptance, then arms
-without force. The live parameter is
+Start requires `MIS_DONE_BEHAVE` to be stop (0) or loiter (1), selects HOLD
+when initially disarmed and mission item one, enters AUTO, confirms speed acceptance, then arms
+without force if initially disarmed. An armed start requires LOITER and does not
+disarm or rearm. The live parameter is
 logged. The retained boat firmware reports loiter (1); a cached parameter list
 initially reported zero, so cached lists are not authoritative. The app requests
 HOLD at final waypoint arrival regardless of those two firmware end settings.
@@ -69,10 +70,9 @@ required after interruption, completion or application restart.
 
 On the final waypoint-reached report, the app requests HOLD and verifies GPS
 position inside the finish radius and horizontal speed below the selected
-threshold throughout the settle interval. It leaves the boat in HOLD awaiting
-the operator. Disarm is explicit. This uses reported navigation telemetry,
-not independent simulator truth or whole-hull passage. HOLD does not imply
-station keeping after completion.
+threshold throughout the settle interval. It then confirms LOITER through a
+heartbeat and leaves the vehicle armed awaiting the operator. Disarm is explicit. This uses reported navigation telemetry,
+not independent simulator truth or whole-hull passage. LOITER capability and physical station keeping require separate vehicle verification.
 
 Heartbeat/position ages above three seconds, GPS age above five seconds or fix
 below 3D, and execution/finish timeout cause failure. Best-effort HOLD is
