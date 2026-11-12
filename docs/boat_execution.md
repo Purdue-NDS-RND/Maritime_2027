@@ -36,31 +36,30 @@ saved before upload. Operator approval currently consists of explicit upload
 and start calls on that file; GCS approval uses the HTTP interface below.
 
 ArduPilot item zero is home and items one onward are supplied waypoints, at
-zero relative altitude. Speed is a separately acknowledged start command,
-applied in AUTO while still disarmed, before the arm command. A leading mission
-speed item was observed to execute without applying its speed while AUTO was
-initially loitering; placing it after the first waypoint applied it too late
-for that leg. The start transaction therefore verifies speed acceptance before
-allowing powered motion. Requested speed is a controller target, not a guarantee
-that measured speed never overshoots.
-ArduPilot handles turns and waypoint acceptance. Lines between waypoints do
-not establish its executed path or hull clearance. No RTL or next task is added.
+zero relative altitude. Speed is a separately acknowledged start command in
+AUTO. For a disarmed start, speed acceptance precedes arming. For an already
+armed start from LOITER, entering AUTO begins navigation immediately and the
+speed command follows immediately; there can be a brief interval at the
+firmware's initial waypoint speed. Rejection fails the operation and requests
+HOLD if AUTO is still owned. Requested speed is a controller target, not a
+strict measured-speed cap. No ArduPilot parameters are changed.
 
-Upload requires fresh heartbeat, 3D GPS and position, a disarmed boat outside
-AUTO, successful final `MISSION_ACK`, and matching mission readback. Duplicate
-requests are supported; timeouts fail explicitly. A failed replacement
+Upload requires fresh heartbeat, 3D GPS and position, either **armed LOITER** or
+a disarmed boat outside AUTO, successful final `MISSION_ACK`, and matching
+mission readback. Upload does not change the Loiter target, arm, disarm or start
+navigation. A mode change to an unsafe upload state aborts the transfer.
+Duplicate requests are supported; timeouts fail explicitly. A failed replacement
 invalidates prior local start authorization. Start verifies stored items again
 to detect post-upload changes. Concurrent mission/control producers are not
 supported; there is no distributed command lock.
 
-Start requires `MIS_DONE_BEHAVE` to be stop (0) or loiter (1), selects HOLD and
-mission item one, enters AUTO disarmed, confirms speed acceptance, then arms
-without force. The live parameter is
-logged. The retained boat firmware reports loiter (1); a cached parameter list
-initially reported zero, so cached lists are not authoritative. The app requests
-HOLD at final waypoint arrival regardless of those two firmware end settings.
-Parameters, simulator dynamics and source pins are retained. ACRO/manual end
-settings are rejected.
+Start requires `MIS_DONE_BEHAVE` stop (0) or loiter (1), and a disarmed boat or
+an armed boat in LOITER. It verifies readback and the live parameter, selects
+mission item one, enters AUTO and acknowledges the requested speed. The
+disarmed path selects HOLD first and arms without force after speed acceptance;
+the armed path stays in LOITER until AUTO and sends no arm/disarm command.
+ArduPilot follows the supplied GPS route; waypoint lines do not establish the
+executed path or hull clearance. No next task starts automatically.
 
 The normal lifecycle is `ready -> uploading -> uploaded -> starting -> executing
 -> stopping -> complete`. Faults report `failed`; mode changes/disarm report
@@ -69,10 +68,13 @@ required after interruption, completion or application restart.
 
 On the final waypoint-reached report, the app requests HOLD and verifies GPS
 position inside the finish radius and horizontal speed below the selected
-threshold throughout the settle interval. It leaves the boat in HOLD awaiting
-the operator. Disarm is explicit. This uses reported navigation telemetry,
-not independent simulator truth or whole-hull passage. HOLD does not imply
-station keeping after completion.
+threshold throughout the settle interval. After settling, it confirms LOITER
+and completes, awaiting the operator.
+Loiter maintains a target area with the firmware-configured `LOIT_RADIUS`;
+it allows drift inside that radius and can use propulsion outside it. It does
+not guarantee exact-position or obstacle clearance. Disarm remains explicit:
+select HOLD, wait for speed ≤0.20 m/s, then disarm. Finish checks use reported
+navigation telemetry, not independent simulator truth or whole-hull passage.
 
 Heartbeat/position ages above three seconds, GPS age above five seconds or fix
 below 3D, and execution/finish timeout cause failure. Best-effort HOLD is
@@ -143,8 +145,12 @@ speed and end behavior.
 
 ## Milestone 1 HTTP and command ownership
 
-The boat also serves loopback HTTP on `127.0.0.1:8091` (ROS parameter
-`http_port`). HTTP and the retained local-file ROS services submit to one
+The boat serves HTTP on `127.0.0.1:8091` by default (ROS parameters
+`http_host` and `http_port`). Field startup can select the Jetson's private
+LAN interface with `BOAT_HTTP_HOST` / `BOAT_HTTP_PORT`; shore GCS uses
+`GCS_BOAT_URL`. This unauthenticated API requires a trusted isolated control
+LAN. See [field configuration](../boat/README.md#jetson-field-connections).
+HTTP and the retained local-file ROS services submit to one
 boat-owned queue. Only its worker receives/sends MAVLink, runs execution ticks,
 or changes execution state; status readers consume snapshots. ROS uses
 reentrant service callbacks so STOP can interrupt another pending service.
@@ -153,7 +159,20 @@ reentrant service callbacks so STOP can interrupt another pending service.
   and the existing `mission` object.
 - `POST /missions/{id}/start` starts that verified current mission explicitly.
 - `POST /stop`, `POST /disarm` retain the existing HOLD/disarm checks.
+- `POST /mode` accepts `{"mode":"LOITER"}` or another advertised mode name.
+  The serialized worker confirms the mode through a target heartbeat and keeps
+  arming unchanged. Mode takeover cancels older queued/in-flight work and
+  invalidates uploaded start authority. AUTO must use verified mission Start.
+  Re-selecting the current mode preserves uploaded start authorization and
+  current LOITER also preserves its position target. After requesting a
+  different mode following upload, the GCS requires a new approval/upload ID;
+  retrying an old upload ID returns only its historical receipt.
+- `GET /status` advertises `available_modes` as mode-name to numeric-ID mapping.
+  The firmware can still refuse a mode because its prerequisites are unmet.
 - `GET /operations/{id}` returns pending/running/succeeded/failed/unknown.
+  `GET /status` also includes all unfinished operations and the last 32 receipts
+  for read-only lost-receipt reconciliation by the GCS connection manager. This
+  summary sends no command and never retries an operation.
 - `GET /status` returns the vehicle/mission snapshot, heading and telemetry ages.
 
 Long commands return HTTP 202 and an operation ID. Receipt is distinct from
@@ -175,7 +194,8 @@ or telemetry-rate dependency. ArduPilot tuning and simulation calibration tools
 belong to `simulation/`; the boat application neither applies nor verifies their
 settings. Mission target speed is a finite positive value supplied by the GCS
 or local mission file, with no application speed cap. Start still requires an
-acknowledged speed command before arming. Firmware limits and actual tracking
+acknowledged speed command before arming on the disarmed path; an armed
+LOITER start acknowledges speed immediately after entering AUTO. Firmware limits and actual tracking
 remain ArduPilot's responsibility. Fresh telemetry, mission readback, finish
 behavior checks, STOP, takeover and arming checks remain enforced.
 

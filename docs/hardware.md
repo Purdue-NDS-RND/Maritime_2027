@@ -47,6 +47,10 @@ GCS now consumes 14550 by default; other ground stations need a separate
 forwarded output. Its telemetry connection, serial baud and autopilot IDs are
 configurable for future radio use such as an RFD900, either through a host
 forwarder or direct device access. No physical radio/device configuration has
-been verified. This does not choose mission delivery to the onboard application.
+been verified. The selected mission-delivery path is HTTP over private
+Wi-Fi/Ethernet to the Jetson, independently of the RFD telemetry link. Startup
+settings select its address/interface and each application's serial device.
+See [Jetson setup](../boat/README.md#jetson-field-connections) and
+[shore setup](../gcs/README.md#field-connections-rfd-telemetry-and-jetson-mission-api).
 
 The approximate BlueBoat dynamics are not calibrated competition-boat dynamics.

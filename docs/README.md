@@ -1,6 +1,8 @@
 # Project documentation
 
 - [System design](design.md): workflow, application boundaries and open decisions.
+- [Map compiling](map_compiling.md): implemented survey cleanup, object labeling
+  and automatic gate/slalom/channel recognition workflow.
 - [Milestone 1](milestone1.md): scope, acceptance criteria, reproduction settings,
   measured simulator results and evidence locations. Selected simulator acceptance
   is complete; physical-boat performance remains unverified.
@@ -11,19 +13,7 @@
 - [Simulator guide](../simulation/README.md): setup, operation, manual GCS tracking,
   performance, optional cameras, troubleshooting and maintenance.
 - [Hardware knowledge](hardware.md): retained configuration and hardware notes.
-- [Sensing/perception context](../drone/LLM.md) and [tasks](../drone/TASKS.md):
-  maintained entry point and ordered development backlog.
-- [Sensing architecture](sensing_perception.md): CV, runtime and component ownership.
-- [ENU geolocation](geolocation.md): frames, calibration, error budget and experiments.
-- [Uncertainty and tracking](uncertainty_tracking.md): reviewed covariance/motion/association
-  design, real-time ellipse semantics and the forwarded research brief's new targets.
-- [ROS 2 package research](ros2_geolocation_packages.md): library reuse for camera projection,
-  TF/timing/geodesy and YOLO26n integration, with inspected sources and evaluation criteria.
-- [Perception JSON contract](perception_contract.md): proposed map semantics and GCS compatibility.
-- [CUASC vision review](legacy_vision_review.md): reusable code and concrete source issues.
-- [Competition sensing](competition_sensing.md): mission requirements, source versions and rules questions.
-- [Repository access](repository_access.md): GitHub permissions and branch workflow.
-- [Competition course](<competition_docs/AIMM-ICC Competition Course Details 12-13 2025.pdf>)
+- [Competition course](<competition_docs/Course and Competition Details.pdf>)
   and [rules](<competition_docs/Rules and Regulations _ AIMM ICC.pdf>): source documents.
 
 ## Maintaining documentation

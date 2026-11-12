@@ -27,6 +27,9 @@ The launcher prints all resolved settings before Docker startup. `SIM_GPU` and
 An explicit `BOAT_MODEL=single|dual` enables cameras unless `CAMERAS` is supplied.
 See [camera boat selection](DUAL_CAMERA.md).
 
+Competition layout randomization uses the separate `COURSE_SEED` controls below;
+the menu's legacy `BUOY_SEED` still leaves the fixed competition layout unchanged.
+
 Commands with an explicit `WORLD` or `SCENARIO` skip the menu. Non-terminal
 launches (redirected input or output) use calm water, cameras off and competition and never
 prompt. Use `./scripts/run.sh --non-interactive` for default startup without a
@@ -53,6 +56,86 @@ MAVLink on UDP `14550`; student software independently receives it on `14551`.
 
 Stop the attached simulation with `Ctrl+C`. If the terminal was closed or the
 Compose display was detached, use `make down`.
+
+## Random full-course layouts
+
+From `simulation/`, generate a preview without starting or replacing any runtime:
+
+```bash
+make random-course SEED=45
+```
+
+Open the printed `preview.html` path in your browser. It shows the full course
+with north up and offers the GPS observations download. In the GCS, import
+`simulation/logs/random-courses/moderate-seed-45/observations.json`, review the map,
+then **Compile course → Confirm tasks**. All 29 objects are retained, with colors
+and classifications but shuffled opaque IDs and no task labels or assignments.
+The import is synthetic, with unverified survey age and no execution authority.
+
+Change the seed for another repeatable layout, or choose a variation level:
+
+```bash
+make random-course SEED=46 VARIATION=mild
+make random-course SEED=47 VARIATION=strong CHECK=1
+make random-course SEED=48 VARIATION=moderate ROTATION=73
+```
+
+`CHECK=1` also writes `compile-check.json`: unhinted compiler output, the rank
+of the intended joint interpretation and per-task ranks, and search limits.
+A missing rank means the intended assignment was absent from the returned set;
+it does not prove an impossible layout. Truncated searches do not establish
+uniqueness or optimality. The generator does not consult the compiler when
+accepting a layout. Separate `truth.json` is for evaluation only.
+
+The same seed, variation, source and generator version reproduce the layout.
+Generated bundles refuse to overwrite an existing directory; use another seed
+or `python3 scripts/generate_course.py --seed 45 --output logs/random-courses/repeat-45`
+to regenerate it separately. The manifest records the source hash, generation
+version, accepted sample, rotation and variation parameters. `world.sdf` and
+`manifest.json` describe the matching rendered collision geometry; they are not
+an active, aligned simulator export.
+
+To run the matching course in Gazebo, stop your current simulation first, then:
+
+```bash
+SCENARIO=competition COURSE_SEED=45 COURSE_VARIATION=moderate WATER=calm make run
+```
+
+Add `COURSE_ROTATION_DEG=73` only when the preview used `ROTATION=73`.
+Otherwise rotation is sampled across 0–360 degrees from the seed. The boat
+stays at world (0,0), heading west; its starting heading is independent of course
+rotation. Existing cameras, dynamics, firmware parameters, geographic reference
+and MAVLink ports are unchanged. The default launch without `COURSE_SEED` is
+still the fixed competition map. Do not combine `COURSE_SEED` with `BUOY_SEED`.
+Actual movement testing uses the normal active-scene alignment/export workflow;
+do not substitute the preview's synthetic observations for verified scene identity.
+
+Variation bounds are exploratory development assumptions, not competition rules,
+placement tolerances or measured GPS accuracy:
+
+| Variation | Nominal centreline spacing / channel width variation | Local bend per step | Lateral / along-edge stagger | Gate skew | Connection angle deviation |
+| --- | --- | --- | --- | --- | --- |
+| mild | ±10% | ±5° | ±0.4 m | ±8° | ±15° |
+| moderate | ±20% | ±10° | ±0.9 m | ±18° | ±30° |
+| strong | ±30% | ±18° | ±1.5 m | ±30° | ±50° |
+
+Slalom steps and channel sections start from 30 ft; channel widths from 40 ft.
+Each gate independently varies the simulator's provisional 4 m width by the
+same percentage; this is not a compiler requirement. Stagger can change final
+measured distances beyond the centreline sampling percentage. The channel turns
+independently relative to the final slalom heading, rather than requiring a
+right angle. Towers follow their local channel edges. Other tasks remain rigid
+groups attached to the channel exit, and all prop yaw angles/footprints and
+station annotations rotate with the scene.
+
+Whole samples are rejected for crossing/degenerate geometry, physical surface
+separation below 0.5 m, objects within a 1.5 m spawn envelope plus that separation,
+or object centres outside a 120 m radius. Generation tries at most 100 samples
+and fails explicitly. These geometric checks do not establish a feasible route
+at your selected buffer or dynamic whole-hull clearance. No route, approval,
+vehicle command, missing detection or survey error is generated. For observation
+error experiments, use the separate survey-error tooling below against fixed
+simulator truth.
 
 ## Prove autonomous movement
 
@@ -242,3 +325,105 @@ Historical measured-profile acceptance used explicit tuning and telemetry; see
 [milestone reproduction](../../docs/milestone1.md#implementation-and-reproduction).
 Radio setup is in the [GCS guide](../../gcs/README.md#live-map-telemetry);
 physical radio operation remains unverified.
+
+## Imperfect-survey and continuous-run developer tools
+
+These tools add no normal GCS controls and leave `make run` unchanged. Run from
+`simulation/`. Inputs/outputs belong under ignored `logs/`. Supply a reviewed
+competition `run_draft` JSON containing explicit task setups, selected tasks,
+common boundary/settings, start, full attempt and execution budget. Do not use
+previously generated waypoints as task setup. For offline planning set
+`attempt.start_source` to `manual`. After reviewing a run in the GCS, capture its
+explicit inputs without sending vehicle commands:
+
+```bash
+curl -fsS http://localhost:8080/api/workspace | python3 -c \
+  'import json,sys; print(json.dumps(json.load(sys.stdin)["run_draft"], indent=2))' \
+  > logs/reviewed-run-input.json
+```
+
+The test fixture must explicitly decide
+whether a channel polygon is fixed surveyed water or derived from its reviewed
+chain IDs (`channel: []`); fixed boundary conflicts are normal rejections.
+
+```bash
+python3 scripts/survey_scenarios.py \
+  --source ../gcs/examples/competition-gps-map.json \
+  --output logs/survey-sweep --sweep
+python3 scripts/survey_runner.py plan \
+  --surveys logs/survey-sweep --run-input logs/reviewed-run-input.json \
+  --output logs/survey-planning
+python3 scripts/survey_runner.py execute \
+  --case logs/survey-planning/offset-0-seed-0 \
+  --output logs/survey-baseline-1 --disconnect-gcs
+```
+
+The sweep covers common offsets and bounded independent errors at 0, 0.25, 0.5,
+1 and 2 m, each with seeds 0–2 (30 cases). Single scenarios support `--seed`,
+`--offset-m`, `--point-error-m`, `--remove-hints`, `--missing ID ...`, and
+`--age-s` with an explicit reproducible `--as-of` ISO timestamp. The generator
+retains the source, fixed geographic reference, capture time and every applied
+change. Missing classification leaves ordinary unknown point obstacles. Missing
+assigned objects fail through normal planner validation, without truth-based
+repair. These are stress inputs, not expected GPS/drone accuracy claims.
+
+Execution refuses active Maritime/operator containers or native simulator
+processes and holds the simulator launcher lock. It starts named private-network
+simulator/boat/GCS containers with isolated workspaces/state; only preview port
+8082 is published on loopback (`--port` changes it). No physical object moves,
+controller parameters, dynamics, source pins or normal workspaces are changed.
+It archives source hashes/diff, image identities, inputs, planning outcome,
+approval, upload/readback and raw physics evidence. It never forces rejected
+planning cases into execution. Use `--interrupt-after-s 20` in a separate run to
+exercise Stop and rejection of a repeated Start. Each run cleans up only its own
+containers. Keep rejected operation/pre-arm evidence separately from movement.
+
+The independent evaluator consumes physical scene snapshots and explicit task
+assignments, including every obstacle footprint and whole-hull passages. It
+checks ≥0.25 m hull clearance, no contacts, ordered passages, channel containment
+and final position within 1 m at ≤0.2 m/s for 5 s. Missing physics or verified
+contact evidence yields **inconclusive**. Unless `--contact-proof` is supplied,
+the runner qualifies the recorder after the mission window using deliberate
+**disarmed** contact and restores the boat pose before cleanup. This has no
+steering role. A map-valid route can fail physical evaluation.
+
+Development acceptance settings are 0.5 m/s; 1.8 m hard / 3 m preferred point
+buffers; tower 1.8 m hard / 10 m soft, strength 10. Operator settings are preserved.
+Three consecutive baseline combined successes, a representative 0.25 m common
+offset and a bounded point-error execution are required for the new movement
+acceptance. Read `docs/milestone1.md` for the actual results; static checks or
+mission upload alone do not establish acceptance.
+
+### Ordered runs and reviewed return evaluation
+
+The survey runner also accepts Run builder `planning_mode: "run"` drafts with
+ordered `steps` and instance IDs. Its session client imports explicitly, saves
+the current revision, generates, validates, approves, uploads/readbacks and starts.
+Legacy fixed-order case inputs are converted to explicit instances for this
+client; the GCS never loads saved planner state. Use the full competition map.
+
+```bash
+# From simulation/: CASE contains survey.json and a successful generation.json.
+python3 scripts/survey_runner.py execute --case "$CASE" \
+  --output logs/run-builder-return --port 8084 --return-after-complete
+python3 scripts/survey_runner.py execute --case "$CHANNEL_CASE" \
+  --output logs/run-builder-channel-return --port 8085 --return-inside-channel
+```
+
+`--return-after-s N` requests a reviewed return during a task;
+`--return-inside-channel` triggers from a fresh reported position safely inside
+reviewed water. The test sends Stop, proves repeated outbound Start is rejected,
+prepares/validates/approves the return, explicitly disarms, uploads/readbacks and
+starts it. Outbound interruption is not task completion. Independent evaluation
+names passages by card instance, limits containment to each channel's own
+entry/exit, and checks return escape/settling separately without awarding task
+passage credit. Missing physics or fresh per-runtime contact proof remains
+inconclusive. Every result and source/image identity stays under ignored logs.
+
+The default launcher still refuses an active operator stack. For an intentional
+parallel test, `--parallel-isolated` uses an output-scoped launcher lock, a fresh
+Docker bridge network namespace, unique Gazebo partition, separate ROS process
+space and chosen loopback HTTP port. It never attaches to host/operator vehicle
+ports or changes the operator stack. Use distinct output paths/ports. The test
+cleans up only the containers it created. No controller gains, source pins,
+calibration, firmware parameters or normal `make run` defaults change.

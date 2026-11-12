@@ -1,32 +1,38 @@
-"""Validate version 1 buoy maps and version 2 fixed-object maps."""
+"""Validate native physical maps and version 3 GPS point maps."""
 import re
 from .geometry import finite, to_local
 
 
 def validate_map(data):
-    if type(data['schema_version']) is not int or data['schema_version'] not in (1,2) or not data['scene_id'] or not data['run_id']:
+    if type(data['schema_version']) is not int or data['schema_version'] not in (1,2,3) or (data['schema_version'] != 3 and (not data['scene_id'] or not data['run_id'])):
         raise ValueError('unsupported or unidentified map')
+    if data['schema_version'] == 3 and data.get('source') != 'live':
+        raise ValueError('version 3 is an unverified live map')
     reference = data['geographic_reference']
     to_local(reference, reference)
-    if not isinstance(data['buoys'], list) or not data['buoys']:
-        raise ValueError('map must contain buoys')
-    obstacles = data['obstacles'] if data['schema_version'] == 2 else data.get('obstacles', [])
+    if not isinstance(data['buoys'], list):
+        raise ValueError('map buoys must be a list')
+    obstacles = data['obstacles'] if data['schema_version'] in (2,3) else data.get('obstacles', [])
     if not isinstance(obstacles, list) or (data['schema_version'] == 1 and obstacles):
         raise ValueError('unsupported obstacles')
     names = set()
     for obj in [*data['buoys'], *obstacles]:
-        if not isinstance(obj['id'], str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', obj['id']):
+        if not isinstance(obj['id'], str) or not obj['id'] or len(obj['id'])>80 or (data['schema_version'] != 3 and not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', obj['id'])):
             raise ValueError('unsupported object ID')
         if obj['id'] in names:
             raise ValueError('duplicate object identity')
         names.add(obj['id'])
         to_local(obj['centre'], reference)
-        if data['schema_version'] == 2 and not 0 < finite(obj['height_m']) < 10:
+        if obj['type'] == 'point':
+            if any(key in obj for key in ('radius_m', 'height_m', 'footprint')):
+                raise ValueError('point objects use centre-based buffers, without physical dimensions')
+            continue
+        if data['schema_version'] in (2,3) and not 0 < finite(obj['height_m']) < 10:
             raise ValueError('invalid object height')
         if obj['type'] == 'cylinder':
             if not 0 < finite(obj['radius_m']) < 10:
                 raise ValueError('unsupported cylinder geometry')
-        elif obj['type'] == 'polygon' and data['schema_version'] == 2 and obj in obstacles:
+        elif obj['type'] == 'polygon' and data['schema_version'] in (2,3) and obj in obstacles:
             vertices = obj['footprint']
             if not isinstance(vertices, list) or not 3 <= len(vertices) <= 32:
                 raise ValueError('polygon needs 3..32 vertices')
