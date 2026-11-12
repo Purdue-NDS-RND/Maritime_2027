@@ -1,0 +1,13 @@
+{
+  "repository": "Purdue-NDS-RND/CUASC_2026",
+  "commit": "e50d6e2e42e0e6eeac150e8b7c94be0d0474a42d",
+  "source_files": {
+    "src/vision_pipeline/config/arducam_info.yaml": "531293cfa27c8f8b83c1a7f08d1bbd762cd64699",
+    "src/vision_pipeline/config/kalibr.yaml": "1a556e3e96cd7fa98be3161e8a136893e04e94c6"
+  },
+  "status": "historical_intrinsics_candidate",
+  "sensor": "IMX519",
+  "calibration_resolution": [3840, 2160],
+  "actual_m12_lens_focus_sensor_mode_and_reprojection_verified": false,
+  "note": "kalibr.yaml converts the same ROS calibration; these are not independent calibrations. No camera mount, position covariance or clock contract is supplied."
+}

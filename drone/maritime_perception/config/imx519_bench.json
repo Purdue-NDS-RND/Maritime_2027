@@ -1,0 +1,20 @@
+{
+  "adapter": "argus",
+  "sensor_id": 0,
+  "sensor_mode": 1,
+  "width": 3840,
+  "height": 2160,
+  "output_width": 1280,
+  "output_height": 720,
+  "fps": "17",
+  "publish_hz": 2.0,
+  "shutter_speed": 1000.0,
+  "wb_mode": 1,
+  "rectify": true,
+  "calibration": "builtin:arducam_info.yaml",
+  "save_interval_s": 0.0,
+  "preview_width": 0,
+  "preview_height": 0,
+  "duration_s": 60.0,
+  "ros_topic_profile": "builtin:mavros_imx519"
+}

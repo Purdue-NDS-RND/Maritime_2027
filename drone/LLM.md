@@ -1,0 +1,391 @@
+# Maritime sensing and perception: working context
+
+Last updated: 2026-11-08. Owner: Samuel Yoon, Sensing and Perception Lead.
+Status: the portable pixel/state-to-GPS core, deterministic synthetic survey and observed
+camera/MAVROS source bindings are implemented on `feature/cv-raycast`. The user's actual
+Jetson/ROS camera/FCU bag is verified recording evidence. Full raw-source normalization,
+Docker deployment, sustained performance and physical accuracy remain open.
+[README.md](README.md) contains exact setup/demo/test commands.
+
+## Read this first
+
+Read root `AGENTS.md`, this file, and [TASKS.md](TASKS.md) before sensing/perception work.
+The user authorizes writes only to `feature/cv-raycast` in
+`Purdue-NDS-RND/Maritime_2027`; see [drone instructions](AGENTS.md).
+Then read only the maintained topic needed:
+
+| Topic | Reference |
+| --- | --- |
+| Responsibilities, CV, runtime, boat perception | [Sensing and perception](../docs/sensing_perception.md) |
+| Frames, raycasting, calibration, error budget, experiments | [Geolocation](../docs/geolocation.md) |
+| Existing ROS 2 projection packages and reuse decision | [Package research](../docs/ros2_geolocation_packages.md) |
+| Live covariance/ellipses, motion models and cross-pass association | [Uncertainty and tracking](../docs/uncertainty_tracking.md) |
+| JSON semantics and existing GCS compatibility | [Perception contract](../docs/perception_contract.md) |
+| Reusable CUASC code and concrete problems | [Legacy vision review](../docs/legacy_vision_review.md) |
+| Missions, document versions, rules questions | [Competition sensing](../docs/competition_sensing.md) |
+| Branch workflow and GitHub access | [Repository access](../docs/repository_access.md) |
+| Existing system and completed boat simulation milestone | [Design](../docs/design.md), [Milestone 1](../docs/milestone1.md) |
+
+These are living references. Update the applicable topic and task status when decisions,
+implementation, hardware or measurements change. Preserve source/evidence links and
+distinguish proposals from accepted decisions and measured results. Do not create a new
+handoff report for each chat. New chats should read this index rather than the full ZIPs.
+The current GitHub feature branch is the canonical shared context. The earlier exported
+Markdown pack is a historical starting point; use current repository files for future work.
+
+### First supplied hardware bag (2026-11-08)
+
+The user's `hardware-bag-02.zip` contains one intact SQLite database. Its subsequently
+supplied metadata.yaml matches that file: 11,020 messages, all 13 topic entries/counts/
+types, start time, 97.575138678 s duration and per-file statistics. No declared splits
+are missing. Portable decoding of the actual Humble CDR payloads verified 47 rectified
+1280x720 images, 62 CameraInfo/metadata records and unique exact companions for every
+image; 15 metadata records have no image in the database. Source spacing is about
+1.06 processed FPS under a 2 Hz request. IMU/GNSS each contain 1,952 messages and
+odometry 1,951 at about 20 Hz over a 97.6 s bag. GPS origin is present; static TF contains
+MAVROS convention transforms, not camera extrinsics. All odometry covariances are zero,
+IMU/odometry have no exact matching timestamps, and exposure semantics remain unverified.
+
+The bag audit now reads supplied SQLite splits read-only, offers ROS-free counts,
+reports exact camera companions and navigation gaps, and exports PNGs/frames.jsonl plus
+raw navigation.jsonl using native ROS decoding. The actual database exported 47 verified
+PNGs with retained source clocks/calibration/checksums via a portable test decoder.
+No decoder dependency or raw-sensor fusion was added to production. The camera ROS
+publisher uses a typed byte array to avoid Humble's per-byte setter validation; rate
+improvement and native export CLI still need another Jetson run. See README commands.
+The audit now cross-checks/hashes complete manifests and rejects mismatched counts,
+types and times before export. Completion flags refer only to the declared archive;
+partial snapshots retain unknown completeness. All 182 drone tests pass on Python 3.10
+and 3.12, and static checks pass.
+This updates recording/runtime evidence only: physical accuracy, timing/mount/height,
+frame-origin/reset and uncertainty acceptance remain open. Earlier statements below
+that no bag was supplied describe the implementation-time test boundary.
+
+### Observed source binding implementation
+
+The installed `mavros_imx519_topics.json` binds all 13 observed topics/types/QoS and
+source frame labels. Camera publication, recorder command generation, bag audit/export
+and the new bounded live `hardware_source_check` use that same profile. The IMU logger
+already defaults to `/mavros/imu/data`. The repeatable `imx519_bench.json` selects the
+observed mode 1/3840x2160/17 FPS with rectified 1280x720 output, 2 Hz requested rate,
+requested 1/1000 s shutter and no preview; CLI controls remain available.
+
+The live checker subscribes read-only, reports exact recent camera companions, rates,
+header/type/frame mismatches, unknown odometry covariance, FCU connection, origin and
+time status. It keeps bounded keys/duplicate records and writes a summary on Ctrl+C.
+It emits no normalized pose/frame events and is not the raw-to-geolocation bridge.
+The source profile does not relabel map as survey_enu, certify origin/heading/height,
+make GStreamer PTS into exposure time or invent a covariance/shared-error model.
+Those measurements and the ensuing normalized-state/manual-pixel bridge remain W03-W06
+in the updated completion plan. Native execution of the new checker is a team-host task;
+actual bag decoding/profile matching and portable callback tests are separate evidence.
+Validation: 198 drone tests pass on Python 3.10 and 3.12. The actual bag passes the
+profile audit and complete source-monitor replay, retaining 47 exact image companions,
+the 15 metadata/image gaps and 1,951 unknown odometry covariance records. The live
+subscriber uses doubles in portable tests; no new physical acceptance is claimed.
+
+## Python tooling requirement
+
+The user requires uv exclusively for project Python setup and execution. Use the
+sourced system Python 3.10/Humble environment with system site packages on the observed
+Jetson host; portable checks also run on Python 3.12. Requirements retain explicit
+version markers and commands use `uv run --no-project --python VENV/bin/python python ...`.
+The user bag demonstrates native capture/ROS source flow. The new source checker,
+full normalized geolocation and container deployment still require native team trials.
+
+## Readable reports and first bench test
+
+The user-requested [pipeline report](../docs/perception_reports/Maritime_Pipeline_Report.docx)
+is an explanatory snapshot of the earlier implementation. The updated
+[completion plan](../docs/perception_reports/Maritime_Pipeline_Completion_Plan.docx)
+reviews source `653ce92`, the verified hardware-bag-02 evidence and 198 portable tests.
+It records the exact topic table, Python 3.10 host, new source-check commands and revised
+Student A/Student B/Samuel/HW/SW assignments. Raw-to-normalized state and manual-pixel
+bridging remain open until geometry, timing, origin/quality and uncertainty are verified.
+Document status does not add physical acceptance evidence beyond the stated recordings.
+The [README first-test guide](README.md#first-tests-with-manual-pixels-and-real-recordings)
+shows explicit manual-pixel injection through replay and the inventory/recording needed
+for a stationary planar-grid experiment. Fake origins exercise software only; target
+truth stays outside processing, and unknown physical inputs remain unavailable.
+
+## Implemented portable milestone (2026-11-04)
+
+`maritime_perception/` contains validated source-neutral records, explicit clock mapping,
+bounded SciPy SLERP pose resolution, OpenCV camera geometry, analytic horizontal-water
+intersection, first-order covariance propagation, named shared-error factors, static/
+random-walk association/tracking, PROJ WGS84 geodesy and validated versioned JSON reports.
+`perception_synthetic/` separately generates raw pixels and antenna states using a forward
+camera model. Only its evaluator reads withheld target truth; pure replay works without it.
+
+The analytic scenario recovers three known points exactly. The seeded noisy survey
+includes a moving/turning camera, same-class objects, GNSS offset, misses, ambiguity and
+invalid inputs. It retains three identities and the shared GNSS uncertainty. Tests cover
+geometry, uncertainty, association, validity, reports and process-independent replay.
+Current results and limits are maintained in the topic docs; do not infer real accuracy.
+
+The implementation uses the narrow OpenCV/SciPy fallback because ROS/IPM/tf2 are unavailable
+in this environment. Optional ROS conversions/recorded-event node/launch and CPU/desktop-ROS
+Dockerfiles are present but not runtime-verified. Local Ultralytics weights are required
+for the optional detector adapter; inference/trained water detection were not exercised.
+No camera/FCU driver, GCS importer, radio infrastructure or flight control was added.
+
+### IMU integration review (2026-11-08)
+
+Reviewed all five new `log/` commits (`22dc30e`, `a688d6c`, `91dd2ec`, `3b041fc`,
+`e2e25fe`) after `53ef249`. Their standalone logger split was retained as compatibility
+imports, with its maintained implementation installed in the drone adapters. Recordings
+now preserve quaternion, exact nanoseconds, frame and covariance availability. Invalid
+messages are rejected, output files are exclusive-created, and packaged ROS startup and
+cleanup are explicit. The absent startup-script references and direct Python setup were
+replaced with actual-interface checks and uv instructions in the [recorder guide](../log/README.md).
+
+`imu_state` events and `PipelineImuSink` connect verified same-time IMU/navigation to the
+existing pose/project/track/report path. The offline join CLI preserves input provenance
+and rejects missing/duplicate or mismatched times. ENU/FLU conversion is not repeated;
+IMU angular rates rotate from body to ENU. Position, velocity, heading/height quality,
+origin, clock mapping and a justified full joint sample/shared covariance model must be
+provided externally. No acceleration dead reckoning or independent fusion of correlated
+FCU outputs is introduced. See the [contract](README.md#imu-input-and-navigation-integration).
+
+All 104 drone tests pass, including analytic 90-degree heading, retained shared errors,
+truth-free deterministic IMU replay and structural ROS callback/QoS/cleanup tests. The
+original analytic/noisy demos also remain the regression reference. This is a portable
+integration, not a complete asynchronous live camera/GNSS node or physical acceptance.
+The actual flight-controller stream, mounting, true-north heading, clock/covariance
+semantics and Jetson/ROS runtime remain unverified under SP-01/SP-02/SP-04/SP-06/SP-41/
+SP-42/SP-44. The exact-time join intentionally refuses nearest/latest data.
+
+### Configurable Arducam capture (2026-11-08)
+
+The user specified the IMX519 16 MP module with M12 wide-angle lens. CUASC_2026
+`src/vision_pipeline/vision_pipeline/image_grabber.py`, the compressed grabber/detector,
+launch/config and both intrinsic YAMLs were reviewed at `e50d6e2`. The two YAMLs contain
+the same 3840x2160 model and are preserved byte-for-byte in the installed drone config,
+with full commit/blob provenance. They remain historical candidates; applicability to
+the actual M12 lens/focus/mode and reprojection accuracy is unverified.
+
+The installed `image_grabber` CLI now uses native GStreamer GI/Argus, bounded appsink,
+source PTS/running time and stride-aware BGR extraction. Sensor/output resolution, FPS,
+processing rate, shutter/exposure ranges, analog/digital gain, white balance/locks,
+antibanding, noise reduction, sharpening and recording controls are startup options or
+JSON config keys. PNG/JPEG capture includes checksums, effective calibration and timing/
+control provenance. Optional ROS publication has correct raw/rectified topics, CameraInfo
+and separately calibrated preview. No detector weights or navigation are required to capture.
+
+Raw K/D, rectified new-K/zero-D and OpenCV pixel-centre resize/crop geometry are kept
+consistent. Changed capture modes require their own calibration or an explicitly verified
+reference ROI; arbitrary modes can instead capture uncalibrated raw images. Detector
+conversion pairs exact companion metadata and retains the source clock, not arrival time.
+Geolocation still rejects unverified exposure semantics. No mount/pose/covariance, actual
+exposure/gain achievement or rolling-shutter readout is fabricated.
+
+Portable validation: 147 drone tests (43 new camera cases) and 11 GCS workspace tests pass.
+Camera/GStreamer/ROS cases use structural doubles; no native GStreamer/GI, Argus, ROS/DDS,
+Jetson, camera or physical accuracy trial ran. The existing Python >=3.11 pins require a
+compatible host GI/ROS ABI; stock Python 3.10/Humble is not supported by this dependency set.
+See [capture commands, controls and limits](README.md#arducam-imx519-image-capture).
+SP-01/SP-05/SP-06/SP-18/SP-19 remain open for actual runtime, lens/mode calibration,
+timing/rolling-shutter and sustained onboard performance. Capture is an implemented
+source/recording boundary, not complete asynchronous live sensor fusion.
+
+Do not treat a new covariance source ID as evidence of independence. Input adapters must
+establish residual versus common covariance, clock validity and frame/reset contracts.
+Current named common sources are constant over their declared session/sample; real drift
+models and empirical calibration remain open. Real hardware mode forbids synthetic config.
+
+### First asynchronous testing and team ownership
+
+The completion plan now reflects the IMU/camera changes and the 9 November HW/SW
+meeting. Proposed division: Student A owns capture, exact image metadata, manual pixels
+and recording; Student B owns the authoritative normalized FCU state, clocks and quality;
+Samuel owns geometry/acceptance; the SW/Gazebo lead supplies the simulation source
+contract and report inspection/GCS boundary. Confirm student names and host facts locally.
+
+`maritime_perception.async_test` now provides a bounded normalized-event coordinator,
+deterministic virtual arrival/fault replay, an optional ROS listener and fixture publisher.
+Frames wait for bracketing pose and time out explicitly; late/duplicate inputs and queue
+overflow have outcomes. It is not a raw IMU/GNSS estimator or fixed-lag smoother. A native
+rosbag2_py audit and adaptable QoS configuration support the first real recording.
+The default analytic test produced 4 reports/12 observations and no pending frames;
+removing all states produced zero observations and explicit timeouts. All 160 drone
+tests plus 11 GCS workspace tests pass. ROS endpoint and bag-reader tests use doubles;
+no native bag, DDS, camera or Jetson run occurred here. The user has not supplied a bag.
+Use the README asynchronous test commands. Prefer a complete fused FCU pose/velocity
+source first; the exact IMU/navigation pair is optional. Raw-only bags still need source
+adapters and verified exposure/clock/geometry/quality contracts for usable GPS reports.
+
+## Python 3.10 host compatibility (2026-11-08)
+
+The user's ROS host reports system Python 3.10.12. Package metadata now permits
+Python >=3.10; requirement markers select NumPy 1.26.4, SciPy 1.15.3, OpenCV 4.11.0.86
+and pyproj 3.6.1 for 3.10, preserving the existing pins for Python >=3.11. Nanosecond
+evaluation uses the existing integer UTC parser and IMU checksum streaming avoids
+the Python 3.11-only file_digest API. Fresh 3.10 and existing 3.12 x86_64 installs
+pass 161 drone tests; 11 GCS workspace tests pass on 3.10. ARM64 binary-wheel
+resolution, analytic/delay/loss CLI checks and camera dry-run pass. Native system
+rclpy/GI imports, ROS/DDS/Argus and Jetson execution remain for the team host.
+Use its sourced system interpreter with --system-site-packages; do not replace
+/usr/bin/python3 or bypass Requires-Python. Current commands are in README.md.
+
+## User-established direction
+
+1. A drone launches from the boat and surveys buoys/objects in the water.
+2. Each vehicle is planned to carry a Jetson Orin Nano 8GB.
+3. Drone camera: fixed Arducam IMX519; downward-looking is the working orientation,
+   with exact mounting rotation and lens/focus still to be measured.
+4. Desired survey altitude: below 5 m above water, subject to coverage and accuracy tests.
+5. Ordinary GNSS replaces RTK by explicit user direction on 2026-11-04. Receiver,
+   antenna, covariance semantics, vertical datum, heading source, attitude accuracy and
+   telemetry interfaces remain unverified. No RTK base/correction link is required.
+6. YOLO26n is the user's selected detector baseline. Automatic aerial buoy-color classification is optional;
+   object instance locations are the first deliverable.
+7. Geometry, association and map fusion operate in a fixed local ENU frame.
+   Convert consolidated estimates to WGS84 for external consumers at the boundary.
+8. Drone sends an object map to a laptop GCS. An operator labels colors/roles using
+   imagery and the rough course map. The GCS prepares the boat route.
+9. Boat executes the supplied route. Boat perception with two ZED cameras is a
+   separate later workstream for local identification, ranging and mission alignment.
+10. Reuse useful CUASC code, but establish the measurement error sources and correct
+    geometry/timing instead of assuming the previous implementation is accurate.
+
+## Targets added by the forwarded research brief
+
+The user's Gemini brief adds real-time location/uncertainty reports, dynamically
+computed Gaussian position ellipses, persistent identities across passes and prediction
+through observation gaps. The portable static baseline now implements these report/state
+semantics on synthetic input; real motion, transport and cross-pass performance remain targets.
+Clarify report cadence/latency/maximum age and whether updates are only during a survey
+or must continue while the boat navigates. The existing survey-then-land workflow and
+operator route approval remain until explicitly changed.
+
+Keep fixed Arducam and YOLO26n choices. Generic gimbal encoders and alternate detectors
+in the brief are not confirmed hardware/model changes. Confirm whether buoys are moored;
+a floating case may need a different motion model. A bottom-centre pixel is not a
+universal water-contact reference for an overhead image.
+
+Use a linear KF as the first projected-ENU constant-velocity tracker; nonlinear
+projection upstream does not alone justify EKF/UKF downstream. Evaluate static/random-walk
+and moored-motion alternatives. Preserve shared camera/clock/GNSS biases rather than
+letting repeated frames produce falsely tiny covariances. Association must allow
+unmatched and ambiguous cases. Output state epoch, last-observation time, prediction
+status, EN covariance and explicitly defined ellipse orientation/coverage.
+
+Gemini's planar projection, CWNA covariance, 99% 2D gate and 95% ellipse scale are
+mathematically sound under their assumptions. Its covariance budget is incomplete
+and its package conclusion misses IPM. See the maintained tracking topic for the
+checked equations, implementation candidates, new tasks and unresolved scope.
+
+## 2026-11-04 end-to-end design discussion
+
+The user explicitly replaces RTK with ordinary GPS and requests small, single-purpose
+classes, ROS 2 in Docker, and structured GPS reports with uncertainty. The proposed
+[class/interface and deployment design](../docs/sensing_perception.md#proposed-end-to-end-class-contracts)
+was the discussion proposal. The portable subset above is now implemented; hardware
+accuracy and the remaining deployment/transport choices are not accepted.
+
+Camera + raw IMU alone cannot provide absolute GPS object locations. Timestamped GNSS,
+earth-referenced heading and height above water are required. Prefer one validated FCU
+fused pose over duplicate fusion of its outputs and raw inputs. Firmware and available
+covariance remain unknown. Separate local object geometry from shared map anchoring and
+drift uncertainty; repeated frames must not average away a common GNSS offset.
+
+Current source review verified Maritime at
+`dd18759df02303f4202804fa330ef0e7d5004587` and CUASC main at
+`e50d6e2e42e0e6eeac150e8b7c94be0d0474a42d`. Directly inspected CUASC capture,
+detector, logger, launch and parameters. Input-stamp preservation is useful; pose fallback
+and frame/calibration risks remain. No ROS, inference, camera or flight trial ran.
+
+## Existing repository reality
+
+- Current `drone/` includes the standalone processing core, synthetic source/evaluator,
+  tests, optional ROS adapters and deployment candidates alongside context documents.
+- `boat/`, `gcs/` and `shared/` have implementations; Gazebo/SITL tools are retained.
+- Existing design describes survey -> GCS review -> approved route -> boat execution.
+  Initial survey is consolidated, and the drone lands before boat route execution.
+- Milestone 1 records selected camera-free slalom simulator acceptance, including three
+  2.0 m/s target runs. This review did not rerun those trials. It is not physical acceptance.
+- Existing GCS imports geographic object maps, versions 1 and 2. A new ENU survey
+  envelope will require a deliberate import/export boundary; it is not already supported.
+- Current shared geographic math approximates ArduPilot's local projection. Preserve
+  its simulator compatibility while evaluating a WGS84 ECEF/ENU geodetic path.
+- Evaluate ROS Sports ipm_library for pixel-to-water-plane projection with tf2 at image
+  time. The fallback is image_geometry + tf2 + a narrow analytic intersection function.
+  The current non-ROS core uses OpenCV/SciPy/PROJ. Full ROS projection/history dependencies
+  are not installed/evaluated on the target stack; SP-34 remains open.
+- Automatic route generation, real radio mission delivery, drone survey implementation
+  and boat mission-specific camera behaviors are not established by the supplied code.
+- The user's implementation request authorizes this standalone milestone. Historical
+  boat milestone deferral preserves boat-only testability and does not block drone development.
+- Preserve independently testable boat routes; keep navigation decisions out of geolocation.
+
+## Findings that must not be forgotten
+
+- Legacy `mission_logger._raycast_to_gps` mixes an FRD-like ray with a ROS FLU-to-ENU
+  attitude. Extracting the actual function and supplying an identity ROS quaternion,
+  zero mount and centre pixel at +5 m returns no intersection. See legacy review.
+- Capture stamps are generated after read/remap, not demonstrated exposure timestamps.
+- Pose interpolation sometimes falls back to the latest pose without rejecting stale data.
+- `compressed_grabber` can publish resized pixels with full-resolution intrinsics.
+- CameraInfo mixes rectified K/P with original distortion; exported logs can be ambiguous.
+- Legacy hard-distance deduplication prevents useful repeated observations from refining
+  a track. Class IDs cannot be object IDs when many buoys share a class.
+- GNSS position (including RTK in historical notes) does not establish yaw,
+  camera-to-body alignment, water height or timing.
+- A bounding-box centre on an elevated buoy is not necessarily its water-plane centre.
+- Reflections are prominent in supplied buoy images. Label actual bodies separately.
+- A 100-frame 4K BGR ring alone uses about 2.32 GiB, before ROS, model or other copies.
+- Shared Jetson memory must cover OS, CPU and GPU workloads, not just model weights.
+- Exact boat camera model is unresolved: user said ZED Mini; old repository mentions
+  ZED X Mini. Verify before selecting drivers/capture hardware.
+
+## Open inputs with highest value
+
+- Ordinary GNSS model/antenna/covariance and temporal drift; attitude/yaw source; autopilot firmware;
+  local/global message contracts, time synchronization and origin-reset behavior.
+- Actual Arducam lens, camera mode, focus control, exposure metadata and mount survey.
+- Camera optical centre, FCU body reference and GNSS antenna lever arms.
+- How water elevation will be measured in the same vertical reference as positioning.
+- Required map accuracy/coverage/latency, buoy dimensions and motion, boat clearance budget.
+- Which missions are prioritized and whether GCS human labeling affects autonomy scoring.
+- Exact ZED hardware and two-camera support on the actual boat carrier/Jetson stack.
+
+## ROS 2 reuse findings
+
+- IPM accepts an arbitrary plane, calibrated image pixels, measurement time and
+  plane/output TF frames. Its vectorized Python API matches a batch of detection points.
+- Its inspected implementation reads K rather than rectified P; adapt rectified CameraInfo
+  explicitly. Water at ENU z=h uses shape_msgs/Plane coefficients [0,0,1,-h].
+- tf2 supplies buffered transforms and interpolation. It does not validate clock domains,
+  GNSS health or acceptable sample gaps; keep those checks in our adapter.
+- Prefer the authoritative FCU fused pose if available; robot_localization is conditional,
+  not an additional mandatory estimator.
+- yolo_ros currently lists YOLO26 but its prebuilt GPU runtime is x64; Jetson/aarch64 GPU
+  needs deployment evaluation. A thin Ultralytics/TensorRT ROS adapter remains an option.
+- Six analytic checks passed on the extracted IPM intersection kernel only. Full ROS,
+  OpenCV distortion, TF, Jetson and hardware integration have not been tested.
+
+These inputs do not prevent implementing a hardware-independent geometry/replay core.
+
+## Review provenance and limits
+
+Reviewed the supplied repositories' architecture and integration surfaces, the active
+`src/vision_pipeline` capture/inference/logger/clustering/offline paths, relevant
+archived localizers, all four PDFs in text and rendered form, and the linked official
+AIMM information/rules pages on 2026-11-01. Repository-wide review was architectural;
+unrelated flight-control and all boat/simulator code were not exhaustively audited.
+No Jetson, RTK, camera, flight, model-inference or live competition test ran here.
+The initial review used ZIP snapshots. GitHub access was subsequently verified for
+`Purdue-NDS-RND/Maritime_2027`, with `feature/cv-raycast` based on commit
+`5954eb2dcf34658f67231befe07d62b476397f96` before this documentation change.
+Read the current branch head on future visits; that baseline is not a permanent head.
+
+| Input | SHA-256 |
+| --- | --- |
+| CUASC_2026-main.zip | 255c6741b710d41b6e4ff8f9e46da5207e7f3d47f47930a44589619fde686d0d |
+| Maritime_2027-feature-cv-raycast.zip | fba8bb77cb2f4ec24aede7b4ca7a75aec77ba7604f69d2ada017e8c27fa1ef6d |
+| 2025 AIMM Challenge Brief.pdf | aa643aa085be232603d7f4ec0c55e791090d366a9640efcde072d3d606cfa7f6 |
+| AIMM-ICC Competition Course Details 12-13 2025.pdf | efccf4994c05e544821c49a0288197ca40276fcd3d9cc8be39e17d676baa401a |
+| Challenge Competition Scoresheet_4-3-2025.pdf | 0e4b0d62d4296319feae5d590dc7427af706e298a97d5fccf38c82ff45dc0ca1 |
+| Buoy Images _ AIMM ICC.pdf | 3060ee39f5f4f0b9a01aec57784de07c5ed27b1f5b9ae4c0ad61d8784c769145 |
+
+

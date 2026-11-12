@@ -11,6 +11,18 @@
 - [Simulator guide](../simulation/README.md): setup, operation, manual GCS tracking,
   performance, optional cameras, troubleshooting and maintenance.
 - [Hardware knowledge](hardware.md): retained configuration and hardware notes.
+- [Sensing/perception context](../drone/LLM.md) and [tasks](../drone/TASKS.md):
+  maintained entry point and ordered development backlog.
+- [Sensing architecture](sensing_perception.md): CV, runtime and component ownership.
+- [ENU geolocation](geolocation.md): frames, calibration, error budget and experiments.
+- [Uncertainty and tracking](uncertainty_tracking.md): reviewed covariance/motion/association
+  design, real-time ellipse semantics and the forwarded research brief's new targets.
+- [ROS 2 package research](ros2_geolocation_packages.md): library reuse for camera projection,
+  TF/timing/geodesy and YOLO26n integration, with inspected sources and evaluation criteria.
+- [Perception JSON contract](perception_contract.md): proposed map semantics and GCS compatibility.
+- [CUASC vision review](legacy_vision_review.md): reusable code and concrete source issues.
+- [Competition sensing](competition_sensing.md): mission requirements, source versions and rules questions.
+- [Repository access](repository_access.md): GitHub permissions and branch workflow.
 - [Competition course](<competition_docs/AIMM-ICC Competition Course Details 12-13 2025.pdf>)
   and [rules](<competition_docs/Rules and Regulations _ AIMM ICC.pdf>): source documents.
 
@@ -38,3 +50,4 @@ tests passed with host visibility); no final live rebuild/control acceptance was
 claimed at that checkpoint. Evidence: `simulation/logs/revamp-final-validate.log`
 and `revamp-verify-rgbd*.log`. Later milestone results supersede that checkpoint;
 drone remains a scaffold. Removed migration reports remain in Git history.
+

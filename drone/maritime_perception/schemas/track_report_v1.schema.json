@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "maritime.track_report"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "survey_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_mode": {
+      "enum": [
+        "synthetic",
+        "recorded",
+        "hardware",
+        "gazebo"
+      ]
+    },
+    "synthetic": {
+      "type": "boolean"
+    },
+    "frame": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "const": "survey_enu"
+        },
+        "axes": {
+          "const": [
+            "east",
+            "north",
+            "up"
+          ]
+        },
+        "units": {
+          "const": "m"
+        },
+        "covariance_units": {
+          "const": "m^2"
+        },
+        "origin": {
+          "type": "object",
+          "properties": {
+            "origin_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "latitude_deg": {
+              "type": "number",
+              "exclusiveMinimum": -90,
+              "exclusiveMaximum": 90
+            },
+            "longitude_deg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "ellipsoid_height_m": {
+              "type": "number"
+            },
+            "provenance": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "origin_id",
+            "latitude_deg",
+            "longitude_deg",
+            "ellipsoid_height_m",
+            "provenance"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "axes",
+        "units",
+        "covariance_units",
+        "origin"
+      ],
+      "additionalProperties": false
+    },
+    "state_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^object_[0-9]{4,}$"
+          },
+          "class_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "position_enu_m": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "position_wgs84": {
+            "type": "object",
+            "properties": {
+              "latitude_deg": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude_deg": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              "ellipsoid_height_m": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "latitude_deg",
+              "longitude_deg",
+              "ellipsoid_height_m"
+            ],
+            "additionalProperties": false
+          },
+          "position_reference": {
+            "const": "horizontal_centre_at_water_plane"
+          },
+          "state_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "first_observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "age_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "estimate_status": {
+            "enum": [
+              "observed",
+              "predicted",
+              "stale"
+            ]
+          },
+          "association_status": {
+            "enum": [
+              "tentative",
+              "confirmed",
+              "ambiguous"
+            ]
+          },
+          "observation_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "motion_model": {
+            "const": "static_random_walk"
+          },
+          "uncertainty": {
+            "type": "object",
+            "properties": {
+              "covariance_en_m2": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              },
+              "independent_covariance_en_m2": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              },
+              "shared_covariance_en_m2": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              },
+              "shared_factors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "model_id": {
+                "const": "linearized_correlated_factors_v1"
+              },
+              "coverage_validated": {
+                "const": false
+              },
+              "ellipse_en": {
+                "type": "object",
+                "properties": {
+                  "probability": {
+                    "const": 0.95
+                  },
+                  "semi_major_m": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "semi_minor_m": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "angle_ccw_from_east_rad": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "exclusiveMaximum": 3.141592653589793
+                  }
+                },
+                "required": [
+                  "probability",
+                  "semi_major_m",
+                  "semi_minor_m",
+                  "angle_ccw_from_east_rad"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "covariance_en_m2",
+              "independent_covariance_en_m2",
+              "shared_covariance_en_m2",
+              "shared_factors",
+              "model_id",
+              "coverage_validated",
+              "ellipse_en"
+            ],
+            "additionalProperties": false
+          },
+          "quality": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "synthetic_only",
+                  "unvalidated"
+                ]
+              },
+              "positioning_mode": {
+                "const": "standalone_gnss"
+              }
+            },
+            "required": [
+              "status",
+              "positioning_mode"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "class_id",
+          "position_enu_m",
+          "position_wgs84",
+          "position_reference",
+          "state_at",
+          "last_observed_at",
+          "first_observed_at",
+          "age_s",
+          "estimate_status",
+          "association_status",
+          "observation_count",
+          "motion_model",
+          "uncertainty",
+          "quality"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "rejected",
+              "ambiguous",
+              "matched",
+              "initiated"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "frame_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detection_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "track_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "processing": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "0.1.0"
+        },
+        "calibration_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projection_backend": {
+          "const": "opencv_analytic_plane"
+        },
+        "geodesy": {
+          "const": "PROJ_WGS84_ECEF_ENU"
+        }
+      },
+      "required": [
+        "version",
+        "calibration_id",
+        "projection_backend",
+        "geodesy"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "survey_id",
+    "revision",
+    "source_mode",
+    "synthetic",
+    "frame",
+    "state_at",
+    "published_at",
+    "tracks",
+    "diagnostics",
+    "processing"
+  ],
+  "additionalProperties": false
+}

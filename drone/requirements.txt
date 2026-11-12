@@ -1,0 +1,10 @@
+numpy==1.26.4; python_version < "3.11"
+numpy==2.2.6; python_version >= "3.11"
+scipy==1.15.3; python_version < "3.11"
+scipy==1.17.0; python_version >= "3.11"
+opencv-python-headless==4.11.0.86; python_version < "3.11"
+opencv-python-headless==4.12.0.88; python_version >= "3.11"
+pyproj==3.6.1; python_version < "3.11"
+pyproj==3.7.2; python_version >= "3.11"
+jsonschema==4.25.1
+PyYAML==6.0.2
