@@ -64,3 +64,14 @@ test('connection revisions discard old status and planner responses while profil
     setConnectionGeneration(3);release();
     await assert.rejects(old,/Superseded response discarded/);
 });
+
+test('operation reads forward cancellation to fetch', async t => {
+    const controller = new AbortController();
+    t.mock.method(globalThis, 'fetch', async (_url, {signal}) => {
+        assert.equal(signal, controller.signal);
+        return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))));
+    });
+    const pending = api('operations/example', 'GET', undefined, {signal: controller.signal});
+    controller.abort();
+    await assert.rejects(pending, {name: 'AbortError'});
+});
