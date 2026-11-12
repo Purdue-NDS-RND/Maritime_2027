@@ -6,6 +6,29 @@ keeps a large map beside the selected task editor and a compact ordered task
 strip above them. The map is primary during course and route review.
 Planning works offline; execution requires a fresh boat connection.
 
+The tactical workspace uses black/gray panels and blue selection/action accents. Amber
+clearance indicators and semantic task/status colors retain their original meaning. **Panel width** adjusts the workflow sidebar from 340 to
+720 px (capped to preserve the map on smaller desktops). **Expand map** gives
+the map priority in Build run. These display choices last for this page session.
+Required/preferred distances remain visible; **Clearance key** opens their
+explanation. Short task lists use the available editor height; long lists and
+advanced settings scroll within one content pane, with review controls outside it.
+On narrow screens the map and editor stack vertically.
+
+For a separate frontend preview while the normal GCS backend runs on port 8080:
+
+```bash
+cd gcs/frontend
+npm ci
+npm exec -- vite
+```
+
+Open <http://localhost:8082>. The loopback-only preview shares the running GCS
+backend, live telemetry and vehicle command interface, using its own fresh
+planner session. It does not restart the GCS, boat or simulator. Stop the
+preview with Ctrl+C. Use `npm test` and `npm run build` in this directory to
+check the frontend. Normal image startup remains `make -C gcs run` from the root.
+
 ## Startup and session state
 
 From the repository root:
@@ -33,12 +56,10 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    Loading also suggests a four-corner planning boundary rotated to fit the
    entire map, with **10 m extra room** on each side. It includes mapped objects,
    native physical footprints, station annotations and any known start (fresh
-   live position when available). Review this amber outline before **I reviewed
-   the map — continue**; the same action confirms the objects and boundary.
-   **Extra room (m)** and **Regenerate** rebuild it after corrections;
-   **Edit corners** lets you drag numbered corners, and **Draw manually** starts
-   a replacement polygon. **Undo corner** removes its last point. Crossing or
-   collapsed outlines must be corrected before confirming the map.
+   live position when available). The amber outline appears immediately; Map
+   confirms object review only. Unknown-type objects display gray regardless of
+   their recorded color; assigning a known type restores their normal display
+   color. This does not change their stored observations or clearance geometry.
    The suggestion cannot infer shorelines or permitted water from observations.
    Reviewed boundaries stay fixed as the boat moves or tasks change; correcting
    them revokes the generated route and requires fresh validation/approval.
@@ -52,8 +73,11 @@ uploaded boat mission. Live boat status and Hold / Stop remain available.
    **Speed & clearance / LiDAR towers / Start & limits** categories; selecting a
    tower on the map opens its category. Continue stays pinned below the settings.
    Drawing tools open the map automatically; inputs remain in this page session.
-   The map-reviewed boundary is already populated here. The same boundary tools
-   remain available for corrections. Changing extra room takes effect only on
+   The automatically suggested boundary is already populated here. Boundary
+   controls appear only in Configure: **Extra room (m)** and **Regenerate** rebuild
+   the suggestion; **Edit corners** moves existing corners; **Draw manually**
+   replaces the polygon; **Undo corner** removes its last point. Correct crossing
+   or collapsed outlines before continuing to Build run. Changing extra room takes effect only on
    **Regenerate**, which replaces the current outline and fits it in the map.
 3. **Build run:** use the direct **＋ Gate / Slalom / Channel / Manual** buttons.
    To include the starting gate, add **Gate** first, then **Slalom**. Gate owns
