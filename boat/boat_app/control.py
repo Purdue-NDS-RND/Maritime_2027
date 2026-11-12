@@ -45,6 +45,10 @@ class Control:
     def status(self):
         with self.lock:
             result = deepcopy(self.snapshot)
+            # Reconcile a GCS request whose operation receipt was lost.
+            entries = list(self.registry['operations'].values())
+            result['operations'] = deepcopy([op for op in entries[:-32]
+                                             if op['state'] in ('pending', 'running', 'unknown')] + entries[-32:])
         # Ages must advance even if the worker is waiting for a response.
         age = max(0, time.monotonic() - result.pop('snapshot_monotonic_s', time.monotonic()))
         for key in ('heartbeat_age_s', 'position_age_s'):
@@ -91,23 +95,30 @@ class Control:
                 upload = self.registry['operations'][old['upload_operation']]
                 if upload['state'] != 'succeeded' or self.snapshot.get('mission_id') != mission_id or self.snapshot.get('state') != 'uploaded':
                     raise ValueError('mission upload/readback not confirmed in this session')
+            elif command == 'mode':
+                if not isinstance(envelope, dict) or set(envelope) != {'mode'} or not isinstance(envelope['mode'], str):
+                    raise ValueError('Provide a mode name')
+                if envelope['mode'] == 'AUTO' or envelope['mode'] == 'INITIALISING' or envelope['mode'] not in self.snapshot.get('available_modes', {}):
+                    raise ValueError('Unsupported mode; use mission Start for AUTO')
             elif command not in ('stop', 'disarm'):
                 raise ValueError('unknown command')
             operation_id = str(uuid.uuid4())
             operation = {'operation_id': operation_id, 'command': command, 'mission_id': mission_id,
                          'state': 'pending', 'detail': 'received; vehicle acceptance pending'}
             self.registry['operations'][operation_id] = operation
+            if command == 'mode':
+                operation['mode'] = envelope['mode']
             if command == 'upload':
                 self.registry['missions'][mission_id] = {'sha256': sha, 'upload_operation': operation_id,
                                                         'envelope': deepcopy(envelope)}
             elif command == 'start':
                 old['start_operation'] = operation_id
-            if command == 'stop':
+            if command in ('stop', 'mode'):
                 self.epoch += 1
                 self.cancelled.set()
             self.save()
             self.sequence += 1
-            self.queue.put((0 if command == 'stop' else 1, self.sequence, self.epoch, operation_id, mission))
+            self.queue.put((0 if command in ('stop', 'mode') else 1, self.sequence, self.epoch, operation_id, mission))
             return deepcopy(operation)
 
     def run(self):
@@ -133,6 +144,8 @@ class Control:
                     self.cancelled.clear()
                 elif epoch != self.epoch:
                     raise MissionError('operation cancelled by earlier STOP')
+                elif command == 'mode':
+                    self.cancelled.clear()
                 self.check_cancel()
                 if command == 'upload':
                     if self.controller.state in ('executing', 'starting', 'stopping'):
@@ -144,6 +157,8 @@ class Control:
                     if self.controller.mission is None or self.controller.mission.mission_id != operation['mission_id']:
                         raise MissionError('mission is no longer current')
                     self.controller.start()
+                elif command == 'mode':
+                    self.controller.change_mode(operation['mode'])
                 else:
                     getattr(self.controller, command)()
                 result = ('succeeded', self.controller.detail)

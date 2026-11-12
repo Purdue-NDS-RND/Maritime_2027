@@ -83,3 +83,10 @@ ArduPilot ground-rover and surface-boat heartbeats are supported. See the
 [Gazebo rover workflow](../simulation/docs/USING_THE_SIM.md#gazebo-ground-rover-compatibility-environment)
 for the isolated Wild Thumper test environment. Physical vehicle firmware and
 performance remain unverified.
+
+The planner GCS header reads `available_modes` from boat status and sends
+`POST /mode` with `{"mode":"LOITER"}` (or another advertised non-AUTO mode).
+The sole boat command worker applies the change and confirms it through a
+heartbeat; a different mode consumes previous start authorization. AUTO remains
+behind reviewed mission Start. Status includes recent operation receipts so
+browser reconnection can reconcile commands without repeating them.

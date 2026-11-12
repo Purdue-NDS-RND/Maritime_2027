@@ -521,7 +521,10 @@ Unrelated vehicle/autopilot heartbeats cannot refresh the selected vehicle.
 The existing LOITER execution behavior was brought onto this branch from
 `8cbd69a`: armed uploads require LOITER, Start explicitly enters AUTO, completion
 verifies HOLD/finish settling then confirms LOITER, and Stop confirms HOLD.
-Mission envelopes, HTTP endpoints and status schema are unchanged.
+Mission envelopes remain unchanged. The subsequent live-header check found that
+the planner GCS also needs its existing `/mode`, `available_modes` and operation
+receipt interface; these were restored on this branch rather than leaving the
+header paired with an incomplete backend.
 
 A separate `maritime-rover-sitl:latest` image packages upstream Wild Thumper at
 SITL Models `25bc38ed8c6c0345840159a8cbc0b02781d52f3c`, over verified
@@ -577,3 +580,12 @@ checker now waits for HTTP startup. After confirmed disarm, terminating the owne
 supervisor to exit nonzero and clean up Gazebo/SITL; no ArduRover processes or
 simulator containers remained (`supervisor-check.json`). Test runtimes were
 explicitly disarmed and shut down after validation.
+
+A subsequent live planner-header check found an integration gap: the running
+planner GCS displayed disabled `Select mode` because the rover branch's boat
+backend lacked `available_modes` and its mode-command HTTP handler. Restoring
+that existing planner interface (including operation reconciliation) passed 35
+boat tests. The boat container alone was rebuilt/replaced while disarmed in
+HOLD; Chrome then confirmed LOITER and HOLD through the header, with arming
+unchanged. The rover/GCS remained running, and final status was disarmed HOLD.
+Evidence is in `rover-sitl/flight-mode-{tests.log,build.log,live-status.json}`.
