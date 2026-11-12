@@ -665,3 +665,22 @@ in Map, controls present in Configure, and a red buoy changing to a gray marker
 when classified Unknown (the test edit was undone). Frontend tests/render check
 and production build passed; no vehicle commands were issued. Evidence is under
 `simulation/logs/gcs-tactical-layout/` (`boundary-object-*`, `unknown-gray-map.png`).
+
+### GCS command polling and run review — 2026-11-12
+
+Command-result reads now run sequentially with cancellation and a 5.5-second
+read timeout. Terminal results remain visible without repeated requests; read
+failures retry without resending commands. Run review uses numbered task names
+and connector destinations, with internal IDs in expandable diagnostics. Polling
+and summary rendering were extracted from their parent components.
+Frontend tests, including delayed reads, cancellation, timeout/retry, terminal
+results and task-label rendering, and the production build passed. This is
+frontend validation; no vehicle execution or runtime deployment was performed.
+Subsequent Chrome review on a separate frontend preview generated a 2.4 m
+manual route on the full competition map and confirmed the numbered task label.
+Earlier trial segments were rejected by existing clearance checks. Review also
+removed unrelated vehicle-mission progress/detail from the draft summary; a
+render regression covers that case. No Upload, Start or vehicle commands were
+issued.
+Final review passed all 176 GCS backend tests in the isolated test image,
+all nine frontend test files, render checks, the production build and diff checks.

@@ -716,3 +716,18 @@ and mission workflow. Build/run from this branch; no other branch is required.
 Normal builds stamp the source commit, branch and dirty status. See the
 [image identity checks](../simulation/docs/USING_THE_SIM.md#verify-which-source-an-image-runs)
 to compare the running container ID with the tag and inspect its source labels.
+
+### Command-result polling and run review
+
+The browser polls unresolved command results sequentially. Each read has a
+5.5-second timeout; failed reads are retried after the polling pass, with a
+one-second delay between passes. Completed, failed, cancelled and unknown-outcome
+results remain visible without further polling. Changing the command list or
+leaving the page cancels the pending read; polling never resends vehicle commands.
+Unknown outcomes still require inspecting the actual vehicle state before retrying.
+
+Run review identifies tasks by their position and name (for example, `Task 2:
+Slalom`), including connector destinations. Full internal task IDs are available
+in the expandable diagnostics. Live waypoint counts and execution details appear
+only when the vehicle mission matches the reviewed mission. Command polling and
+the run summary are maintained in separate frontend modules.

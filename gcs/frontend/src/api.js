@@ -9,7 +9,7 @@ export async function newSession(){
     const value=await response.json();if(revision!==requestRevision)throw new Error('Superseded session discarded');connectionGeneration=value.generation??connectionGeneration;pageSession=value.session_id;return value;
 }
 
-export async function api(path, method='GET', body, {generationTimeoutMs=75000}={}) {
+export async function api(path, method='GET', body, {generationTimeoutMs=75000,signal}={}) {
     const session=pageSession, generation=connectionGeneration;
     const connectionRequest=path.startsWith('connections');
     const revision=method!=='GET'&&!connectionRequest?++requestRevision:requestRevision;
@@ -19,7 +19,7 @@ export async function api(path, method='GET', body, {generationTimeoutMs=75000}=
         const response=await fetch('/api/'+path, {
             method, headers:{'Content-Type':'application/json',...(session?{'X-Planner-Session':session}:{}),...(generation!==null&&!connectionRequest?{'X-Connection-Generation':String(generation)}:{})},
             body:body===undefined?undefined:JSON.stringify(body),
-            ...(controller?{signal:controller.signal}:{})
+            ...((controller?.signal||signal)?{signal:controller?.signal||signal}:{})
         });
         let value;
         try {value=await response.json();}

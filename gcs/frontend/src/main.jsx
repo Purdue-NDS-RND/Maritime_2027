@@ -17,6 +17,7 @@ import ConnectionsDialog from './Connections';
 import {configuration,heading,friendly} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 import {api,newSession,setConnectionGeneration} from './api';
+import {useOperationPolling} from './useOperationPolling';
 import {addedObject} from './MapReview';
 import {displayColour,isUnknownObject} from './mapReviewState';
 import {courseOverlay} from './courseOverlay';
@@ -231,11 +232,21 @@ function App() {
         refresh();const timer=setInterval(refresh,1000);
         return()=>{controller.abort();clearInterval(timer);};
     },[telemetry?.gcs_session_id]);
-    useEffect(()=>{
-        let active=true;
-        async function poll(){for(const id of operations){try {const value=await api('operations/'+encodeURIComponent(id));if(active){setResults(r=>({...r,[id]:value}));if(watchedOperations.current.has(id)&&value.command==='start'&&value.state==='succeeded')api('workspace').then(w=>setWorkspace(old=>old.revision===w.revision?{...old,return_target:w.return_target,run_consumed:w.run_consumed,execution:w.execution}:old)).catch(reportError);if(watchedOperations.current.has(id)){const update=operationNotice(value);if(update){watchedOperations.current.delete(id);updateMessage(update.text);setNotice(update);}}}}catch{}}}
-        poll();const timer=setInterval(poll,1000);return()=>{active=false;clearInterval(timer);};
-    },[operations]);
+    useOperationPolling(operations, results, (id, value) => {
+        setResults(previous => ({...previous, [id]: value}));
+        if (!watchedOperations.current.has(id)) return;
+        if (value.command === 'start' && value.state === 'succeeded') {
+            api('workspace').then(next => setWorkspace(previous => previous.revision === next.revision
+                ? {...previous, return_target: next.return_target, run_consumed: next.run_consumed, execution: next.execution}
+                : previous)).catch(reportError);
+        }
+        const update = operationNotice(value);
+        if (update) {
+            watchedOperations.current.delete(id);
+            updateMessage(update.text);
+            setNotice(update);
+        }
+    });
     useEffect(()=>{
         if(!ready)return;
         if(tileRef.current){tileRef.current.remove();tileRef.current=null;}

@@ -99,3 +99,14 @@ const offlineModes=renderToStaticMarkup(<FlightMode status={modeStatus} stale={t
 assert.match(offlineModes,/Unknown/);assert.match(offlineModes,/disabled=""[^>]*>Set mode/);
 const armedLoiter=renderToStaticMarkup(<BoatControls status={{...modeStatus,speed_m_s:0}} stale={false}/>);
 assert.match(armedLoiter,/Upload the approved route/);assert.match(armedLoiter,/disabled=""[^>]*>Disarm/);
+
+const reviewDraft={...draft,steps:[{id:'internal-gate-id',type:'gate'},{id:'internal-slalom-id',type:'slalom'}],blocks:[{instance_id:'internal-slalom-id',instances:['internal-slalom-id'],waypoint_start:0,waypoint_end:2}],route_sections:[{instance_id:'internal-slalom-id',kind:'connector',leg:0}],waypoints:[draft.start,draft.start]};
+const reviewHtml=renderToStaticMarkup(<Planner {...props} step={4} draft={reviewDraft}/>);
+assert.match(reviewHtml,/Task 1: Gate → Task 2: Slalom/);
+assert.match(reviewHtml,/Connector to Task 2: Slalom/);
+assert.match(reviewHtml,/Task diagnostics · internal IDs/);
+assert.doesNotMatch(reviewHtml.split('Task diagnostics')[0],/internal-gate-id|internal-slalom-id/);
+
+const unrelatedMission=renderToStaticMarkup(<Planner {...props} step={4} draft={reviewDraft} status={{mission_id:'older-run',current_item:99,detail:'old mission failure'}}/>);
+assert.doesNotMatch(unrelatedMission,/old mission failure|actual waypoint <!-- -->99/);
+assert.match(unrelatedMission,/actual waypoint .*—/);
