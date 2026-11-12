@@ -149,8 +149,9 @@ for that baseline.
 
 ## Logs and state
 
-Existing recordings are retained in `logs/recordings/`; the old Monitor-dependent
-record/replay tooling was removed during migration.
+Historical ROS bag recordings are not required by the current simulator or GCS
+and can be deleted when no longer needed. The old Monitor-dependent record/replay
+tooling was removed during migration.
 
 Every run writes:
 
@@ -162,6 +163,17 @@ Every run writes:
 
 `logs/state/eeprom.bin` preserves parameters between containers. Reset it on a
 single start with `WIPE_PARAMS=1 make run`.
+
+For storage cleanup, stop the simulator and any recording process first. Old
+console logs, MAVLink `.tlog`/`.tlog.raw` files, DataFlash `logs/state/logs/*.BIN`
+files and renderer logs/caches are disposable unless needed for an investigation.
+Keep the saved EEPROM, GCS data under `logs/gcs/`, calibration/profiles, final
+acceptance evidence and the newest course snapshot. Old startup attempts,
+exploratory run folders and superseded boat sessions do not all need to be kept,
+including historical examples mentioned in `docs/milestone1.md`. The retained
+generic runs are the three frozen slalom passes and the newest course snapshot;
+final survey/return qualifications remain in their component evidence folders.
+Do not delete the entire `logs/` or `logs/state/` directory.
 
 All worlds/scenarios share `config/blueboat.parm`; there is no slalom-specific
 parameter selection. It retains boat frame class, 2.0 m/s cruise/default waypoint
