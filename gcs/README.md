@@ -6,6 +6,29 @@ keeps a large map beside the selected task editor and a compact ordered task
 strip above them. The map is primary during course and route review.
 Planning works offline; execution requires a fresh boat connection.
 
+The tactical workspace uses charcoal panels, olive selection states and amber
+map/clearance accents. **Panel width** adjusts the workflow sidebar from 340 to
+720 px (capped to preserve the map on smaller desktops). **Expand map** gives
+the map priority in Build run. These display choices last for this page session.
+Required/preferred distances remain visible; **Clearance key** opens their
+explanation. Short task lists use the available editor height; long lists and
+advanced settings scroll within one content pane, with review controls outside it.
+On narrow screens the map and editor stack vertically.
+
+For a separate frontend preview while the normal GCS backend runs on port 8080:
+
+```bash
+cd gcs/frontend
+npm ci
+npm exec -- vite
+```
+
+Open <http://localhost:8082>. The loopback-only preview shares the running GCS
+backend, live telemetry and vehicle command interface, using its own fresh
+planner session. It does not restart the GCS, boat or simulator. Stop the
+preview with Ctrl+C. Use `npm test` and `npm run build` in this directory to
+check the frontend. Normal image startup remains `make -C gcs run` from the root.
+
 ## Startup and session state
 
 From the repository root:

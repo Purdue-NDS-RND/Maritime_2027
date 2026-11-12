@@ -628,3 +628,24 @@ session still follows the existing fresh-on-reload policy. All four application
 build paths now stamp project revision, branch and dirty status separately from
 upstream dependency pins. Image tags must be compared to actual container IDs;
 `latest` alone is not proof of source freshness. See simulator usage for commands.
+
+### Tactical GCS layout preview — 2026-11-12
+
+The isolated `feature/gcs-tactical-layout` branch adds a charcoal/olive/amber
+workspace, adjustable workflow-panel width, compact task strip and an expandable
+clearance legend. Map preparation and task editors use their available height;
+redundant nested list scroll limits were removed while retaining scrolling for
+long content and accessible review controls. Mission rules and vehicle interfaces
+are unchanged. A separate loopback frontend preview uses the existing backend
+without replacing the running simulator, boat or GCS.
+
+Chrome checks used the full 23-buoy/six-prop map. At 1640×750, the default
+440 px sidebar leaves a 1200 px map, compared with about 984 px previously.
+The five-passage Slalom assignment panel fits without scrolling; Advanced uses
+one content scroll pane with review controls visible. Map cleanup fits with
+closed optional tools at the tested desktop sizes. Keyboard adjustment of panel
+width reached 720 px. Checks also covered 1024×768 and 390×844 layouts; narrow
+screens retain scrolling for longer forms. Frontend tests (35), the render check
+and production build passed. No vehicle commands or mission execution were
+performed for this UI check. Raw screenshots and test logs are ignored under
+`simulation/logs/gcs-tactical-layout/`. This is UI validation only.

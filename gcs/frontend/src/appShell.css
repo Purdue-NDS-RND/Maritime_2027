@@ -479,3 +479,19 @@ header h1 { font-size: 16px; }
     .task-review-button small { font-size: 10px; }
     .map-review-footer .text-button { margin-top: 2px; }
 }
+/* Closed tools occupy a row; expanding them uses the editor's single scroll area. */
+.map-review-body .object-type-summary { margin: 5px 0; font-size: 11px; }
+.map-review-body .map-phase-heading p { margin: 4px 0 6px; font-size: 11px; }
+.map-review-body > details { margin-top: 3px; padding-top: 3px; }
+.map-review-body .planning-boundary-controls .hint { margin: 4px 0; }
+.map-review-body .planning-boundary-controls { margin: 6px 0; }
+.map-review-body .planning-boundary-controls details { margin-top: 5px; padding-top: 4px; }
+.map-review-body .boundary-padding { margin: 5px 0; }
+.map-review-body { padding-block: 6px; }
+@media (max-width: 700px) {
+    .header-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .header-actions .flight-mode-control { grid-column: 1 / -1; display: flex; flex-wrap: nowrap; }
+    .flight-mode-control label { flex-direction: row; align-items: center; white-space: nowrap; }
+    .flight-mode-control select { flex: 1; max-width: none; min-width: 0; }
+    .flight-mode-control button { flex-shrink: 0; }
+}
