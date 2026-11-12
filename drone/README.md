@@ -18,7 +18,8 @@ The deployed sensor direction remains fixed Arducam IMX519 + ordinary GNSS, with
 Run from the repository root. Python 3.10 and 3.12 on Linux x86_64 are exercised.
 Requirements select explicit Python 3.10 pins for host ROS/GI environments and retain
 the existing pins on Python >=3.11. The user's captured Argus/ROS bag is runtime evidence;
-new source-check endpoints and full geolocation still require native team-host checks.
+the 2026-11-11 follow-up below also exercised the live source checker and native bag export.
+Full normalized geolocation still requires a measured team-host trial.
 
 Use **uv exclusively** to create environments, install Python packages and run Python
 commands for this workstream. Run every command below from the repository root. Use an
@@ -563,8 +564,35 @@ Validation of this integration: 198 drone tests pass on Python 3.10 and 3.12. Re
 all 11,020 actual bag messages through the audit and source monitor matches the expected
 required topic/type/frame labels, 47 exact camera companions and 1,951 zero-covariance
 odometry records. `/tf` is the only empty optional topic. The recorder-command and
-bench-preset dry-run checks pass; ROS endpoint/QoS/lifecycle tests use doubles. Native
-source-check execution and post-change delivery/rate measurements remain for the team.
+bench-preset dry-run checks pass; portable ROS endpoint/QoS/lifecycle tests use doubles.
+
+### Follow-up Jetson bench evidence (2026-11-11)
+
+The team ran the recorder, camera, live source checker and native bag audit/export on the
+Jetson. The archive passed its declared-file/count checks. All required topics were present
+in the audit and live sample. The live sample matched 20 image/CameraInfo/metadata triplets.
+
+| Check | Observed result |
+| --- | --- |
+| Camera delivery | 119 local saves and 119 CameraInfo/metadata records at about 2 Hz. The bag held 91 images at about 1.54 Hz, all with exact companions. The local-ID comparison identified 28 absent images. The delivery failure point is unresolved. |
+| Navigation | IMU, odometry and GNSS each supplied 2,382 records at about 20 Hz. All 2,382 odometry pose and twist covariance arrays were zero. The audit found zero exact IMU-to-odometry timestamp matches. |
+| Timing | All 91 image host-arrival headers had odometry brackets 47 to 53 ms wide. The audit verified zero exposure times. Use these brackets as arrival diagnostics. |
+| Indoor annotation | The operator filled six rectified-frame rows for one checkerboard corner and exercised the image-ID/checksum join. Five identical clicks leave a positive pixel-uncertainty estimate pending. A6 verified requested settings with a dry run. |
+
+Student B can start offline using the shared run's `hardware-audit-01.json` and
+`hardware-import-01/navigation.jsonl`. Keep indoor annotations paired with their
+own images. Review the navigation counts, source frame labels, time fields and pose
+quality. Collect MAVROS parameter dumps and topic samples, then verify map/origin and
+reset behavior, pose reference, true heading, height datum, exposure-clock mapping
+and a joint pose covariance model against independent measurements. Treat the
+all-zero odometry arrays as unavailable uncertainty.
+
+For the next shared run, measure the rig and target plane, retain independent target
+coordinates, and record the lit camera and navigation together. Build normalized
+`vehicle_state` and `frame` events only after those input contracts are verified.
+Compare accepted projections and rejection reasons with the measured reference before
+a live normalized transport trial. This follow-up establishes source acquisition and
+export, with physical geolocation acceptance still pending.
 
 ## IMU input and navigation integration
 

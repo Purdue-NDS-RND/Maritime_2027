@@ -351,8 +351,8 @@ topics/types/QoS and frame labels. It drives the camera publisher, recorder comm
 bag audit/export and bounded live source checker. The profile retains the measured
 bag checksums and observed host/mode information without making nominal rates acceptance
 limits. The bench preset disables preview, selects the observed sensor mode and retains
-all existing CLI capture controls. Native source-check and capture-rate retesting remain
-for the Jetson owner.
+all existing CLI capture controls. See the follow-up below for native source checking
+and capture-rate evidence.
 
 The normalized raw-MAVROS state bridge and manual-pixel handoff are not completed by
 topic discovery: verified origin/reset, exposure clock, heading/height, mount and joint
@@ -361,6 +361,24 @@ state is substituted. Keep the current raw bag usable for both students while th
 measurements are obtained, and use the updated completion plan for the owner split.
 Validation is 198 drone tests on both Python 3.10 and 3.12 plus the actual bag's
 topic/profile and source-monitor replay. Native endpoint/runtime acceptance stays open.
+
+### Follow-up Jetson evidence and next checks (2026-11-11)
+
+- SP-04/SP-19/SP-44: the team ran the native live source checker and bag audit/export.
+  The audit retained 91 exact image companions from 119 metadata records and the
+  local-ID comparison found 28 images missing from the bag. Delivery diagnosis remains
+  open. These results establish acquisition and export for the recorded setup.
+- SP-05/SP-06/SP-18: six indoor annotations exercised the image-ID/checksum handoff.
+  Verify the applicable camera model and estimate pixel uncertainty for measured
+  frames. All 91 host-arrival headers had 47 to 53 ms odometry brackets. Verified
+  camera exposure timing remains open.
+- SP-41/SP-42: all 2,382 odometry records had zero pose and twist covariance.
+  Student B owns the navigation evidence, measured frame/origin/heading/height and
+  clock checks, joint pose error model and verified state conversion. Coordinate
+  a fresh measured camera/navigation capture with Student A and HW.
+- SP-44: assemble the reviewed normalized session and separate reference coordinates.
+  Run measured replay and inspect acceptance and rejection evidence before delayed
+  and live normalized transport trials. Physical acceptance remains open.
 
 Use the IDs in commits and discussions. Check a task only when its acceptance evidence
 exists; describe important limits in its owning topic. Record unresolved numerical

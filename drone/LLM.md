@@ -52,7 +52,7 @@ raw navigation.jsonl using native ROS decoding. The actual database exported 47 
 PNGs with retained source clocks/calibration/checksums via a portable test decoder.
 No decoder dependency or raw-sensor fusion was added to production. The camera ROS
 publisher uses a typed byte array to avoid Humble's per-byte setter validation; rate
-improvement and native export CLI still need another Jetson run. See README commands.
+improvement and native export CLI were pending at this stage. See the follow-up below.
 The audit now cross-checks/hashes complete manifests and rejects mismatched counts,
 types and times before export. Completion flags refer only to the declared archive;
 partial snapshots retain unknown completeness. All 182 drone tests pass on Python 3.10
@@ -83,6 +83,29 @@ Validation: 198 drone tests pass on Python 3.10 and 3.12. The actual bag passes 
 profile audit and complete source-monitor replay, retaining 47 exact image companions,
 the 15 metadata/image gaps and 1,951 unknown odometry covariance records. The live
 subscriber uses doubles in portable tests; no new physical acceptance is claimed.
+
+### Follow-up Jetson run and current owner split (2026-11-11)
+
+The team exercised live source checking and native bag audit/export. The follow-up
+bag has 91 exact rectified image companions out of 119 CameraInfo/metadata records.
+The capture log lists 119 local saves. The local-ID comparison identifies 28 images
+absent from the bag, with the loss point unresolved. The archive is complete by its
+declared manifest. IMU, odometry and GNSS each have 2,382 records at about 20 Hz.
+Odometry pose and twist covariance are zero throughout, IMU and odometry have zero
+exact timestamp matches, and the 47 to 53 ms brackets for all 91 images use host
+arrival headers. Verified exposure timestamps remain absent.
+
+Student A completed the indoor annotation exercise with six rectified-frame entries
+for one corner. Five repeated clicks returned identical coordinates. Pixel uncertainty
+and applicability of the historical calibration remain explicit checks. A6 was
+exercised as a requested-settings dry run. Keep that indoor capture together with its
+CSV and joined records.
+
+Student B starts with the follow-up audit and raw navigation export, then obtains live
+MAVROS evidence and verifies origin/reset, reference point, heading, height datum,
+exposure clock and joint covariance. Samuel and HW measure the next rigid bench setup.
+A new shared recording supplies the paired data for S5/S6. The normalized adapters and
+measured replay remain open.
 
 ## Python tooling requirement
 
