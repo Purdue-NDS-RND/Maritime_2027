@@ -6,8 +6,8 @@ keeps a large map beside the selected task editor and a compact ordered task
 strip above them. The map is primary during course and route review.
 Planning works offline; execution requires a fresh boat connection.
 
-The tactical workspace uses charcoal panels, olive selection states and amber
-map/clearance accents. **Panel width** adjusts the workflow sidebar from 340 to
+The tactical workspace uses black/gray panels and blue selection/action accents. Amber
+clearance indicators and semantic task/status colors retain their original meaning. **Panel width** adjusts the workflow sidebar from 340 to
 720 px (capped to preserve the map on smaller desktops). **Expand map** gives
 the map priority in Build run. These display choices last for this page session.
 Required/preferred distances remain visible; **Clearance key** opens their

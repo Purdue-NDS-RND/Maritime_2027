@@ -649,3 +649,8 @@ screens retain scrolling for longer forms. All eight frontend test files, the re
 and production build passed. No vehicle commands or mission execution were
 performed for this UI check. Raw screenshots and test logs are ignored under
 `simulation/logs/gcs-tactical-layout/`. This is UI validation only.
+
+The UI preview subsequently restored the original black/gray/blue palette at
+the operator’s request, retaining the adjustable panel, compact controls and
+scrolling improvements. Only display colors changed; semantic warning, task and
+vehicle-state colors remain intact. Frontend tests and production build passed.
