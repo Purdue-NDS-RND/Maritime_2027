@@ -11,7 +11,7 @@ See [recorded results](#recorded-simulator-results) below and
 
 Boat deployment configuration now provides `make sim` and `make field`, with
 shared `status`, `stop` and `down` commands. Both use one launcher/application
-command; `sim.env` and local `field.env` select connection, mission folder, baud,
+command; tracked `sim.env` and `field.env` select connection, mission folder, baud,
 HTTP listener and optional serial device/group access. Simulator defaults are retained.
 Desktop image build, both Compose configurations, host validation and all 40 boat
 container tests passed on 2026-11-14, including configured ROS baud/listener and

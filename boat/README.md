@@ -49,8 +49,9 @@ commands remain explicit.
 
 Both starts use the same launcher and application command; only the selected
 env file changes. Edit `sim.env` for simulation and `field.env` for hardware.
-`sim.env` ships with the existing simulator defaults. `field.env` is local and
-ignored by Git; its committed template is `field.env.example`. Neither settings
+`sim.env` ships with the existing simulator defaults. `field.env` is also tracked
+and ships with required hardware values blank; `field.env.example` is a reset
+template. Neither settings
 file is copied into the image. Changes take effect on the next launch.
 
 ## Jetson field connections
@@ -58,7 +59,6 @@ file is copied into the image. Changes take effect on the next launch.
 On the Jetson, from `boat/`, do this once:
 
 ```bash
-cp field.env.example field.env
 ls -l /dev/serial/by-id/
 stat -Lc %g /dev/serial/by-id/YOUR_PIXHAWK
 nano field.env
@@ -77,7 +77,7 @@ after USB reconnect/device changes; device hotplug is not guaranteed.
 Then use `make build`, `make test`, and `make field`. No ROS installation on the
 host or GPU access is required by this boat application. Edit `field.env` for
 hardware changes, then shut down/relaunch to apply them; no image rebuild is
-needed for those settings. The file is excluded from Git and the image build.
+needed for those settings. The file is tracked in Git and excluded from the image build.
 `compose.yaml` holds the common application command and mounts. `COMPOSE_FILE`
 in each env selects that YAML; the serial template also selects the small
 `compose.serial.yaml` device/group overlay. There is no separate field application
