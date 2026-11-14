@@ -389,16 +389,19 @@ remain to be checked on the actual hardware. See the
 On the **shore computer**, from `gcs/`:
 
 ```bash
-cp field.env.example field.env
 ls -l /dev/serial/by-id/
 # Choose the RFD's stable device path; find its group with:
 stat -Lc %g /dev/serial/by-id/YOUR_SHORE_RADIO
 ```
 
-Edit `field.env`: set `GCS_BOAT_URL` to the Jetson's private LAN address and
+The tracked `field.env` contains the current bench setup: Jetson API at
+`http://boat-jetson:8091`, the shore FTDI radio's stable device path, device group
+20, host baud 115200 and Pixhawk system/component IDs 1/1. Edit these settings
+for different hardware: set `GCS_BOAT_URL` to the Jetson's reachable address and
 HTTP port, `GCS_SERIAL_DEVICE` to the shore RFD path, `GCS_SERIAL_GID` to the
 numeric group above, and match the actual radio host baud and Pixhawk IDs.
-The example address and device are placeholders, not discovered hardware.
+`field.env.example` retains a generic template with placeholder address/device
+and an example baud of 57600; copying it over `field.env` replaces the bench settings.
 Then start the GCS:
 
 ```bash
@@ -442,7 +445,9 @@ Stop the field GCS with:
 make ENV_FILE=field.env SERIAL=1 down
 ```
 
-`field.env` is ignored by Git. `ENV_FILE` and `SERIAL=1` also work with `build`;
+`field.env` is tracked in Git alongside the boat deployment env files. Keep
+credentials out of these shared configuration files.
+`ENV_FILE` and `SERIAL=1` also work with `build`;
 a new data directory with default `make run` seeds simulator connections.
 An existing data directory retains its saved active settings. To use a host radio
 forwarder instead, omit `SERIAL=1` and put its separate UDP input in
