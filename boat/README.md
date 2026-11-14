@@ -64,9 +64,9 @@ stat -Lc %g /dev/serial/by-id/YOUR_PIXHAWK
 nano field.env
 ```
 
-Fill in the actual serial device path, its numeric group ID, the Pixhawk baud,
-and the Jetson's private control-LAN IPv4 address. The template deliberately leaves
-required settings blank; `make field` rejects missing settings. A USB/UART device
+Fill in the actual serial device path, its numeric group ID and the Pixhawk baud.
+The template deliberately leaves these required hardware settings blank;
+`make field` rejects missing settings. A USB/UART device
 is exposed as `/dev/boat-fcu` with the selected device group. Configure the actual
 Pixhawk port for MAVLink and match its baud; verify fresh heartbeat, position,
 velocity and GPS messages rather than assuming the simulator's stream settings.
@@ -92,15 +92,25 @@ the base configuration and `sim.env` to locate the shared project, without
 applying simulator settings to a running field container. Inspect and shut down
 the existing container before launching with changed settings.
 
-The field HTTP listener binds the configured Jetson address, port 8091 by default.
-In the shore GCS's **Connections**, set its mission URL to
-`http://JETSON_LAN_IP:8091`. The API has no authentication or encryption; keep it
-on the trusted control LAN. RFD map telemetry is a separate shore connection,
+Field HTTP defaults to `BOAT_HTTP_HOST=0.0.0.0`, listening on all host IPv4
+interfaces at port 8091. In the shore GCS's **Connections**, set its mission URL
+to `http://JETSON_WIFI_IP:8091`, or `http://JETSON_TAILSCALE_IP:8091` when using
+Tailscale/Headscale. Do not enter `0.0.0.0` as the GCS destination. A specific
+Jetson interface address can be configured instead to limit the listener.
+The API has no application authentication or TLS: any client that can reach
+the listener can submit requests, subject to existing vehicle-state checks.
+Network/firewall policy controls reachability. Tailscale/Headscale may supply
+the private network and access policy; they are not installed/configured by
+`make field`. Tailscale traffic uses its encrypted network transport while
+direct Wi-Fi HTTP retains the existing unencrypted application protocol.
+See [Tailscale device connections](https://tailscale.com/docs/how-to/connect-to-devices)
+and [Headscale policy](https://headscale.net/stable/ref/acls/).
+RFD map telemetry is a separate shore connection,
 as described in the [GCS field guide](../gcs/README.md#field-connections-rfd-telemetry-and-jetson-mission-api).
 For a read-only check from shore:
 
 ```bash
-curl --fail http://JETSON_LAN_IP:8091/status
+curl --fail http://JETSON_WIFI_OR_TAILSCALE_IP:8091/status
 ```
 
 Field mode does not mount the simulator example mission. For local-file testing,

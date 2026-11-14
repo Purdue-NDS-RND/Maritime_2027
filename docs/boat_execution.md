@@ -146,10 +146,12 @@ speed and end behavior.
 The boat defaults to loopback HTTP on `127.0.0.1:8091` (ROS parameters
 `http_host` and `http_port`). Both bringups use the same application command:
 `make sim` loads `boat/sim.env`, and `make field` loads `boat/field.env`, including
-an explicit private control-LAN listener and serial baud;
+a listener on all IPv4 interfaces (`0.0.0.0`) and explicit serial baud;
 see [Jetson field connections](../boat/README.md#jetson-field-connections).
 Physical Jetson/network/serial operation remains unverified. HTTP has no
-authentication or encryption; field exposure requires a trusted control LAN.
+authentication or TLS. Clients connect directly over Wi-Fi or a separately
+configured Tailscale/Headscale network using the Jetson's reachable IP;
+network/firewall policy determines who can reach the command API.
 HTTP and the retained local-file ROS services submit to one
 boat-owned queue. Only its worker receives/sends MAVLink, runs execution ticks,
 or changes execution state; status readers consume snapshots. ROS uses
