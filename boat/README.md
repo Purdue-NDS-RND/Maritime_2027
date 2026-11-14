@@ -16,11 +16,12 @@ From `boat/`:
 ```bash
 make validate  # host input tests, syntax and Compose configuration
 make build
-make test      # protocol/lifecycle tests and ROS node construction
+make test      # protocol/lifecycle, virtual serial port and ROS construction tests
 ```
 
 Docker, Compose, Make and Python are required on the host. ROS and
-`pymavlink==2.4.50` are installed in the image. Jetson deployment is untested.
+`pymavlink==2.4.50` plus `pyserial==3.5` for serial connections are installed
+in the image. Jetson deployment is untested.
 `make build` builds natively for the computer running it: x86-64 on the desktop,
 ARM64 on the Jetson. The same Dockerfile is used for both.
 

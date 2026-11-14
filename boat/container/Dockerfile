@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-colcon-common-extensions python3-venv \
     && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv --system-site-packages /opt/boat-venv \
-    && /opt/boat-venv/bin/pip install --no-cache-dir pymavlink==2.4.50
+    && /opt/boat-venv/bin/pip install --no-cache-dir pymavlink==2.4.50 pyserial==3.5
 ENV PATH=/opt/boat-venv/bin:$PATH
 ENV PYTHONPATH=/opt/boat-venv/lib/python3.12/site-packages
 COPY . /ws/src/boat_app

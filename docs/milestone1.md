@@ -21,7 +21,12 @@ launch selection/refusal to replace a running boat. Resolved configuration check
 confirmed that editing only env values changes the connection and HTTP port,
 and that physical/simulator mission folders and device access remain distinct.
 No vehicle was commanded.
-ARM64 build and physical Jetson/serial/network acceptance remain unverified;
+A subsequent field startup exposed missing `pyserial` in the image. The image
+now installs `pyserial==3.5`; a native ARM64 rebuild, host validation and all
+41 container tests passed, including MAVLink heartbeat reception through a
+local virtual serial port. Evidence: `simulation/logs/boat/serial-dependency-tests.log`.
+This verifies serial software availability, not physical device access.
+Physical Jetson/serial/network acceptance remains unverified;
 see the [boat field guide](../boat/README.md#jetson-field-connections).
 
 Read this alongside the [system design](design.md). This document defines the
