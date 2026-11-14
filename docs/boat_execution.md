@@ -143,8 +143,14 @@ speed and end behavior.
 
 ## Milestone 1 HTTP and command ownership
 
-The boat also serves loopback HTTP on `127.0.0.1:8091` (ROS parameter
-`http_port`). HTTP and the retained local-file ROS services submit to one
+The boat defaults to loopback HTTP on `127.0.0.1:8091` (ROS parameters
+`http_host` and `http_port`). Both bringups use the same application command:
+`make sim` loads `boat/sim.env`, and `make field` loads `boat/field.env`, including
+an explicit private control-LAN listener and serial baud;
+see [Jetson field connections](../boat/README.md#jetson-field-connections).
+Physical Jetson/network/serial operation remains unverified. HTTP has no
+authentication or encryption; field exposure requires a trusted control LAN.
+HTTP and the retained local-file ROS services submit to one
 boat-owned queue. Only its worker receives/sends MAVLink, runs execution ticks,
 or changes execution state; status readers consume snapshots. ROS uses
 reentrant service callbacks so STOP can interrupt another pending service.

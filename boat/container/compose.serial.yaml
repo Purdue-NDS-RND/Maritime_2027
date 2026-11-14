@@ -1,0 +1,8 @@
+# Optional serial access, selected by COMPOSE_FILE in the env file.
+# Application command and mission mount remain in the common compose.yaml.
+services:
+  boat:
+    devices:
+      - "${BOAT_SERIAL_DEVICE:?Set BOAT_SERIAL_DEVICE in the selected env file}:/dev/boat-fcu"
+    group_add:
+      - "${BOAT_SERIAL_GID:?Set BOAT_SERIAL_GID in the selected env file}"

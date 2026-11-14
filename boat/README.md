@@ -21,6 +21,100 @@ make test      # protocol/lifecycle tests and ROS node construction
 
 Docker, Compose, Make and Python are required on the host. ROS and
 `pymavlink==2.4.50` are installed in the image. Jetson deployment is untested.
+`make build` builds natively for the computer running it: x86-64 on the desktop,
+ARM64 on the Jetson. The same Dockerfile is used for both.
+
+## Everyday commands
+
+Run these from `boat/`:
+
+```bash
+make build    # build the image; repeat after application/dependency changes
+make sim      # connect using sim.env (make run remains an alias)
+make field    # connect to physical hardware using field.env
+make status   # watch status; Ctrl-C exits the viewer
+make stop     # request and confirm HOLD
+make down     # shut down the container
+```
+
+Choose either `sim` or `field`; both run in the foreground and neither uploads,
+arms or starts a mission. Startup refuses to replace a running boat container.
+Use a second terminal for status/control. All control commands and `down` address
+the same `maritime-boat` project regardless of how it was launched; no remembered
+target selection or environment flags are needed. `make down` shuts down the
+application; use `make stop` and inspect the confirmed outcome before shutdown
+when controlling a vehicle. Shutdown cannot guarantee a physical stop.
+`make help` lists the short commands. Local mission `upload`, `start` and `disarm`
+commands remain explicit.
+
+Both starts use the same launcher and application command; only the selected
+env file changes. Edit `sim.env` for simulation and `field.env` for hardware.
+`sim.env` ships with the existing simulator defaults. `field.env` is local and
+ignored by Git; its committed template is `field.env.example`. Neither settings
+file is copied into the image. Changes take effect on the next launch.
+
+## Jetson field connections
+
+On the Jetson, from `boat/`, do this once:
+
+```bash
+cp field.env.example field.env
+ls -l /dev/serial/by-id/
+stat -Lc %g /dev/serial/by-id/YOUR_PIXHAWK
+nano field.env
+```
+
+Fill in the actual serial device path, its numeric group ID, the Pixhawk baud,
+and the Jetson's private control-LAN IPv4 address. The template deliberately leaves
+required settings blank; `make field` rejects missing settings. A USB/UART device
+is exposed as `/dev/boat-fcu` with the selected device group. Configure the actual
+Pixhawk port for MAVLink and match its baud; verify fresh heartbeat, position,
+velocity and GPS messages rather than assuming the simulator's stream settings.
+Direct Jetson UART wiring also needs the correct electrical interface and host
+UART setup. USB is the simplest initial bench connection. Recreate the container
+after USB reconnect/device changes; device hotplug is not guaranteed.
+
+Then use `make build`, `make test`, and `make field`. No ROS installation on the
+host or GPU access is required by this boat application. Edit `field.env` for
+hardware changes, then shut down/relaunch to apply them; no image rebuild is
+needed for those settings. The file is excluded from Git and the image build.
+`compose.yaml` holds the common application command and mounts. `COMPOSE_FILE`
+in each env selects that YAML; the serial template also selects the small
+`compose.serial.yaml` device/group overlay. There is no separate field application
+command. This overlay is needed because simulation has no serial device to map.
+Simulator commands load `sim.env`, not `field.env` or a local `.env`.
+Exported shell overrides still follow normal Compose precedence.
+For an existing network MAVLink connection, a field env can select only the base
+YAML and set `BOAT_CONNECTION` to the appropriate network endpoint instead.
+Paths in `MISSION_DIR` are relative to `boat/container/`, or may be absolute;
+`COMPOSE_FILE` paths are relative to `boat/`. Build/status/control/shutdown use
+the base configuration and `sim.env` to locate the shared project, without
+applying simulator settings to a running field container. Inspect and shut down
+the existing container before launching with changed settings.
+
+The field HTTP listener binds the configured Jetson address, port 8091 by default.
+In the shore GCS's **Connections**, set its mission URL to
+`http://JETSON_LAN_IP:8091`. The API has no authentication or encryption; keep it
+on the trusted control LAN. RFD map telemetry is a separate shore connection,
+as described in the [GCS field guide](../gcs/README.md#field-connections-rfd-telemetry-and-jetson-mission-api).
+For a read-only check from shore:
+
+```bash
+curl --fail http://JETSON_LAN_IP:8091/status
+```
+
+Field mode does not mount the simulator example mission. For local-file testing,
+place a physically appropriate `mission.json` under
+`simulation/logs/boat/field-missions/`, or set `MISSION_DIR` to an absolute
+mission directory in `field.env`. GCS uploads need no local mission file. Logs
+and journals retain the existing `simulation/logs/boat/` location. Neither launch
+adds boot startup or an automatic restart policy.
+
+Configuration and synthetic tests do not establish Jetson, USB/serial, radio,
+RC takeover, firmware failsafe or physical motion acceptance. Verify the ARM64
+build and disarmed connection/upload/readback before controlled movement tests.
+Total MAVLink loss can leave the Pixhawk executing AUTO; inspect/configure its
+physical failsafes independently of this application.
 
 ## Boat-only simulation
 
@@ -38,7 +132,7 @@ gate/slalom route. Its numbers are experimental settings, not agreed margins.
 From `boat/`, in a second terminal:
 
 ```bash
-make run
+make sim
 ```
 
 From `boat/`, in a third terminal:
@@ -69,10 +163,11 @@ Local file tests do not check map/obstacle clearance. GCS approval uses the
 shared conservative validator before mission transfer. Use a new mission ID for
 each deliberate new attempt; identical IDs are idempotent.
 
-`BOAT_CONNECTION` defaults to `udpin:127.0.0.1:14551`.
+`sim.env` sets `BOAT_CONNECTION=udpin:127.0.0.1:14551`.
 `BOAT_ROS_DOMAIN_ID` defaults to 27 with local discovery. These are local
-development interfaces. The GCS uses the boat-owned HTTP API on localhost:8091;
-physical vehicle networking remains open. See [HTTP command ownership](../docs/boat_execution.md#milestone-1-http-and-command-ownership).
+development interfaces. Simulator HTTP defaults to localhost:8091; field mode
+uses the explicitly configured Jetson address. Physical networking remains
+unverified. See [HTTP command ownership](../docs/boat_execution.md#milestone-1-http-and-command-ownership).
 
 Mission snapshots and the operation journal live under ignored
 `simulation/logs/boat/`, with progress/events under individual session folders; ROS logs under `simulation/logs/boat/ros/`.

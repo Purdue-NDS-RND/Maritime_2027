@@ -1,27 +1,34 @@
 .DEFAULT_GOAL := validate
-.PHONY: validate test build run down status upload start stop disarm
+COMPOSE = docker compose -p maritime-boat --env-file sim.env -f container/compose.yaml
+.PHONY: help validate test build sim field run down status upload start stop disarm
+
+help:
+	@printf '%s\n' 'make build   Build the image for this computer' 'make sim     Start the boat app for simulation' 'make field   Start with field.env and the physical Pixhawk' 'make status  Watch the running boat status' 'make stop    Request HOLD' 'make down    Shut down the boat container' 'make test    Run tests without a vehicle'
 
 validate:
 	python3 -m unittest discover -s tests -p 'test_mission.py' -v
+	python3 -m unittest discover -s tests -p 'test_launch.py' -v
 	python3 -m compileall -q boat_app tests
-	bash -n container/entrypoint.sh
-	docker compose -f container/compose.yaml config --quiet
+	bash -n container/entrypoint.sh container/launch.sh
+	docker compose -p maritime-boat --env-file sim.env config --quiet
+	BOAT_SERIAL_DEVICE=/dev/null BOAT_SERIAL_GID=0 BOAT_BAUD=115200 BOAT_HTTP_HOST=127.0.0.1 docker compose -p maritime-boat --env-file field.env.example config --quiet
 
 build:
-	../scripts/with-build-provenance.sh docker compose -f container/compose.yaml build
+	../scripts/with-build-provenance.sh $(COMPOSE) build
 
 test:
 	docker run --rm --network none "$${BOAT_IMAGE:-maritime-boat:latest}" python3 -m unittest discover -s /ws/src/boat_app/tests -v
 
-run:
-	mkdir -p ../simulation/logs/boat
-	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose -f container/compose.yaml up --no-build
+run: sim
+
+sim field:
+	bash container/launch.sh $@
 
 down:
-	docker compose -f container/compose.yaml down
+	$(COMPOSE) down
 
 status:
-	docker compose -f container/compose.yaml exec -T boat /boat-entrypoint.sh ros2 topic echo /boat_mission/status
+	$(COMPOSE) exec -T boat /boat-entrypoint.sh ros2 topic echo /boat_mission/status
 
 upload start stop disarm:
-	docker compose -f container/compose.yaml exec -T boat /boat-entrypoint.sh python3 -m boat_app.client $@
+	$(COMPOSE) exec -T boat /boat-entrypoint.sh python3 -m boat_app.client $@

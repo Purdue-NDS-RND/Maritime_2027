@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 import rclpy
 from pymavlink import mavutil
@@ -18,9 +19,16 @@ class NodeTests(unittest.TestCase):
             mission = Path(__file__).resolve().parents[1] / "examples/mission.json"
             rclpy.init(args=["--ros-args", "-p", f"log_dir:={directory}",
                              "-p", "connection:=udpin:127.0.0.1:0",
+                             "-p", "baud:=57600", "-p", "http_host:=127.0.0.2",
+                             "-p", "http_port:=0",
                              "-p", f"mission_file:={mission}"])
-            node = BoatNode()
+            with patch("boat_app.node.mavutil.mavlink_connection",
+                       wraps=mavutil.mavlink_connection) as connect:
+                node = BoatNode()
+                connect.assert_called_once_with("udpin:127.0.0.1:0", baud=57600,
+                                                source_system=245, source_component=191)
             try:
+                self.assertEqual(node.http.server_address[0], "127.0.0.2")
                 self.assertEqual(len(node.command_services), 4)
                 node.publish_status()
                 response = node.handler("upload")(Trigger.Request(), Trigger.Response())

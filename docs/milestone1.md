@@ -9,6 +9,19 @@ This establishes simulator acceptance; physical-boat performance is unverified.
 See [recorded results](#recorded-simulator-results) below and
 [boat execution](boat_execution.md) for interfaces and fault behavior.
 
+Boat deployment configuration now provides `make sim` and `make field`, with
+shared `status`, `stop` and `down` commands. Both use one launcher/application
+command; `sim.env` and local `field.env` select connection, mission folder, baud,
+HTTP listener and optional serial device/group access. Simulator defaults are retained.
+Desktop image build, both Compose configurations, host validation and all 40 boat
+container tests passed on 2026-11-14, including configured ROS baud/listener and
+launch selection/refusal to replace a running boat. Resolved configuration checks
+confirmed that editing only env values changes the connection and HTTP port,
+and that physical/simulator mission folders and device access remain distinct.
+No vehicle was commanded.
+ARM64 build and physical Jetson/serial/network acceptance remain unverified;
+see the [boat field guide](../boat/README.md#jetson-field-connections).
+
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
 GCS until after boat-only development. Boat-only testing remains the first
