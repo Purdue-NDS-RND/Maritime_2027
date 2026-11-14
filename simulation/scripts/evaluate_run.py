@@ -44,8 +44,16 @@ def project_footprint(footprint, x, y, roll, pitch, yaw):
 
 def evaluate(samples, footprint, course, start_s, end_s):
     minimum = math.inf
+    polygon_bounds = {}
+    for name, obstacle in course.get('polygon_obstacles', {}).items():
+        centre = obstacle['pose'][:2]
+        polygon_bounds[name] = (centre, max(math.dist(centre,p) for p in obstacle['footprint']))
+    task_active = not course.get("task_entry")
+    channel_active = not course.get('channel_entry')
     failures, missing, passages, trajectory = [], [], [], []
     sequence = course['passages']
+    channel_states = {c['instance_id']:bool(c.get('return_escape')) for c in course.get('channels', [])}
+    channel_finished = set()
     next_passage = 0
     previous, finish_since, finished = None, None, False
     count = 0
@@ -63,7 +71,7 @@ def evaluate(samples, footprint, course, start_s, end_s):
             continue
         count += 1
         poses = {item['name']: item['pose'] for item in sample['poses']}
-        required = {'blueboat/base_link', *course['buoys']}
+        required = {'blueboat/base_link', *course['buoys'], *course.get('polygon_obstacles', {}), *course.get('frozen_objects', {})}
         if not required <= set(poses):
             missing.append('missing boat or buoy pose')
             continue
@@ -83,6 +91,9 @@ def evaluate(samples, footprint, course, start_s, end_s):
         except (ValueError, KeyError, TypeError) as error:
             missing.append(str(error))
             continue
+        for name, expected in course.get('frozen_objects', {}).items():
+            if math.dist(poses[name][:2],expected) > .01:
+                missing.append('physical object differs from frozen scene: '+name)
         step_minimum = math.inf
         enclosing_radius = max(math.hypot(px-x, py-y) for px, py in polygon)
         for name, buoy in course['buoys'].items():
@@ -93,6 +104,20 @@ def evaluate(samples, footprint, course, start_s, end_s):
             separation = polygon_clearance(polygon, poses[name][:2], buoy['radius_m'])
             step_minimum = min(step_minimum, separation)
             minimum = min(minimum, separation)
+        from shared.course import polygon_gap, inside
+        for name, obstacle in course.get('polygon_obstacles', {}).items():
+            original = obstacle['pose']
+            pose = poses[name]
+            if math.dist(pose[:2], original[:2]) > .01 or abs(math.remainder(pose[5]-original[5], 2*math.pi)) > .01:
+                missing.append('polygon obstacle moved from frozen physical scene: '+name)
+            centre, radius = polygon_bounds[name]
+            if math.dist((x,y),centre)-radius-enclosing_radius > step_minimum:
+                continue
+            poly = obstacle['footprint']
+            # Signed polygon-to-polygon separation, including full containment.
+            distance = -1e-9 if any(inside(p,polygon) for p in poly) or any(inside(p,poly) for p in polygon) else min(polygon_gap(poly,a,b) for a,b in zip(polygon,polygon[1:]+polygon[:1]))
+            step_minimum = min(step_minimum, distance)
+            minimum = min(minimum, distance)
         speed = 0
         if previous is not None:
             dt = t - previous['time_s']
@@ -106,31 +131,123 @@ def evaluate(samples, footprint, course, start_s, end_s):
             duration += dt
             speed_integral += speed * dt
             peak = max(peak, speed)
-        # Passage planes use +X as course direction. Require initial footprint
-        # wholly before every plane, lateral bounds throughout passage, then stern.
-        for index, passage in enumerate(sequence):
-            plane = passage['x']
-            lowest, highest = min(p[0] for p in polygon), max(p[0] for p in polygon)
-            if previous is None and highest >= plane:
-                missing.append('recording starts after passage approach')
-            if lowest <= plane <= highest:
-                if passage['kind'] == 'gate':
-                    if min(p[1] for p in polygon) < passage['y_min'] or max(p[1] for p in polygon) > passage['y_max']:
-                        failures.append('footprint outside gate opening: ' + passage['id'])
-                else:
-                    buoy_y = poses[passage['buoy']][1]
-                    if passage['side'] == 'left' and min(p[1] for p in polygon) <= buoy_y:
-                        failures.append('wrong passing side: ' + passage['id'])
-                    if passage['side'] == 'right' and max(p[1] for p in polygon) >= buoy_y:
-                        failures.append('wrong passing side: ' + passage['id'])
-            if previous is not None and previous['stern_x'] <= plane < lowest:
-                if index != next_passage:
-                    failures.append('missed/reversed passage order: ' + passage['id'])
-                else:
-                    passages.append({'id': passage['id'], 'stern_clear_time_s': t})
-                    next_passage += 1
-            if previous is not None and previous['stern_x'] > plane >= lowest and index < next_passage:
-                failures.append('reversed cleared passage: ' + passage['id'])
+        entry=course.get('task_entry')
+        if not task_active and previous and entry:
+            direction=entry['direction'];length=math.hypot(*direction)
+            forward=[v/length for v in direction];left=[-forward[1],forward[0]];origin=entry['origin']
+            if entry.get('activate_on_stern'):
+                before=min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in previous['polygon'])
+                after=min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in polygon)
+            else:
+                before=sum((previous[k]-origin[i])*forward[i]for i,k in enumerate(('x','y')))
+                after=sum(((x,y)[i]-origin[i])*forward[i]for i in (0,1))
+            if before<=0<after:
+                fraction=-before/(after-before)
+                crossing=[previous[k]+fraction*((x,y)[i]-previous[k])for i,k in enumerate(('x','y'))]
+                lateral=sum((crossing[i]-origin[i])*left[i]for i in (0,1))
+                task_active=abs(lateral)<=entry.get('half_width_m',1)
+        entrance = course.get('channel_entry')
+        if entrance and not channel_active and previous and next_passage >= course.get('channel_starts_after', 0):
+            direction = entrance['direction']; length = math.hypot(*direction)
+            forward = [v/length for v in direction]; origin = entrance['origin']
+            before = min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in previous['polygon'])
+            after = min(sum((p[i]-origin[i])*forward[i] for i in (0,1)) for p in polygon)
+            left = [-forward[1], forward[0]]
+            lateral = sum(((x,y)[i]-origin[i])*left[i] for i in (0,1))
+            if before <= 0 < after and abs(lateral) <= entrance['half_width_m']:
+                channel_active = True
+        if task_active:
+            # Independent physics-footprint projection into each confirmed course frame.
+            # Legacy evaluation specs default to +X, with lateral coordinates in world Y.
+            active_block = sequence[min(next_passage,len(sequence)-1)].get('block') if sequence else None
+            for index, passage in enumerate(sequence):
+                if active_block is not None and passage.get('block') != active_block:
+                    continue
+                if course.get('finite_passages') and next_passage==0 and index!=0:
+                    continue
+                direction = passage.get('direction', [1, 0])
+                length = math.hypot(*direction)
+                if not length:
+                    raise ValueError('invalid evaluation passage direction')
+                forward = [v/length for v in direction]
+                left = [-forward[1], forward[0]]
+                origin = passage.get('origin', [passage.get('x', 0), 0])
+                def project(point, axis):
+                    return sum((point[i]-origin[i])*axis[i] for i in (0, 1))
+                centre_plane = project((x,y), forward)
+                if not course.get('finite_passages') and previous is None and centre_plane > enclosing_radius:
+                    missing.append('recording starts after passage approach')
+                    continue
+                old_plane = project((previous['x'],previous['y']),forward) if previous else centre_plane
+                bound = max(enclosing_radius,previous['radius'] if previous else enclosing_radius)
+                if (centre_plane < -bound and old_plane < -bound) or (centre_plane > bound and old_plane > bound):
+                    continue
+                longitudinal = [project(p, forward) for p in polygon]
+                lateral = [project(p, left) for p in polygon]
+                if course.get('finite_passages') and (min(lateral)>passage['y_max'] or max(lateral)<passage['y_min']):
+                    continue
+                lowest, highest = min(longitudinal), max(longitudinal)
+                if previous is None and highest >= 0:
+                    missing.append('recording starts after passage approach')
+                if lowest <= 0 <= highest:
+                    if passage['kind'] == 'gate':
+                        if min(lateral) < passage['y_min'] or max(lateral) > passage['y_max']:
+                            failures.append('footprint outside gate opening: ' + passage['id'])
+                    else:
+                        buoy_y = project(poses[passage['buoy']][:2], left)
+                        if passage['side'] == 'left' and min(lateral) <= buoy_y:
+                            failures.append('wrong passing side: ' + passage['id'])
+                        if passage['side'] == 'right' and max(lateral) >= buoy_y:
+                            failures.append('wrong passing side: ' + passage['id'])
+                old_stern = min(project(p, forward) for p in previous['polygon']) if previous else None
+                if old_stern is not None and old_stern <= 0 < lowest:
+                    if index != next_passage:
+                        failures.append('missed/reversed passage order: ' + passage['id'])
+                    else:
+                        passages.append({'id': passage['id'], 'stern_clear_time_s': t})
+                        next_passage += 1
+                if old_stern is not None and old_stern > 0 >= lowest and index < next_passage:
+                    failures.append('reversed cleared passage: ' + passage['id'])
+        for boundary in [*course.get('boundary_polygons', []), *([course['task_channel']] if task_active and channel_active and course.get('task_channel') else [])]:
+            from shared.course import contained
+            if -polygon_clearance(boundary,(x,y),0) > enclosing_radius:
+                continue
+            if any(not contained(a, b, boundary) for a,b in zip(polygon,polygon[1:]+polygon[:1])):
+                failures.append('whole hull escaped channel/planning boundary')
+        # Ordered card channels are active only for their own entry/exit.
+        # Check the projected whole hull between finite end caps, including bow
+        # entry and stern exit; a later card may navigate outside this water.
+        from shared.course import inside as point_inside, intersects, segment_distance
+        for water in course.get('channels', []):
+            key = water['instance_id']
+            if key in channel_finished or next_passage < water['begin_passage']:
+                continue
+            entry, exit = water.get('entry'), water['exit']
+            def plane(point, cap):
+                return sum((point[i]-cap['origin'][i])*cap['direction'][i] for i in (0,1))
+            if not channel_states[key] and entry and max(plane(p,entry) for p in polygon) >= 0:
+                channel_states[key] = True
+            if not channel_states[key]:
+                continue
+            poly = water['polygon']
+            clipped = polygon[:]
+            # Clip the hull to the part still between the physical caps. This
+            # allows crossing only an end cap, while retaining every side edge.
+            for cap, sign in [(entry,1),(exit,-1)]:
+                if cap is None:continue
+                result = []
+                for a,b in zip(clipped,clipped[1:]+clipped[:1]):
+                    u,v = sign*plane(a,cap),sign*plane(b,cap)
+                    if u >= -1e-8:result.append(a)
+                    if u*v < 0:result.append(tuple(a[i]+u/(u-v)*(b[i]-a[i]) for i in (0,1)))
+                clipped = result
+                if not clipped:break
+            for a,b in zip(clipped,clipped[1:]+clipped[:1]):
+                from shared.task_geometry import segment_within
+                if not segment_within(a,b,poly):
+                    failures.append('whole hull escaped reviewed channel: '+key)
+            if min(plane(p,exit) for p in polygon) > 0:
+                channel_finished.add(key)
         finish = course['finish']
         finish_error = math.hypot(x-finish['x'], y-finish['y'])
         inside = finish_error <= finish['radius_m']
@@ -146,13 +263,17 @@ def evaluate(samples, footprint, course, start_s, end_s):
         if count % 100 == 0:
             trajectory.append({'time_s': t, 'x': x, 'y': y, 'yaw_rad': yaw, 'speed_m_s': speed, 'clearance_m': step_minimum})
         previous = {'time_s': t, 'iteration': sample['iteration'], 'x': x, 'y': y,
-                    'stern_x': min(p[0] for p in polygon)}
+                    'polygon': polygon, 'radius': enclosing_radius}
     if not count or previous is None:
         missing.append('empty evidence window')
     if previous and (previous['time_s'] < end_s - 0.002 or abs(start_s - (previous['time_s'] - duration)) > 0.002):
         missing.append('evidence does not cover mission window')
     if minimum < course['minimum_clearance_m']:
         failures.append('minimum footprint clearance violated')
+    if course.get('channel_entry') and not channel_active:
+        failures.append('reviewed channel entrance was not crossed')
+    if not task_active:
+        failures.append('confirmed task entry was not crossed')
     if next_passage != len(sequence):
         failures.append('incomplete course/stern exit')
     if not finished:
@@ -185,6 +306,7 @@ def verify_contact_evidence(course, course_directory):
         course['contact_recorder_verified'] = (
             hashlib.sha256(path.read_bytes()).hexdigest() == course['contact_verification_sha256']
             and proof.get('scene_id') == course['scene_id'] and proof.get('outcome') == 'passed'
+            and ('contact_run_id' not in course or proof.get('run_id') == course['contact_run_id'])
             and any(s.get('contacts') for s in proof.get('samples', [])))
     except (ValueError, KeyError, OSError, TypeError):
         pass

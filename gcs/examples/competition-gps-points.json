@@ -1,0 +1,149 @@
+{
+  "points": [
+    {
+      "latitude": 51.566151,
+      "longitude": -4.034301645758707,
+      "color": "blue"
+    },
+    {
+      "latitude": 51.56616896630568,
+      "longitude": -4.034499861380495,
+      "color": "red"
+    },
+    {
+      "latitude": 51.566133033694314,
+      "longitude": -4.0344998613193015,
+      "color": "green"
+    },
+    {
+      "latitude": 51.56616896630568,
+      "longitude": -4.0351605801483394,
+      "color": "red"
+    },
+    {
+      "latitude": 51.566133033694314,
+      "longitude": -4.035160579826064,
+      "color": "green"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.034632005077359,
+      "color": "red"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.034764148804819,
+      "color": "green"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.03489629253228,
+      "color": "red"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.035028436259741,
+      "color": "green"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.035402843487546,
+      "color": "red"
+    },
+    {
+      "latitude": 51.56606885805042,
+      "longitude": -4.035402842531987,
+      "color": "red"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.03540284157643,
+      "color": "red"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.035226651850932,
+      "color": "green"
+    },
+    {
+      "latitude": 51.56606885805042,
+      "longitude": -4.035226651054528,
+      "color": "green"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.035226650258126,
+      "color": "green"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.03518260242855,
+      "color": "blue"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.0351605785137625,
+      "color": "orange"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.035138554598975,
+      "color": "purple"
+    },
+    {
+      "latitude": 51.566000406425765,
+      "longitude": -4.035160578636549,
+      "color": "yellow"
+    },
+    {
+      "latitude": 51.56597302577591,
+      "longitude": -4.035160578390976,
+      "color": "cyan"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.034940339365883,
+      "color": "zebra"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.034720100218003,
+      "color": "black"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.034367717581396,
+      "color": "blue"
+    },
+    {
+      "latitude": 51.566027787075626,
+      "longitude": -4.035402842054208,
+      "color": "purple"
+    },
+    {
+      "latitude": 51.56610992902521,
+      "longitude": -4.03522665145273,
+      "color": "purple"
+    },
+    {
+      "latitude": 51.566027787075626,
+      "longitude": -4.0347201003874185,
+      "color": "black"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.034499861070123,
+      "color": "yellow"
+    },
+    {
+      "latitude": 51.566151,
+      "longitude": -4.034235573894977,
+      "color": "brown"
+    },
+    {
+      "latitude": 51.56598671610084,
+      "longitude": -4.034279621922244,
+      "color": "brown"
+    }
+  ]
+}

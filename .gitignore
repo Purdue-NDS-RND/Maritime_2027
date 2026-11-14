@@ -7,3 +7,5 @@ __pycache__/
 /.codex
 /.agents
 /.aws
+gcs/*.env
+boat/*.env

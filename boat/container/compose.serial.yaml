@@ -1,0 +1,12 @@
+# Optional Jetson-to-Pixhawk USB serial connection, separate from the shore RFD.
+services:
+  boat:
+    devices:
+      - "${BOAT_SERIAL_DEVICE:?Set BOAT_SERIAL_DEVICE to the host Pixhawk device}:/dev/boat-pixhawk"
+    group_add:
+      - "${BOAT_SERIAL_GID:?Set BOAT_SERIAL_GID to the device numeric group ID}"
+    command: ["python3", "-m", "boat_app.node", "--ros-args",
+              "-p", "connection:=/dev/boat-pixhawk",
+              "-p", "baud:=${BOAT_BAUD:-115200}",
+              "-p", "http_host:=${BOAT_HTTP_HOST:-127.0.0.1}",
+              "-p", "http_port:=${BOAT_HTTP_PORT:-8091}"]

@@ -1,11 +1,11 @@
-"""Loopback development HTTP transport; no MAVLink access on HTTP threads."""
+"""Configurable boat HTTP transport; no MAVLink access on HTTP threads."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
 from urllib.parse import unquote, urlsplit
 
 
-def serve(control, port=8091):
+def serve(control, port=8091, host='127.0.0.1'):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -36,6 +36,12 @@ def serve(control, port=8091):
                     envelope = json.loads(self.rfile.read(length))
                     return self.reply(202, control.submit('upload', envelope, parts[1]))
                 if self.command == 'POST':
+                    if parts == ['mode']:
+                        length = int(self.headers.get('Content-Length', '0'))
+                        if not 0 < length <= 256:
+                            raise ValueError('mode request size must be 1..256 bytes')
+                        self.connection.settimeout(5)
+                        return self.reply(202, control.submit('mode', json.loads(self.rfile.read(length))))
                     if len(parts) == 3 and parts[0] == 'missions' and parts[2] == 'start':
                         return self.reply(202, control.submit('start', mission_id=parts[1]))
                     if parts in (['stop'], ['disarm']):
@@ -46,6 +52,6 @@ def serve(control, port=8091):
             except (ValueError, TypeError) as error:
                 self.reply(409, {'detail': str(error)})
         do_GET = do_POST = do_PUT = handle_request
-    server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    server = ThreadingHTTPServer((host, port), Handler)
     threading.Thread(target=server.serve_forever, name='boat-http', daemon=True).start()
     return server

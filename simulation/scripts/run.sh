@@ -28,6 +28,9 @@ Explicit WORLD/SCENARIO selections and redirected input/output skip the menu.
 Environment:
   SCENARIO=one|gate|multi|repeated_red|slalom|competition  Launch a Gazebo buoy scenario (default competition)
   BUOY_SEED=<integer>      Deterministically randomize the selected scenario
+  COURSE_SEED=<integer>    Rotate/deform the full competition course reproducibly
+  COURSE_VARIATION=mild|moderate|strong  Layout variation (default moderate)
+  COURSE_ROTATION_DEG=<degrees> Optional fixed rotation, otherwise seeded 0..360
   BOAT_MODEL=single|dual   Select forward or -45/+45 degree camera boat
   WATER=calm|normal|harsh  Override water independently (default calm)
   SIM_GPU=auto|nvidia|mesa Prefer working NVIDIA graphics, or select a renderer
@@ -180,6 +183,17 @@ if [[ -n ${BUOY_SEED:-} && -z $scenario ]]; then
     echo "ERROR: BUOY_SEED requires SCENARIO." >&2
     exit 2
 fi
+if [[ -n ${COURSE_SEED:-} ]]; then
+    [[ $scenario == competition && ${COURSE_SEED} =~ ^-?[0-9]+$ && -z ${BUOY_SEED:-} ]] || {
+        echo 'ERROR: COURSE_SEED requires SCENARIO=competition, an integer seed, and no BUOY_SEED.' >&2; exit 2;
+    }
+    case "${COURSE_VARIATION:-moderate}" in
+        mild|moderate|strong) ;;
+        *) echo 'ERROR: COURSE_VARIATION must be mild, moderate, or strong.' >&2; exit 2 ;;
+    esac
+elif [[ -n ${COURSE_VARIATION:-}${COURSE_ROTATION_DEG:-} ]]; then
+    echo 'ERROR: COURSE_VARIATION/COURSE_ROTATION_DEG require COURSE_SEED.' >&2; exit 2
+fi
 
 if [[ -n $scenario ]]; then
     case "$scenario" in
@@ -197,6 +211,11 @@ if [[ -n $scenario ]]; then
     )
     if [[ -n ${BUOY_SEED:-} ]]; then
         render_args+=(--seed "$BUOY_SEED")
+    fi
+    if [[ -n ${COURSE_SEED:-} ]]; then
+        render_args+=(--course-seed "$COURSE_SEED" --variation "${COURSE_VARIATION:-moderate}")
+        [[ -z ${COURSE_ROTATION_DEG:-} ]] || render_args+=(--rotation-deg "$COURSE_ROTATION_DEG")
+        printf 'Random course: seed=%s variation=%s rotation=%s\n' "$COURSE_SEED" "${COURSE_VARIATION:-moderate}" "${COURSE_ROTATION_DEG:-seeded}"
     fi
     python3 scripts/render_scenario.py "${render_args[@]}"
     export WORLD=active.sdf CAMERA_ENABLED=1

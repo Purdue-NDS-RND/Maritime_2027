@@ -9,6 +9,7 @@ From this directory:
 ```bash
 make validate
 make run                         # Calm, cameras off, competition; terminal setup menu
+make random-course SEED=45        # Generate a full-course preview + GCS observations
 WORLD=blueboat_calm.sdf make run # Direct world, no camera by default
 SCENARIO=gate make run           # Existing Gazebo buoy scene
 make smoke                       # Running boat: movement, HOLD, RTL, disarm
@@ -27,3 +28,6 @@ Read [setup](docs/SETUP.md), [operation](docs/USING_THE_SIM.md),
 [maintenance](docs/DEVELOPMENT.md), [troubleshooting](docs/TROUBLESHOOTING.md),
 [camera assets](docs/DUAL_CAMERA.md), and [scenario layouts](scenarios/README.md).
 The approximate BlueBoat model does not establish real-boat dynamics or clearance.
+
+For rotated, uneven and curved full-course layouts, see
+[random course testing](docs/USING_THE_SIM.md#random-full-course-layouts).

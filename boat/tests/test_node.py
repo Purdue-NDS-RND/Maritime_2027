@@ -18,10 +18,14 @@ class NodeTests(unittest.TestCase):
             mission = Path(__file__).resolve().parents[1] / "examples/mission.json"
             rclpy.init(args=["--ros-args", "-p", f"log_dir:={directory}",
                              "-p", "connection:=udpin:127.0.0.1:0",
+                             "-p", "baud:=57600", "-p", "http_host:=127.0.0.2",
+                             "-p", "http_port:=0",
                              "-p", f"mission_file:={mission}"])
             node = BoatNode()
             try:
                 self.assertEqual(len(node.command_services), 4)
+                self.assertEqual(node.get_parameter("baud").value, 57600)
+                self.assertEqual(node.http.server_address[0], "127.0.0.2")
                 node.publish_status()
                 response = node.handler("upload")(Trigger.Request(), Trigger.Response())
                 self.assertFalse(response.success)

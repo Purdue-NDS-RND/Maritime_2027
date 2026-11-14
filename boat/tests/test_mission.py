@@ -40,6 +40,15 @@ class MissionTests(unittest.TestCase):
             with self.subTest(point=point), self.assertRaises(ValueError):
                 self.load_changed(lambda data: data.update(waypoints=[point]))
 
+    def test_execution_budget_and_waypoint_limits_remain_unchanged(self):
+        for budget in (10, 7200):
+            self.assertEqual(self.load_changed(lambda d: d.update(timeout_s=budget)).timeout_s, budget)
+        for budget in (9, 7201):
+            with self.assertRaises(ValueError):
+                self.load_changed(lambda d: d.update(timeout_s=budget))
+        with self.assertRaises(ValueError):
+            self.load_changed(lambda d: d.update(waypoints=d['waypoints']*501))
+
     def test_distance_direction_and_dateline(self):
         self.assertAlmostEqual(distance_m(Point(0, 0), Point(0, 0.001)), 111.195, places=2)
         self.assertAlmostEqual(distance_m(Point(0, 179.999), Point(0, -179.999)), 222.39, places=2)

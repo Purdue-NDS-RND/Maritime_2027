@@ -15,5 +15,9 @@ services:
     volumes:
       - ${MISSION_DIR:-../examples}:/mission:ro
       - ../../simulation/logs/boat:/logs
-    command: ["python3", "-m", "boat_app.node", "--ros-args", "-p", "connection:=${BOAT_CONNECTION:-udpin:127.0.0.1:14551}"]
+    command: ["python3", "-m", "boat_app.node", "--ros-args",
+              "-p", "connection:=${BOAT_CONNECTION:-udpin:127.0.0.1:14551}",
+              "-p", "baud:=${BOAT_BAUD:-115200}",
+              "-p", "http_host:=${BOAT_HTTP_HOST:-127.0.0.1}",
+              "-p", "http_port:=${BOAT_HTTP_PORT:-8091}"]
     stop_grace_period: 20s

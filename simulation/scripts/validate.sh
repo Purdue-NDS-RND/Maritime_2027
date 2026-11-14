@@ -15,12 +15,12 @@ for script in "${scripts[@]}" scripts/smoke-test.py scripts/teleop_wasd.py; do
 done
 python_sources=(
     scripts/smoke-test.py scripts/teleop_wasd.py scripts/augment_blueboat_model.py scripts/render_scenario.py scripts/competition_scene.py scripts/gazebo_sensor_smoke.py
-    scripts/render_boat.py tests/test_boat_models.py
+    scripts/render_boat.py tests/test_boat_models.py scripts/random_course.py scripts/generate_course.py tests/test_random_course.py
     scripts/configure_camera_rate.py tests/test_camera_rate.py tests/test_gpu_selection.py
     scripts/render_water.py tests/test_water_rendering.py tests/test_run_menu.py
     scripts/scene_snapshot.py scripts/export_map.py scripts/export_competition.py scripts/export_active.py scripts/alignment_probe.py
     scripts/alignment_report.py scripts/footprint.py scripts/evaluate_run.py scripts/calibrate.py
-    scripts/calibration_report.py scripts/make_course.py tests/test_scene_export.py tests/test_evaluator.py
+    scripts/calibration_report.py scripts/make_course.py scripts/survey_runner.py scripts/survey_evaluation.py tests/test_scene_export.py tests/test_evaluator.py tests/test_ordered_requirements.py
     scripts/calibration_result.py tests/test_calibration.py
     tests/test_scenario_rendering.py tests/test_competition.py
 )
@@ -91,6 +91,11 @@ for scenario in one gate multi repeated_red slalom competition; do
         --seed 42
 done
 
+python3 scripts/render_scenario.py \
+    --scenario scenarios/competition.json --course-seed 42 --variation strong \
+    --base-world worlds/blueboat_rgbd_base.sdf \
+    --output-world "$tmp_dir/competition-random.sdf" --manifest "$tmp_dir/competition-random.json"
+
 for water in calm normal harsh; do
     python3 scripts/render_water.py --source "$tmp_dir/gate.sdf" \
         --output "$tmp_dir/gate-$water.sdf" --water "$water"
@@ -127,7 +132,7 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
     XAUTH_FILE=/dev/null DISPLAY=:0 HOST_UID=$(id -u) HOST_GID=$(id -g) \
         docker compose -f container/compose.yaml config --quiet
     if docker image inspect "${SIM_IMAGE:-maritime-sim:latest}" >/dev/null 2>&1; then
-        for scenario in one gate multi repeated_red slalom competition gate-calm gate-normal gate-harsh; do
+        for scenario in one gate multi repeated_red slalom competition competition-random gate-calm gate-normal gate-harsh; do
             cp "$tmp_dir/$scenario.sdf" "$tmp_dir/$scenario-resolved.sdf"
             sed -i \
                 -e 's#model://blueboat_rgbd#file:///opt/boat_sim/models/blueboat_rgbd#g' \
@@ -164,9 +169,12 @@ python3 -m unittest discover -s tests -p test_camera_rate.py -q
 
 python3 -m unittest discover -s tests -p test_scene_export.py -q
 python3 -m unittest discover -s tests -p test_evaluator.py -q
+PYTHONPATH=..:../gcs/tests python3 -m unittest discover -s tests -p test_ordered_requirements.py -q
+python3 -m unittest discover -s tests -p test_survey_scenarios.py -q
 python3 -m unittest discover -s tests -p test_calibration.py -q
 
 python3 -m unittest discover -s tests -p test_competition.py -q
+python3 -m unittest discover -s tests -p test_random_course.py -q
 
 python3 -m unittest discover -s tests -p test_scenario_rendering.py -q
 python3 -m unittest discover -s tests -p test_run_menu.py -q

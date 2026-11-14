@@ -1,27 +1,30 @@
 .DEFAULT_GOAL := validate
+ENV_FILE ?=
+SERIAL ?= 0
+COMPOSE = docker compose $(if $(ENV_FILE),--env-file "$(ENV_FILE)") -f container/compose.yaml $(if $(filter 1,$(SERIAL)),-f container/compose.serial.yaml)
 .PHONY: validate test build run down status upload start stop disarm
 
 validate:
 	python3 -m unittest discover -s tests -p 'test_mission.py' -v
 	python3 -m compileall -q boat_app tests
 	bash -n container/entrypoint.sh
-	docker compose -f container/compose.yaml config --quiet
+	$(COMPOSE) config --quiet
 
 build:
-	docker compose -f container/compose.yaml build
+	$(COMPOSE) build
 
 test:
 	docker run --rm --network none "$${BOAT_IMAGE:-maritime-boat:latest}" python3 -m unittest discover -s /ws/src/boat_app/tests -v
 
 run:
 	mkdir -p ../simulation/logs/boat
-	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose -f container/compose.yaml up --no-build
+	HOST_UID=$$(id -u) HOST_GID=$$(id -g) $(COMPOSE) up --no-build
 
 down:
-	docker compose -f container/compose.yaml down
+	$(COMPOSE) down
 
 status:
-	docker compose -f container/compose.yaml exec -T boat /boat-entrypoint.sh ros2 topic echo /boat_mission/status
+	$(COMPOSE) exec -T boat /boat-entrypoint.sh ros2 topic echo /boat_mission/status
 
 upload start stop disarm:
-	docker compose -f container/compose.yaml exec -T boat /boat-entrypoint.sh python3 -m boat_app.client $@
+	$(COMPOSE) exec -T boat /boat-entrypoint.sh python3 -m boat_app.client $@

@@ -10,6 +10,7 @@ COPY gcs/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY shared /app/shared
 COPY gcs/app /app/app
+COPY gcs/examples /app/examples
 COPY --from=frontend /frontend/dist /app/static
 ENV PYTHONUNBUFFERED=1
 CMD ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8080"]

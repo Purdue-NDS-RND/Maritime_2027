@@ -1,9 +1,15 @@
 .DEFAULT_GOAL := run
 
-.PHONY: run build build-cached rebuild validate smoke teleop sensor-smoke buoy-tracking-smoke down logs
+.PHONY: run random-course build build-cached rebuild validate smoke teleop sensor-smoke buoy-tracking-smoke down logs
 
 run:
 	@./scripts/run.sh
+
+# Development tool only: writes a new bundle, never starts/replaces a runtime.
+random-course:
+	@set --; [ -z "$${ROTATION:-}" ] || set -- "$$@" --rotation-deg "$$ROTATION"; \
+	[ "$${CHECK:-0}" != 1 ] || set -- "$$@" --check-compiler; \
+	python3 scripts/generate_course.py --seed "$${SEED:-42}" --variation "$${VARIATION:-moderate}" "$$@"
 
 build:
 	./scripts/run.sh --build-only

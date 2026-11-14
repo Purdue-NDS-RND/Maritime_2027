@@ -13,7 +13,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SELECTION_KEYS = ("WORLD", "SCENARIO", "BUOY_SEED", "WATER", "BOAT_MODEL", "CAMERAS", "MAVLINK_STREAMRATE")
+SELECTION_KEYS = ("WORLD", "SCENARIO", "BUOY_SEED", "WATER", "BOAT_MODEL", "CAMERAS", "MAVLINK_STREAMRATE",
+                  "COURSE_SEED", "COURSE_VARIATION", "COURSE_ROTATION_DEG")
 
 
 class RunMenuTests(unittest.TestCase):

@@ -27,9 +27,11 @@ class BoatNode(Node):
     def __init__(self):
         super().__init__("boat_mission")
         self.declare_parameter("connection", "udpin:127.0.0.1:14551")
+        self.declare_parameter("baud", 115200)
         self.declare_parameter("mission_file", "/mission/mission.json")
         self.declare_parameter("log_dir", "/logs")
         self.declare_parameter("http_port", 8091)
+        self.declare_parameter("http_host", "127.0.0.1")
         self.record_lock = threading.Lock()
         self.log_dir = Path(self.get_parameter("log_dir").value)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -41,11 +43,15 @@ class BoatNode(Node):
         self.events = (self.run_dir / "events.jsonl").open("x", buffering=1)
         self.publisher = self.create_publisher(String, "~/status", 10)
         connection = self.get_parameter("connection").value
-        link = mavutil.mavlink_connection(connection, source_system=245, source_component=191)
+        baud = self.get_parameter("baud").value
+        if baud <= 0:
+            raise ValueError("baud must be positive")
+        link = mavutil.mavlink_connection(connection, baud=baud, source_system=245, source_component=191)
         self.controller = Executor(link, self.record)
         self.record({"event": "session", "connection": connection, "run_id": run_id})
         self.control = Control(self.controller, self.log_dir)
-        self.http = serve(self.control, self.get_parameter("http_port").value)
+        self.http = serve(self.control, self.get_parameter("http_port").value,
+                          host=self.get_parameter("http_host").value)
         self.command_group = ReentrantCallbackGroup()
         self.command_services = [self.create_service(Trigger, f"~/{name}", self.handler(name), callback_group=self.command_group)
                                  for name in ("upload", "start", "stop", "disarm")]

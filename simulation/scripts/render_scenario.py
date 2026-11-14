@@ -30,6 +30,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-world", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--seed", type=int)
+    parser.add_argument("--course-seed", type=int)
+    parser.add_argument("--variation", choices=("mild", "moderate", "strong"), default="moderate")
+    parser.add_argument("--rotation-deg", type=float)
     parser.add_argument("--cameras", choices=("on", "off"), default="on")
     parser.add_argument("--boat-model", choices=("single", "dual"), default="single")
     return parser.parse_args()
@@ -135,6 +138,13 @@ def main() -> int:
     except json.JSONDecodeError as error:
         raise SystemExit(f"Scenario source is not valid JSON: {error.msg}") from None
     config = validate_scenario_source(loaded_config)
+    if args.course_seed is not None:
+        if args.seed is not None:
+            raise SystemExit('Use course-seed or legacy seed, not both')
+        from random_course import generate
+        config = generate(config, args.course_seed, args.variation, args.rotation_deg)
+    elif args.rotation_deg is not None:
+        raise SystemExit('rotation-deg requires course-seed')
     rng = random.Random(args.seed) if args.seed is not None else None
     buoys = []
     for source in config["buoys"]:
@@ -208,6 +218,8 @@ def main() -> int:
         manifest.update(boat_pose=config["boat_pose"], buoys=[o for o in competition_objects if o.get("kind", "buoy") == "buoy"],
                         props=[o for o in competition_objects if o.get("kind", "buoy") != "buoy"],
                         stations=config["stations"], source=config["source"], approximation_notes=config["approximation_notes"])
+        if 'generation' in config:
+            manifest['generation'] = config['generation']
     if args.boat_model == "dual":
         manifest["boat_model"] = "dual"
     try:
