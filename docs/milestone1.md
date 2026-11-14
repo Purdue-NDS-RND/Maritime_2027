@@ -26,8 +26,42 @@ now installs `pyserial==3.5`; a native ARM64 rebuild, host validation and all
 41 container tests passed, including MAVLink heartbeat reception through a
 local virtual serial port. Evidence: `simulation/logs/boat/serial-dependency-tests.log`.
 This verifies serial software availability, not physical device access.
-Physical Jetson/serial/network acceptance remains unverified;
+An additional read-only Jetson bench check on 2026-11-14 confirmed the native
+ARM64 container running, USB MAVLink heartbeat reception from a CubeOrange+,
+and GCS backend access over Tailscale at `http://boat-jetson:8091`. Five GCS
+status reads succeeded in 11.3–12.2 ms each during this check. The controller
+reported ArduPilot `MAV_TYPE_HEXAROTOR` (system/component 1/1), so the boat app
+correctly rejected it as an unsupported vehicle and remained disconnected.
+The idle container was stopped for an eight-second passive serial probe and
+restarted. No vehicle commands, firmware changes or parameter writes were made.
+The GCS Field profile now targets that API; separate map telemetry is waiting.
+Evidence: `simulation/logs/boat/jetson-api-check-20261114T201706Z.json`.
+A later check the same day, after the operator flashed ArduRover, confirmed
+the boat app recognizes system/component 1/1 and reports `ready`, disarmed,
+HOLD. The Jetson field config was changed to the Cube's stable USB by-id path
+after its numbered device changed. Both apps were started, and three GCS
+status reads returned fresh data in 11.5–15.1 ms. GPS fix is zero and `0,0`
+is not a usable navigation position; separate passive map telemetry is waiting.
+Evidence: `simulation/logs/boat/jetson-rover-check-20261114T220051Z.json`.
+Mission upload/readback, physical radio and motion remain unverified;
 see the [boat field guide](../boat/README.md#jetson-field-connections).
+
+Boat console diagnostics now distinguish opened transport, listening API,
+supported controller heartbeat, mode/armed state and missing GPS. They report
+heartbeat loss/reconnection and name unsupported firmware; unchanged waiting
+messages repeat every 15 seconds. `make scan` lists USB candidates without
+opening ports. Field device/group defaults are `auto`, selecting one recognized
+primary USB interface and deriving its group; zero or multiple candidates stop
+startup with explicit selection guidance. Manual paths/groups remain supported.
+Desktop and native ARM64 builds, host checks and all 52 packaged boat tests passed
+on 2026-11-14, including controller swaps/ambiguity, heartbeat diagnostics and
+real ROS logger transitions. The deployed Jetson automatically selected its Cube
+and logged CONNECTED, HOLD, DISARMED and no GPS fix. No vehicle commands were sent.
+Evidence: `simulation/logs/boat/startup-diagnostics-tests.log`,
+`simulation/logs/boat/startup-diagnostics-arm64-tests.log` and
+`simulation/logs/boat/startup-diagnostics-jetson-console.log`.
+Different physical controller models and unplug/replug recovery were not tested;
+device changes still require container recreation. GCS behavior is unchanged.
 
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom

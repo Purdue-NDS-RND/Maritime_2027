@@ -43,6 +43,11 @@ class NodeTests(unittest.TestCase):
                     while node.controller.state == "disconnected" and time.monotonic() < deadline:
                         rclpy.spin_once(node, timeout_sec=0.1)
                     self.assertEqual(node.controller.state, "ready")
+                    # Exercise the real ROS logger across warning -> info ->
+                    # warning (waiting, connected, no GPS), not just a mock.
+                    node.publish_status()
+                    self.assertEqual(node.console_status.previous['controller'][0][:2], (1, 1))
+                    self.assertFalse(node.console_status.previous['gps'][0][0])
                 finally:
                     sender.close()
             finally:

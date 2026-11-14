@@ -21,7 +21,8 @@ make test      # protocol/lifecycle, virtual serial port and ROS construction te
 
 Docker, Compose, Make and Python are required on the host. ROS and
 `pymavlink==2.4.50` plus `pyserial==3.5` for serial connections are installed
-in the image. Jetson deployment is untested.
+in the image. A Jetson ARM64 container, USB MAVLink reception and GCS status
+requests over Tailscale were bench-tested; physical boat execution is unverified.
 `make build` builds natively for the computer running it: x86-64 on the desktop,
 ARM64 on the Jetson. The same Dockerfile is used for both.
 
@@ -33,6 +34,7 @@ Run these from `boat/`:
 make build    # build the image; repeat after application/dependency changes
 make sim      # connect using sim.env (make run remains an alias)
 make field    # connect to physical hardware using field.env
+make scan     # list USB controller candidates on this computer; no serial probing
 make status   # watch status; Ctrl-C exits the viewer
 make stop     # request and confirm HOLD
 make down     # shut down the container
@@ -51,8 +53,8 @@ commands remain explicit.
 Both starts use the same launcher and application command; only the selected
 env file changes. Edit `sim.env` for simulation and `field.env` for hardware.
 `sim.env` ships with the existing simulator defaults. `field.env` is also tracked
-and ships with required hardware values blank; `field.env.example` is a reset
-template. Neither settings
+and defaults to USB device/group discovery with baud 115200; `field.env.example`
+is a reset template. Neither settings
 file is copied into the image. Changes take effect on the next launch.
 
 ## Jetson field connections
@@ -60,15 +62,24 @@ file is copied into the image. Changes take effect on the next launch.
 On the Jetson, from `boat/`, do this once:
 
 ```bash
-ls -l /dev/serial/by-id/
-stat -Lc %g /dev/serial/by-id/YOUR_PIXHAWK
+make scan
 nano field.env
 ```
 
-Fill in the actual serial device path, its numeric group ID and the Pixhawk baud.
-The template deliberately leaves these required hardware settings blank;
-`make field` rejects missing settings. A USB/UART device
-is exposed as `/dev/boat-fcu` with the selected device group. Configure the actual
+`BOAT_SERIAL_DEVICE=auto` selects exactly one recognized USB controller from
+`/dev/serial/by-id/`; name matches include Cube, Pixhawk, Holybro, PX4 and CUAV.
+Secondary USB interfaces are excluded from automatic selection, and numbered
+tty aliases are deduplicated. Discovery reads names and metadata only: it does
+not open ports or verify firmware. `BOAT_SERIAL_GID=auto` derives the selected
+device's group. Both values are resolved for this launch without rewriting the
+env file. A different recognized controller can be selected on the next launch.
+No matches or multiple candidates stop startup with a device list; set an
+explicit `BOAT_SERIAL_DEVICE=/dev/serial/by-id/...` to choose. Unrecognized USB
+devices and direct UARTs need an explicit path. Numeric group overrides remain
+supported. Run `make scan` on the Jetson to inspect the Jetson's devices.
+
+Set `BOAT_BAUD` to the actual Pixhawk connection's rate (default 115200).
+A USB/UART device is exposed as `/dev/boat-fcu` with the selected device group. Configure the actual
 Pixhawk port for MAVLink and match its baud; verify fresh heartbeat, position,
 velocity and GPS messages rather than assuming the simulator's stream settings.
 Direct Jetson UART wiring also needs the correct electrical interface and host
@@ -85,6 +96,8 @@ in each env selects that YAML; the serial template also selects the small
 command. This overlay is needed because simulation has no serial device to map.
 Simulator commands load `sim.env`, not `field.env` or a local `.env`.
 Exported shell overrides still follow normal Compose precedence.
+Direct Compose invocations do not resolve `auto`; use `make field` or supply
+explicit device/group overrides when invoking Compose yourself.
 For an existing network MAVLink connection, a field env can select only the base
 YAML and set `BOAT_CONNECTION` to the appropriate network endpoint instead.
 Paths in `MISSION_DIR` are relative to `boat/container/`, or may be absolute;
@@ -92,6 +105,16 @@ Paths in `MISSION_DIR` are relative to `boat/container/`, or may be absolute;
 the base configuration and `sim.env` to locate the shared project, without
 applying simulator settings to a running field container. Inspect and shut down
 the existing container before launching with changed settings.
+
+Startup prints the selected device and group, the MAVLink endpoint/baud and the
+API listener. Opening a serial port is distinct from receiving a supported
+heartbeat. Once connected, the console reports vehicle/component IDs, mode and
+armed state, plus a separate GPS fix message. Missing GPS is explicit even when
+the controller is connected. It reports heartbeat loss and reconnection;
+unchanged waiting diagnostics repeat every 15 seconds, while normal status
+prints only when it changes. Unsupported firmware is named, for example
+`MAV_TYPE_HEXAROTOR`, rather than silently appearing to have no controller.
+These messages also appear in `docker compose`/`docker logs` output.
 
 Field HTTP defaults to `BOAT_HTTP_HOST=0.0.0.0`, listening on all host IPv4
 interfaces at port 8091. In the shore GCS's **Connections**, set its mission URL
@@ -121,9 +144,21 @@ mission directory in `field.env`. GCS uploads need no local mission file. Logs
 and journals retain the existing `simulation/logs/boat/` location. Neither launch
 adds boot startup or an automatic restart policy.
 
-Configuration and synthetic tests do not establish Jetson, USB/serial, radio,
-RC takeover, firmware failsafe or physical motion acceptance. Verify the ARM64
-build and disarmed connection/upload/readback before controlled movement tests.
+The 2026-11-14 bench check reached `http://boat-jetson:8091` through the GCS
+backend and received MAVLink heartbeats from a USB-connected CubeOrange+.
+That controller reported `MAV_TYPE_HEXAROTOR`, so the boat app correctly remained
+disconnected: it accepts ArduPilot ground rovers and surface boats only. Missing
+GPS does not explain an unsupported vehicle type. After the operator flashed
+ArduRover, the same bench setup reported `ready`, disarmed and HOLD, with fresh
+status received through the GCS. The Jetson's `field.env` now selects this
+Cube's stable `/dev/serial/by-id/...-if00` path because its numbered USB device
+changed after flashing. GPS fix remains zero; the reported `0,0` position is
+not usable for navigation. The separate passive map telemetry feed is waiting.
+No mission upload or execution was tested.
+
+These checks do not establish radio, RC takeover, firmware failsafe or physical
+motion acceptance. Verify a supported disarmed connection and mission
+upload/readback before controlled movement tests.
 Total MAVLink loss can leave the Pixhawk executing AUTO; inspect/configure its
 physical failsafes independently of this application.
 

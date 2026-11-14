@@ -1,13 +1,15 @@
 .DEFAULT_GOAL := validate
 COMPOSE = docker compose -p maritime-boat --env-file sim.env -f container/compose.yaml
-.PHONY: help validate test build sim field run down status upload start stop disarm
+.PHONY: help validate test build sim field run down status scan upload start stop disarm
 
 help:
-	@printf '%s\n' 'make build   Build the image for this computer' 'make sim     Start the boat app for simulation' 'make field   Start with field.env and the physical Pixhawk' 'make status  Watch the running boat status' 'make stop    Request HOLD' 'make down    Shut down the boat container' 'make test    Run tests without a vehicle'
+	@printf '%s\n' 'make build   Build the image for this computer' 'make sim     Start the boat app for simulation' 'make field   Start with field.env and the physical Pixhawk' 'make scan    List USB flight controller candidates on this computer' 'make status  Watch the running boat status' 'make stop    Request HOLD' 'make down    Shut down the boat container' 'make test    Run tests without a vehicle'
 
 validate:
 	python3 -m unittest discover -s tests -p 'test_mission.py' -v
 	python3 -m unittest discover -s tests -p 'test_launch.py' -v
+	python3 -m unittest discover -s tests -p 'test_serial_devices.py' -v
+	python3 -m unittest discover -s tests -p 'test_console_status.py' -v
 	python3 -m compileall -q boat_app tests
 	bash -n container/entrypoint.sh container/launch.sh
 	docker compose -p maritime-boat --env-file sim.env config --quiet
@@ -29,6 +31,9 @@ down:
 
 status:
 	$(COMPOSE) exec -T boat /boat-entrypoint.sh ros2 topic echo /boat_mission/status
+
+scan:
+	@python3 container/serial_devices.py scan
 
 upload start stop disarm:
 	$(COMPOSE) exec -T boat /boat-entrypoint.sh python3 -m boat_app.client $@

@@ -126,6 +126,12 @@ class ExecutorTests(unittest.TestCase):
                 self.link.put("HEARTBEAT", autopilot=3, type=2)
                 self.assertFalse(self.executor.receive())
                 self.assertIsNone(self.executor.system)
+                self.assertIn('Unsupported heartbeat', self.executor.detail)
+                self.assertIn('MAV_TYPE_QUADROTOR', self.executor.detail)
+                # Other onboard components must not hide the firmware diagnostic.
+                self.link.put('HEARTBEAT', autopilot=8, type=27, source_component=0)
+                self.assertFalse(self.executor.receive())
+                self.assertIn('MAV_TYPE_QUADROTOR', self.executor.detail)
                 self.link.put("HEARTBEAT", autopilot=3, type=vehicle_type,
                               custom_mode=4, base_mode=0)
                 self.executor.receive()

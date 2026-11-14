@@ -89,6 +89,13 @@ class Executor:
                     and msg.autopilot == mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
                     and msg.type in (mavutil.mavlink.MAV_TYPE_SURFACE_BOAT,
                                      mavutil.mavlink.MAV_TYPE_GROUND_ROVER)):
+                if kind == "HEARTBEAT" and msg.autopilot != mavutil.mavlink.MAV_AUTOPILOT_INVALID:
+                    vehicle = mavutil.mavlink.enums['MAV_TYPE'].get(msg.type)
+                    autopilot = mavutil.mavlink.enums['MAV_AUTOPILOT'].get(msg.autopilot)
+                    self.detail = (f"Unsupported heartbeat: {vehicle.name if vehicle else msg.type}, "
+                                   f"{autopilot.name if autopilot else msg.autopilot} "
+                                   f"from {msg.get_srcSystem()}/{msg.get_srcComponent()}; "
+                                   "requires ArduPilot ground-rover or surface-boat firmware")
                 return False
             self.system, self.component = msg.get_srcSystem(), msg.get_srcComponent()
             self.link.target_system, self.link.target_component = self.system, self.component

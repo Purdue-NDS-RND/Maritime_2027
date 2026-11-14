@@ -18,6 +18,8 @@ class LaunchTests(unittest.TestCase):
         (self.boat / "container").mkdir(parents=True)
         shutil.copyfile(Path(__file__).resolve().parents[1] / "container/launch.sh",
                         self.boat / "container/launch.sh")
+        shutil.copyfile(Path(__file__).resolve().parents[1] / "container/serial_devices.py",
+                        self.boat / "container/serial_devices.py")
         (self.boat / "sim.env").write_text("# simulator settings\n")
         (self.boat / "field.env.example").write_text("# field settings template\n")
         binary = root / "bin"
@@ -31,6 +33,11 @@ with open(os.environ['DOCKER_CALLS'], 'a') as output:
     output.write(json.dumps(sys.argv[1:]) + '\\n')
 if sys.argv[1] == 'ps':
     print(os.environ.get('FAKE_RUNNING', ''))
+elif '--format' in sys.argv and 'json' in sys.argv:
+    print(os.environ.get('FAKE_CONFIG', '{"services":{"boat":{}}}'))
+elif 'up' in sys.argv and 'EXPECTED_DEVICE' in os.environ:
+    assert os.environ['BOAT_SERIAL_DEVICE'] == os.environ['EXPECTED_DEVICE']
+    assert os.environ['BOAT_SERIAL_GID'] == os.environ['EXPECTED_GID']
 """)
         docker.chmod(0o755)
         self.calls_path = root / "docker-calls.jsonl"
@@ -73,6 +80,28 @@ if sys.argv[1] == 'ps':
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Missing sim.env", result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_serial_selection_exports_resolved_device_and_group(self):
+        (self.boat / "field.env").write_text("# local settings\n")
+        self.env.update(FAKE_CONFIG=json.dumps({'services': {'boat': {
+            'devices': [{'source': '/dev/null', 'target': '/dev/boat-fcu'}],
+            'group_add': ['auto'],
+        }}}), EXPECTED_DEVICE='/dev/null', EXPECTED_GID=str(Path('/dev/null').stat().st_gid))
+        result = self.launch('field')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Selected USB/serial device', result.stderr)
+        self.assertEqual(self.calls()[-1][-2:], ['up', '--no-build'])
+
+    def test_missing_device_never_starts_container(self):
+        (self.boat / "field.env").write_text("# local settings\n")
+        self.env['FAKE_CONFIG'] = json.dumps({'services': {'boat': {
+            'devices': [{'source': '/missing-controller', 'target': '/dev/boat-fcu'}],
+            'group_add': ['auto'],
+        }}})
+        result = self.launch('field')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('make scan', result.stderr)
+        self.assertFalse(any('up' in call for call in self.calls()))
 
     def test_neither_launch_replaces_running_boat(self):
         (self.boat / "field.env").write_text("# local settings\n")

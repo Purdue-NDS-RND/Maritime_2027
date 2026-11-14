@@ -21,6 +21,7 @@ from .control import Control
 from .http_api import serve
 from .executor import Executor
 from .mission import Mission
+from .console_status import ConsoleStatus
 
 
 class BoatNode(Node):
@@ -44,17 +45,28 @@ class BoatNode(Node):
         self.publisher = self.create_publisher(String, "~/status", 10)
         connection = self.get_parameter("connection").value
         baud = self.get_parameter("baud").value
-        link = mavutil.mavlink_connection(connection, baud=baud, source_system=245, source_component=191)
+        self.console_status = ConsoleStatus(self.get_logger())
+        self.get_logger().info(f"Opening MAVLink connection: {connection} (baud {baud}).")
+        try:
+            link = mavutil.mavlink_connection(connection, baud=baud, source_system=245, source_component=191)
+        except Exception as error:
+            self.get_logger().error(f"Cannot open MAVLink connection {connection}: {error}. "
+                                    "Check the device mapping, serial group and baud; run make scan on the host.")
+            raise
+        self.get_logger().info("MAVLink transport opened; waiting for a supported flight-controller heartbeat.")
         self.controller = Executor(link, self.record)
         self.record({"event": "session", "connection": connection, "run_id": run_id})
         self.control = Control(self.controller, self.log_dir)
         self.http = serve(self.control, self.get_parameter("http_port").value,
                           host=self.get_parameter("http_host").value)
+        host, port = self.http.server_address
+        self.get_logger().info(f"Boat API LISTENING: http://{host}:{port}/status. "
+                               "Remote clients use this computer's reachable IP or hostname.")
         self.command_group = ReentrantCallbackGroup()
         self.command_services = [self.create_service(Trigger, f"~/{name}", self.handler(name), callback_group=self.command_group)
                                  for name in ("upload", "start", "stop", "disarm")]
         self.create_timer(0.5, self.publish_status)
-        self.get_logger().info(f"Waiting for boat on {connection}; evidence: {self.run_dir}")
+        self.get_logger().info(f"Evidence: {self.run_dir}. Startup does not upload, arm or start a mission.")
 
     def record(self, event):
         with self.record_lock:
@@ -65,6 +77,7 @@ class BoatNode(Node):
         status = self.control.status()
         self.publisher.publish(String(data=json.dumps(status, allow_nan=False)))
         self.record({"event": "status", **status})
+        self.console_status.update(status, time.monotonic())
 
     def handler(self, name):
         def handle(request, response):

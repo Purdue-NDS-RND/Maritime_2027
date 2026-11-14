@@ -21,7 +21,6 @@ compose=(docker compose -p maritime-boat --env-file "$settings_file")
 
 export HOST_UID=$(id -u)
 export HOST_GID=$(id -g)
-"${compose[@]}" config --quiet
 # Both deployments share one project. Never replace an app that may own a mission.
 running=$(docker ps -q --filter label=com.docker.compose.project=maritime-boat \
     --filter label=com.docker.compose.service=boat)
@@ -31,5 +30,16 @@ if [[ -n "$running" ]]; then
     exit 1
 fi
 
+printf '[boat] Starting %s using %s.\n' "$deployment" "$settings_file"
+# Compose resolves env-file values and shell overrides. Discovery only inspects
+# device names/metadata; no additional process opens the MAVLink serial link.
+serial_settings=$("${compose[@]}" config --format json | python3 container/serial_devices.py resolve)
+if [[ -n "$serial_settings" ]]; then
+    mapfile -t serial_values <<< "$serial_settings"
+    export BOAT_SERIAL_DEVICE="${serial_values[0]}"
+    export BOAT_SERIAL_GID="${serial_values[1]}"
+fi
+"${compose[@]}" config --quiet
+printf '%s\n' '[boat] Starting application; a listening API does not confirm a flight-controller heartbeat.'
 mkdir -p ../simulation/logs/boat/field-missions
 exec "${compose[@]}" up --no-build
