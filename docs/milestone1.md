@@ -1,5 +1,31 @@
 # Milestone 1: camera-free slalom through the web GCS
 
+Compact-course planner follow-up (2026-11-15): intermediate Gate cards now
+complete at their last required crossing instead of visiting their standalone
+stopping centre. A full-task return approach can cross passage lines backward
+before its first forward passage without earning progress. Direction, side,
+order, obstacle clearance and water containment remain mandatory once the task
+begins; final cards retain their reviewed stopping region. The UI explains the
+crossing endpoint and hides unused intermediate Gate stopping markers. Search
+exhaustion names the failed card and next unreached passage where available.
+
+All 188 backend tests, 41 frontend tests, render checks, production build,
+Python compilation and Compose/diff checks passed. Compact-layout regressions
+cover rotations, starts beyond early/later turns, unsafe finishes, narrow gates,
+tampered paths and repeated-generation failure invalidation. Nine reconstructed
+compact runs generated/validated in 0.61–0.76 s. After rebuilding/replacing the
+normal GCS, three API generations using the saved eight-buoy survey, reconstructed
+roles, a manual start and the UI's suggested boundary took 0.70–0.72 s each;
+all produced the same valid 11-waypoint route at 1.8 m required clearance.
+Additional compact Gate/Gate, Slalom/Gate and Gate/Slalom/Gate/Slalom sequences
+generated and validated. Deployed backend/shared source and frontend index were
+compared with the working tree build. Browser permission denied access to the
+separate preview, so this follow-up has API/render evidence, not visual browser
+acceptance or vehicle-motion/physical-clearance acceptance. No approval, upload,
+start or vehicle commands were issued. Raw evidence is under ignored
+`simulation/logs/gcs/compact-route-fix/`; saved survey files and connection profiles
+were retained. The normal fresh-on-restart planning-session policy is unchanged.
+
 Course-recognition follow-up (2026-11-14): the compiler rejects intersecting
 slalom gates and gates crossing nonadjacent interior progression. Ranking now
 balances reference spacing with local heading continuity and transverse gate

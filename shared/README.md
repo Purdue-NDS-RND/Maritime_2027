@@ -27,6 +27,12 @@ object; deployment overlays do not add obstacles.
 containment. Live version 3 maps support dimension-free `point` objects, need no simulator identity and are never
 simulator verified. GCS backend planning lives in `gcs/app/planner.py`; shared
 code contains geometry and final validation, not a planning/control service.
+Before the first passage, reverse crossings are approach motion and earn no
+progress. The first forward crossing must meet its side/window requirement;
+subsequent crossings retain direction and order checks. All approach segments
+still obey object buffers and permitted water. Run validation permits an
+intermediate Gate endpoint after all its crossings rather than requiring its
+standalone stopping centre; final Gate cards retain the selected stopping disk.
 For a channel finish selected beyond its final buoy pair, that pair is the
 actual final passage. Containment remains mandatory through the finite exit
 crossing; only then may the route leave for its stopping region. The complete

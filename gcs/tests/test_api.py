@@ -75,6 +75,29 @@ class ApiTests(unittest.TestCase):
             self.assertTrue(self.client.post('/api/validate').json()['valid'])
         self.assertFalse(self.calls)
 
+    def test_compact_run_repeated_generation_and_failure_are_atomic(self):
+        from test_compact_course import compact_course
+        m, run, _ = compact_course()
+        self.w.edit({'revision': self.w.read()['revision'], 'map': m, 'new_import': True})
+        self.w.edit({'revision': self.w.read()['revision'], 'run_draft': run})
+        reviewed_steps = self.w.read()['run_draft']['steps']
+        for _ in range(2):
+            value = self.generate()
+            self.assertEqual(value['workspace']['run_draft']['steps'], reviewed_steps)
+            self.assertTrue(self.client.post('/api/validate').json()['valid'])
+            self.assertIsNone(value['workspace']['approval'])
+        bad = deepcopy(run)
+        bad['settings']['clearance_m'] = bad['settings']['preferred_buffer_m'] = 3
+        self.w.edit({'revision': self.w.read()['revision'], 'run_draft': bad})
+        value = self.client.post('/api/generate').json()
+        self.assertFalse(value['success'])
+        self.assertEqual(value['failed_instance_id'], 'gate')
+        self.assertTrue(value['diagnostics'][0].startswith('Gate 1:'))
+        self.assertEqual(value['errors'][0]['instance_id'], 'gate')
+        self.assertFalse(value['workspace']['run_draft']['waypoints'])
+        self.assertIsNone(value['workspace']['approval'])
+        self.assertFalse(self.calls)
+
     def approve(self):
         self.generate();self.assertTrue(self.client.post('/api/validate').json()['valid'])
         r=self.client.post('/api/approve');self.assertEqual(r.status_code,200,r.text);return r.json()

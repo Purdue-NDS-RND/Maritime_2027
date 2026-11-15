@@ -38,9 +38,14 @@ def generate_run(object_map, run, status=None, max_seconds=60):
             if not d.get('course_confirmed'):
                 raise ValueError('Review and confirm card '+current)
             if step['type'] != 'manual':
-                result = generate(object_map, d, deadline=deadline, max_seconds=deadline-time.monotonic(), transit_finish=not final)
+                result = generate(object_map, d, deadline=deadline, max_seconds=deadline-time.monotonic(),
+                                  transit_finish=not final, passage_finish=not final and step['type']=='gate')
                 if not result['success']:
-                    return {**result, 'failed_instance_id': current}
+                    ordinal=sum(s['type']==step['type'] for s in values[:i+1])
+                    label=f"{step['type'].title()} {ordinal}"
+                    return {**result, 'failed_instance_id': current,
+                            'diagnostics': [label+': '+reason for reason in result['diagnostics']],
+                            'errors': [{**error, 'instance_id': current} for error in result.get('errors', [])]}
                 d = result['draft']
             lo = len(run['waypoints'])
             run['waypoints'].extend(d['waypoints'])

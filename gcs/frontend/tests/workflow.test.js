@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {heading,missingSetup,gateWarnings,configuration,channelExitFinish} from '../src/workflow.js';
+import {heading,missingSetup,gateWarnings,configuration,channelExitFinish,gateContinues} from '../src/workflow.js';
 import {local} from '../src/buffers.js';
 const map=JSON.parse(fs.readFileSync(new URL('../../examples/competition-gps-map.json',import.meta.url)));
 test('channel finish suggestion is beyond the last actual pair, with settings retained',()=>{
@@ -40,4 +40,12 @@ test('version 2 has automatic approach and separates attempts from task setup',(
  assert.deepEqual(missingSetup(d),[]);
  const config=configuration(d);
  assert.equal(config.attempt,undefined);assert.equal(config.route_sections,undefined);assert.equal(config.derived_sections,undefined);
+});
+
+test('only intermediate Gate cards finish at their crossings',()=>{
+ const steps=[{id:'g',type:'gate'},{id:'s',type:'slalom'},{id:'last',type:'gate'}];
+ assert.equal(gateContinues(steps,'g'),true);
+ for(const id of ['s','last','missing'])assert.equal(gateContinues(steps,id),false);
+ assert.equal(gateContinues([steps[0]],'g'),false);
+ assert.equal(gateContinues(undefined,'g'),false);
 });

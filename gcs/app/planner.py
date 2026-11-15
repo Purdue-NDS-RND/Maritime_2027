@@ -74,10 +74,12 @@ def suggest(object_map, direction):
             'diagnostics':['Geometry candidates may overlap tasks. Assign objects and confirm every role; unknown passing sides require operator input.']}
 
 
-def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60, deadline=None, transit_finish=False, navigation=False):
+def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=250000, max_seconds=60, deadline=None, transit_finish=False, navigation=False, passage_finish=False):
     deadline=min(deadline, time.monotonic()+max_seconds) if deadline is not None else time.monotonic()+max_seconds
     draft=deepcopy(draft)
     draft['transit_finish']=transit_finish
+    if passage_finish and (not transit_finish or navigation or draft.get('planner_task')!='gate'):
+        raise ValueError('Only an intermediate Gate card may finish at its crossing')
     preferred=finite(draft.get('preferred_buffer_m',draft['clearance_m']))
     if preferred<finite(draft['clearance_m']):
         raise ValueError('preferred buffer must be at least required buffer')
@@ -127,7 +129,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
         conflicts=[o['id'] for o in course.objects if gap(o,start,start,ref)<zones(o,draft)[0]]
         return {'success':False,'diagnostics':['obstructed approach: unsafe planning start'+(': '+', '.join(conflicts) if conflicts else ' at planning boundary')],
                 'errors':[{'code':'unsafe_start','reason':'Unsafe planning start','location':list(start),'objects':conflicts}]}
-    if course.clearance(finish,finish)<course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m']) or any(not contained(finish,finish,p,course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m'])) for p in course.finish_polygons):
+    if not passage_finish and (course.clearance(finish,finish)<course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m']) or any(not contained(finish,finish,p,course.required+(0 if draft.get('transit_finish') else draft['finish_radius_m'])) for p in course.finish_polygons)):
         return {'success':False,'diagnostics':['unsafe finish area']}
     polygon=course.polygons[0]; xmin=min(p[0] for p in polygon); xmax=max(p[0] for p in polygon)
     ymin=min(p[1] for p in polygon); ymax=max(p[1] for p in polygon)
@@ -140,10 +142,28 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
     def estimate(point,progress):
         key=(*point,progress)
         if key not in heuristic_cache:
-            length=course.heuristic(point,finish,progress)
-            heuristic_cache[key]=heuristic_weight*length+course.tower_lower_bound(point,finish,length)
+            if passage_finish:
+                # The goal is any valid completed crossing, not the standalone
+                # stopping centre. Distance to the next window plus minimum
+                # distances between later windows is an admissible bound.
+                length=0
+                if progress<len(course.planes):
+                    origin,forward,left,low,high,_=course.planes[progress]
+                    delta=sub(point,origin); lateral=dot(delta,left)
+                    length=math.hypot(dot(delta,forward),max(low-lateral,0,lateral-high))
+                    if course.windows:
+                        length+=course.remaining_distance[progress]
+                heuristic_cache[key]=heuristic_weight*length
+            else:
+                length=course.heuristic(point,finish,progress)
+                heuristic_cache[key]=heuristic_weight*length+course.tower_lower_bound(point,finish,length)
         return heuristic_cache[key]
     attempts=[]
+    furthest_progress=course.initial_progress
+    def progress_detail():
+        if furthest_progress<len(course.planes):
+            return f' Completed {furthest_progress} of {len(course.planes)} crossings; next required passage: {course.planes[furthest_progress][-1]}.'
+        return ' All required crossings were reached, but no valid connection to the selected finish was found.'
     # If a broad soft zone exhausts the first preference search, increase
     # heuristic emphasis before spending effort on a finer grid. Hard checks
     # and the one shared deadline remain identical in every search.
@@ -157,13 +177,16 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
             return start[0]+state[0]*spacing,start[1]+state[1]*spacing
         while queue and expanded<max_expansions:
             if time.monotonic()>=deadline:
-                return {'success':False,'diagnostics':['Planning time limit reached; blockage is not proven. Review entry, boundaries and required buffer before retrying.'],
-                        'attempts':attempts+[{'spacing_m':spacing,'expanded':expanded,'time_exhausted':True}]}
+                return {'success':False,'diagnostics':['Planning time limit reached; blockage is not proven.'+progress_detail()],
+                        'attempts':attempts+[{'spacing_m':spacing,'expanded':expanded,'time_exhausted':True,'furthest_progress':furthest_progress}]}
             _,cost,state=heapq.heappop(queue)
             if cost!=costs.get(state):
                 continue
             expanded+=1; a=position(state); progress=state[2]
-            if math.dist(a,finish)<=spacing*1.5 and course.edge(a,finish,progress)==len(course.planes):
+            furthest_progress=max(furthest_progress,progress)
+            if passage_finish and progress==len(course.planes):
+                goal=state; finish=a; break
+            if not passage_finish and math.dist(a,finish)<=spacing*1.5 and course.edge(a,finish,progress)==len(course.planes):
                 goal=state; break
             for heading,(dx,dy) in enumerate(STEPS):
                 x,y=state[0]+dx,state[1]+dy; b=(start[0]+x*spacing,start[1]+y*spacing)
@@ -186,10 +209,10 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
                 if new_cost<costs.get(child,math.inf)-1e-10:
                     costs[child]=new_cost; parents[child]=state
                     heapq.heappush(queue,(new_cost+estimate(b,next_progress),new_cost,child))
-        attempts.append({'spacing_m':spacing,'expanded':expanded,'heuristic_weight':heuristic_weight,'budget_exhausted':expanded>=max_expansions})
+        attempts.append({'spacing_m':spacing,'expanded':expanded,'heuristic_weight':heuristic_weight,'budget_exhausted':expanded>=max_expansions,'furthest_progress':furthest_progress})
         if goal is None:
             continue
-        path=[finish]; state=goal
+        path=[] if passage_finish else [finish]; state=goal
         while state!=initial:
             path.append(position(state)); state=parents[state]
         path.append(start); path.reverse()
@@ -222,6 +245,8 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
             simplified.append(path[chosen]); i=chosen
         derived=draft
         draft=deepcopy(course_input)
+        if passage_finish:
+            draft['finish']=to_gps(*finish,ref)
         draft['waypoints']=[to_gps(*p,ref) for p in simplified[1:]]
         draft.pop('planning_notice',None)
         if heuristic_weight>4:
@@ -253,7 +278,7 @@ def _generate(object_map, draft, resolutions=(.25,.10,.05), max_expansions=25000
                 progress=next_progress
             return {'success':True,'draft':draft,'validation':result,'attempts':attempts,'diagnostics':[]}
         return {'success':False,'diagnostics':[e['reason'] for e in result['errors']],'attempts':attempts}
-    return {'success':False,'diagnostics':['search exhaustion: no route at supported resolutions; blockage is not proven'], 'attempts':attempts}
+    return {'success':False,'diagnostics':['search exhaustion: no route at supported resolutions; blockage is not proven.'+progress_detail()], 'attempts':attempts}
 
 
 def generate(object_map, draft, *args, **kwargs):

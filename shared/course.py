@@ -357,8 +357,10 @@ class Course:
                 continue
             if self.general:
                 # Only finite directed crossings participate in progression.
-                # Before the first passage a return approach may cross later ones.
-                if progress==0 and index!=0:
+                # Before the task begins, returning upstream is an approach,
+                # not a reverse passage. It never earns progress. Once the first
+                # passage is crossed forward, direction/order stay mandatory.
+                if progress==0 and (index!=0 or not forward):
                     continue
                 if not opening:
                     if index==progress and self.draft['passages'][index-int(bool(self.draft.get('entry')))]['kind']=='turn':

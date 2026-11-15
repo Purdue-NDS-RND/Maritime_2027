@@ -1,5 +1,10 @@
 import {local,gps} from './buffers.js';
 
+export function gateContinues(steps=[],id) {
+    const index=steps.findIndex(s=>s.id===id);
+    return index>=0&&index<steps.length-1&&steps[index].type==='gate';
+}
+
 export const TASKS = [
     {id:'gate', title:'Gate', detail:'Pass the entrance gate and stop.'},
     {id:'slalom', title:'Slalom / Dodge', detail:'Weave through the turn buoys and exit gate.'},

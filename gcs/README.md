@@ -150,7 +150,16 @@ map is the primary operator scene; the small slalom map is regression coverage.
 
 Gate and Slalom always produce separate task blocks. There is no shared-crossing
 confirmation or second starting-gate requirement inside Slalom. A combined run
-continues from the Gate endpoint into Slalom; only its final task settles in HOLD and then enters LOITER.
+continues after the Gate's last required crossing into Slalom; an intermediate
+Gate does not travel to its standalone stopping point. Only the final task uses
+its selected finish region and settles in HOLD before entering LOITER. This
+avoids overshooting the first turn on compact practice layouts. Before a task's
+first passage, a safe return approach may cross passage lines backward without
+earning progress; every required crossing must still occur forward, on its
+assigned side and in order. After the task begins, reverse crossings remain
+invalid. Obstacles, required clearance and planning boundaries apply throughout.
+Search-limit feedback names the failed card and next required passage where
+available; exhaustion still does not prove physical blockage.
 For a stop between tasks, generate and execute a Gate-only run, then separately
 review and generate Slalom from the boat's fresh position. Earlier Slalom cards
 that still begin with a gate must be corrected and reviewed before generation.

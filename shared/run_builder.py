@@ -85,6 +85,11 @@ def validate_run(object_map, run, actual_start=None):
             if step['type'] == 'manual' and points[lo:hi] != d['waypoints']:
                 raise ValueError('Manual card waypoints must remain exactly as configured')
             d['waypoints'] = points[lo:hi]
+            # Intermediate Gate cards end at their last required crossing.
+            # Their standalone stopping centre is used only when they are final.
+            # Course validation below must still prove every directed passage.
+            if step['type']=='gate' and not final:
+                d['finish'] = deepcopy(points[hi-1])
             d['attempt'].update(block.get('attempt', {}))
             if lo == 0 and actual_start is not None:
                 d['start'] = actual_start

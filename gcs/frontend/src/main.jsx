@@ -14,7 +14,7 @@ import BoatControls from './BoatControls';
 import FlightMode from './FlightMode';
 import ConnectionDetails from './ConnectionDetails';
 import ConnectionsDialog from './Connections';
-import {configuration,heading,friendly} from './workflow';
+import {configuration,heading,friendly,gateContinues} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 import {api,newSession,setConnectionGeneration} from './api';
 import {useOperationPolling} from './useOperationPolling';
@@ -377,7 +377,7 @@ function App() {
                     if(section.direction){const [x,y]=local(section.centre,map.geographic_reference),d=section.direction;L.polyline([gps([x-2*d[0],y-2*d[1]],map.geographic_reference),gps([x+2*d[0],y+2*d[1]],map.geographic_reference)],{color:taskColor}).addTo(group).bindTooltip('Local travel →');}
                 }
                 if(card.type==='manual'&&setup.waypoints?.length){L.polyline(setup.waypoints.map(latlng),{color:highlight?taskColor:'#777',weight:highlight?4:1}).addTo(group);for(const [i,p] of setup.waypoints.entries())L.marker(latlng(p),{icon:icon(i+1,highlight?taskColor:'#666')}).addTo(group);}
-                if(setup.finish)L.circle(latlng(setup.finish),{radius:setup.finish_radius_m||1,color:highlight?taskColor:'#777'}).addTo(group);
+                if(setup.finish&&!gateContinues(draft.steps,card.id))L.circle(latlng(setup.finish),{radius:setup.finish_radius_m||1,color:highlight?taskColor:'#777'}).addTo(group);
             }
         }
         if(map&&(overlays||step===1||mode==='boundary-corners'||mode==='planning_area')&&draft.planning_area?.length){
@@ -458,7 +458,7 @@ function App() {
         if(!workspace.map)return;
         const view=taskOnly?(selectedCard?.setup||draft):draft;
         const ids=new Set((view.passages||[]).flatMap(p=>[p.red,p.green,p.buoy]).filter(Boolean));
-        const points=taskOnly?[...workspace.map.buoys.filter(o=>ids.has(o.id)).map(o=>latlng(o.centre)),...[view.entry,view.exit,view.finish].filter(Boolean).map(latlng),...(view.channel||[]).map(latlng)]:[...mapBounds(workspace.map),...(draft.planning_area||[]).map(latlng)];
+        const points=taskOnly?[...workspace.map.buoys.filter(o=>ids.has(o.id)).map(o=>latlng(o.centre)),...[view.entry,view.exit,...(taskOnly&&gateContinues(draft.steps,activeTask)?[]:[view.finish])].filter(Boolean).map(latlng),...(view.channel||[]).map(latlng)]:[...mapBounds(workspace.map),...(draft.planning_area||[]).map(latlng)];
         if(points.length)mapRef.current.fitBounds(points,{padding:[60,60],maxZoom:22});
     }
     useEffect(()=>{setFocusedPassage(null);setMode('inspect');if(ready&&step===3)requestAnimationFrame(()=>{mapRef.current.invalidateSize();fitMap(true);});},[activeTask,step,ready]);

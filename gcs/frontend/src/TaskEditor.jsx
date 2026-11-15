@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 import {friendly,heading,missingSetup,channelExitFinish} from './workflow';
 import TaskReviewButton from './TaskReviewButton';
 
-export default function TaskEditor({workspace,draft,edit,setMode,load,save,run,notify,instanceId,showMap,onPassageSelected,focusedPassage}) {
+export default function TaskEditor({workspace,draft,edit,setMode,load,save,run,notify,instanceId,showMap,onPassageSelected,focusedPassage,crossingFinish=false}) {
     const task=draft.planner_task;
     const objects=[...(workspace.map?.buoys||[]),...(workspace.map?.obstacles||[])];
     const [section,setSection]=useState('assignments'),[pair,setPair]=useState(['','']),[side,setSide]=useState('left');
@@ -16,7 +16,8 @@ export default function TaskEditor({workspace,draft,edit,setMode,load,save,run,n
     return <section className="task-editor">
         <nav className="task-editor-tabs" aria-label="Task configuration">{[['assignments',task==='channel'?'Chains & sections':'Assignments'],['boundaries',task==='channel'?'Finish & water':'Finish'],['advanced','Advanced']].map(([id,label])=><button key={id} aria-pressed={section===id} onClick={()=>setSection(id)}>{label}</button>)}</nav>
         <div className="task-editor-content">
-        {section==='boundaries'&&<section id="task-boundaries" className="task-tab-section"><h3>Finish{task==='channel'?' & permitted water':''}</h3>{(draft.geometry_version===2?['finish']:['entry','exit','finish']).map(key=><div className="setup-row" key={key}><span>{friendly(key)} {draft[key]?'✓':'—'}</span>{setPoint(key,'Move on map')}</div>)}{task==='channel'&&<div className="boundary-tools"><strong>Permitted channel · {draft.channel?.length||0} corners</strong><div className="button-row">{setPoint('channel','Add corners')}<button className="quiet" onClick={()=>configure({channel:[]})}>Clear and redraw</button><button disabled={!draft.channel?.length} onClick={()=>configure({channel:draft.channel.slice(0,-1)})}>Undo corner</button></div></div>}<p className="hint">Inspect the highlighted geometry on the map. Move points or draw corners to correct it.</p></section>}
+        {crossingFinish&&<p className="hint">This Gate continues into the next task as soon as all its crossings are complete. Its stopping point is used only when Gate is the final task.</p>}
+        {section==='boundaries'&&<section id="task-boundaries" className="task-tab-section"><h3>Finish{task==='channel'?' & permitted water':''}</h3>{(crossingFinish?[]:draft.geometry_version===2?['finish']:['entry','exit','finish']).map(key=><div className="setup-row" key={key}><span>{friendly(key)} {draft[key]?'✓':'—'}</span>{setPoint(key,'Move on map')}</div>)}{task==='channel'&&<div className="boundary-tools"><strong>Permitted channel · {draft.channel?.length||0} corners</strong><div className="button-row">{setPoint('channel','Add corners')}<button className="quiet" onClick={()=>configure({channel:[]})}>Clear and redraw</button><button disabled={!draft.channel?.length} onClick={()=>configure({channel:draft.channel.slice(0,-1)})}>Undo corner</button></div></div>}<p className="hint">{crossingFinish?'No stopping area is used here. Move this Gate to the end of the run to select its stopping point.':'Inspect the highlighted geometry on the map. Move points or draw corners to correct it.'}</p></section>}
         {section==='assignments'&&<section id="task-assignments" className="task-tab-section">
         {task==='slalom'&&<p className="hint">Slalom starts at the first turn and includes the exit gate. Add a Gate task before Slalom to include the starting gate, or run Slalom on its own.</p>}
         {task==='channel'?<>

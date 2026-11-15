@@ -54,6 +54,9 @@ const splitCards=[{id:'g',type:'gate',setup:{geometry_version:2,passages:[{id:'s
 const splitHtml=renderToStaticMarkup(<Planner {...props} step={3} selectedCard="s" draft={{...draft,steps:splitCards}}/>);
 assert.match(splitHtml,/run Slalom on its own/);
 assert.doesNotMatch(splitHtml,/Review adjacent shared crossings|Dodge Gate A Red \/ Dodge Gate A Green/);
+const transitGate=renderToStaticMarkup(<Planner {...props} step={3} selectedCard="g" draft={{...draft,steps:splitCards}}/>);
+assert.match(transitGate,/continues into the next task as soon as all its crossings are complete/);
+assert.doesNotMatch(gateHtml,/continues into the next task/);
 for(const tasks of [roles,{gate:Object.fromEntries(Object.entries(roles.slalom).slice(0,2))}]){
  const geometry=courseOverlay(map,tasks);assert.ok(geometry.lines.some(l=>l.kind==='arrow'));
  for(const p of [...geometry.lines.flatMap(l=>l.points),...geometry.labels.map(l=>l.position)])assert.ok(p.length===2&&p.every(Number.isFinite));
