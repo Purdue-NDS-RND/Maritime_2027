@@ -538,7 +538,7 @@ def list_serial(revision: int, configured: str | None = None):
     with manager.lock:
         manager.check_revision(revision)
     return {'devices': serial_devices(configured),
-            'help': 'Only devices visible inside this container are listed. Map the USB radio with the serial Compose overlay and its numeric device group; refresh after replugging. Docker device mappings may require container recreation after USB re-enumeration.'}
+            'help': 'Plug in the USB radio, then Refresh devices. Select its stable /dev/serial/by-id/ path when available, set baud and vehicle IDs, then Apply & connect. The standard Linux launcher supports USB serial hotplug; no radio is required to start the GCS.'}
 
 
 @app.post('/api/connections/reconcile')

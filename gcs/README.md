@@ -37,10 +37,16 @@ From the repository root:
 make -C gcs run
 ```
 
-`run` builds the GCS image from the current checkout before starting it, using
-Docker's cache when inputs have not changed. It serves the production frontend
-and backend together, with the normal boat HTTP connection and passive telemetry.
-`make -C gcs build` remains available to build without starting the application.
+`run` starts the existing local GCS image without building or pulling images.
+It serves the production frontend and backend together, with the normal boat
+HTTP connection and passive telemetry. Build once before first use, and rebuild
+explicitly after source changes with `make -C gcs build`. Prepare the image
+before heading outdoors; if it is missing, `run` fails rather than downloading
+or building it. The installed image determines the running application version.
+From inside `gcs/`, simply use `make run` with or without hardware attached.
+Open **Connections** to select **Simulator** or **Field**, edit its API address,
+telemetry transport/device, baud and IDs, then **Apply & connect**. Settings are
+remembered. Missing hardware leaves the link disconnected while the app stays usable.
 
 Open <http://localhost:8080>. Each page starts empty. **New run**, reload, another
 tab and backend restart discard planner maps, assignments, routes, reviews,
@@ -400,27 +406,25 @@ RFD model, wiring, radio settings, port assignment and physical performance
 remain to be checked on the actual hardware. See the
 [boat field setup](../boat/README.md#jetson-field-connections).
 
-On the **shore computer**, from `gcs/`:
+On the **shore computer**, from `gcs/`, build once before heading outdoors
+(and explicitly after application updates):
 
 ```bash
-ls -l /dev/serial/by-id/
-# Choose the RFD's stable device path; find its group with:
-stat -Lc %g /dev/serial/by-id/YOUR_SHORE_RADIO
+make build
 ```
 
-The tracked `field.env` contains the current bench setup: Jetson API at
-`http://boat-jetson:8091`, the shore FTDI radio's stable device path, device group
-20, host baud 115200 and Pixhawk system/component IDs 1/1. Edit these settings
-for different hardware: set `GCS_BOAT_URL` to the Jetson's reachable address and
-HTTP port, `GCS_SERIAL_DEVICE` to the shore RFD path, `GCS_SERIAL_GID` to the
-numeric group above, and match the actual radio host baud and Pixhawk IDs.
-`field.env.example` retains a generic template with placeholder address/device
-and an example baud of 57600; copying it over `field.env` replaces the bench settings.
-Then start the GCS:
+Then start the same way for offline planning, simulator or field use:
 
 ```bash
-make ENV_FILE=field.env SERIAL=1 run
+make run
 ```
+
+No radio, simulator or Jetson is required to boot. In **Connections**, select
+**Field**, enter the Jetson API address when available, and choose **Serial / RFD**.
+Plug in the radio, click **Refresh devices**, select its `/dev/serial/by-id/` path,
+set the radio baud (115200 for the current bench radio) and vehicle/component IDs
+(1/1 for the current controller), then **Apply & connect**. To use simulation,
+select **Simulator** and **Apply & connect** in the same dialog.
 
 Open `http://localhost:8080`, then **Connections** beside the vehicle indicator.
 The bottom **Connection details** panel retains compact active-link diagnostics.
@@ -448,24 +452,25 @@ not confirmation of upload/start success; inspect the boat operation result.
 Environment variables seed the first connection configuration. After initialization,
 `/data/connections.json` takes precedence, including after container restart.
 Change the active shore connections in **Connections** without restarting the
-GCS. Initial Docker USB device exposure and group access still require the
-serial overlay and container recreation; a plain restart does not reload
-Compose environment files. The Jetson boat application's own transport settings
+GCS. The normal Linux container binds the host device directory read-only and
+permits USB serial device access (ttyUSB/ttyACM) for the host dialout group.
+New USB devices appear without recreating the container; missing devices are
+reported in the dialog. This does not use privileged mode. The Jetson boat application's own transport settings
 remain startup settings. The GCS starts every page/restart with an empty planning
 session and never replays commands on reconnect.
 Stop the field GCS with:
 
 ```bash
-make ENV_FILE=field.env SERIAL=1 down
+make down
 ```
 
-`field.env` is tracked in Git alongside the boat deployment env files. Keep
-credentials out of these shared configuration files.
-`ENV_FILE` and `SERIAL=1` also work with `build`;
-a new data directory with default `make run` seeds simulator connections.
-An existing data directory retains its saved active settings. To use a host radio
-forwarder instead, omit `SERIAL=1` and put its separate UDP input in
-`GCS_MAVLINK_CONNECTION` in the environment file.
+Connection profiles in the web app are the normal configuration interface.
+`field.env` remains an optional first-start seed via `ENV_FILE=field.env`;
+saved profiles take precedence. `ENV_FILE` defaults to empty and `SERIAL` to `0`.
+The legacy `SERIAL=1` overlay is optional and requires its configured radio to
+exist at startup. It is unnecessary for the standard Linux USB serial setup.
+If a radio uses a group other than dialout, set `GCS_SERIAL_GID` to that numeric
+group when launching; the default launcher discovers the host dialout group.
 
 The boat HTTP API has no authentication or encryption by default. Use an
 isolated, trusted control LAN and bind the boat to its intended interface;
@@ -479,11 +484,10 @@ Jetson image compatibility or real-boat acceptance is implied by configuration.
 initial environment settings differ from those defaults. Enter the Jetson's
 HTTP(S) origin, then choose UDP (`udpin:ADDRESS:PORT`) or Serial / RFD with the
 device path available **inside the GCS container**, baud and expected IDs.
-`/dev/gcs-radio` is the serial overlay's container path, regardless of its
-host `/dev/serial/by-id/...` name. **Refresh devices** lists visible serial
-ports and retains a configured missing path with its availability/permissions.
-A reconnect cannot add a host device that Docker has not exposed. USB replugging
-may require container recreation if the mapped device's number changes.
+Use the host `/dev/serial/by-id/...` path with normal `make run`. **Refresh devices**
+lists visible serial ports and retains a configured missing path with its
+availability/permissions. If an older saved profile uses `/dev/gcs-radio`, change
+it to the radio's by-id path and apply once; that alias belongs to the legacy overlay.
 
 Selecting a profile or typing changes only the dialog draft:
 
@@ -585,31 +589,15 @@ telemetry can work while the boat mission HTTP API is unavailable.
 | `GCS_MAVLINK_COMPONENT_ID` | `1` | Selected autopilot component |
 | `GCS_IMAGE` | `maritime-gcs:latest` | Image for build/run |
 
-For example, `GCS_MAVLINK_CONNECTION=udpin:127.0.0.1:14552 make run` selects a
-different MAVProxy output, which must already be configured to forward there.
-Restart the GCS to apply connection settings. The backend retries device-open
-and read errors once per second; freshness expires after 3 s without heartbeat
-or position. GPS fix/age is reported separately from position freshness.
+These are backend fallback defaults for a fresh data directory. Saved web-app
+profiles take precedence. Configure normal connections through **Connections**;
+the backend retries device-open/read errors once per second. Freshness expires
+after 3 s without heartbeat or position; GPS fix/age is reported separately.
 
-For an RFD900, normally have a host MAVLink forwarder own the USB radio and send
-UDP to the GCS. This requires no USB access inside the container. Alternatively,
-direct serial access is available through the optional Compose override:
-
-```bash
-# From gcs/, after building the image. Example host baud: verify your radio.
-export GCS_SERIAL_DEVICE=/dev/serial/by-id/your-radio
-export GCS_SERIAL_GID=$(stat -Lc %g "$GCS_SERIAL_DEVICE")
-export GCS_MAVLINK_BAUD=57600
-HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose \
-  -f container/compose.yaml -f container/compose.serial.yaml up --no-build
-```
-
-Use the same two Compose files with `down` to stop that setup. The override maps
-the selected host device to `/dev/gcs-radio` and passes its numeric group to the
-non-root app. After physically replugging a directly mapped USB radio, recreate
-the container if the host device identity changes. Host forwarding avoids that
-container device-remapping issue. For running the backend outside Docker, set
-`GCS_MAVLINK_CONNECTION=/dev/serial/by-id/your-radio` and the matching baud.
+The normal Linux Compose setup supports direct USB serial hotplug without
+requiring a device at startup. A host MAVLink forwarder can alternatively own
+the radio and send UDP; select its UDP endpoint in **Connections**.
+For running the backend outside Docker, serial access needs host user permissions.
 
 Radio telemetry does not prove mission identity or completion; `/api/status`
 retains boat-owned mission status. Snapshot and stream semantics are detailed
@@ -635,7 +623,8 @@ remain unqualified.
 - `GET /api/status` and mission commands retain their existing boat HTTP path.
 - Application lifespan starts/stops the reader. Missing serial devices, occupied
   ports and read errors are reported in snapshots and retried after one second.
-  Direct USB remapping after replug can require container recreation.
+  Normal Linux startup sees USB replugged devices through the directory bind;
+  only the legacy fixed-device overlay can require container recreation.
 
 Only the configured system/component is accepted. A matching ArduPilot
 ground-rover or surface-boat heartbeat is required before using its position or GPS messages.

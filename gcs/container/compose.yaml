@@ -11,6 +11,13 @@ services:
         MARITIME_SOURCE_DIRTY: ${MARITIME_SOURCE_DIRTY:-unknown}
     network_mode: host
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Directory binding sees USB hotplug without requiring any radio at startup.
+    # Device access stays limited to USB serial (ttyUSB/ttyACM), without privileged mode.
+    group_add:
+      - "${GCS_SERIAL_GID:-20}"
+    device_cgroup_rules:
+      - 'c 188:* rw'
+      - 'c 166:* rw'
     environment:
       GCS_DATA: /data
       GCS_ORIGIN: ${GCS_ORIGIN:-http://localhost:8080}
@@ -21,4 +28,10 @@ services:
       GCS_MAVLINK_COMPONENT_ID: ${GCS_MAVLINK_COMPONENT_ID:-1}
     volumes:
       - ../../simulation/logs/gcs:/data
+      - type: bind
+        source: /dev
+        target: /dev
+        read_only: true
+        bind:
+          create_host_path: false
     restart: "no"

@@ -75,6 +75,15 @@ The GCS map toolbar now provides **Go to boat** to center the view once without
 changing zoom, including labeled last-known/no-fix positions. Frontend tests
 (40), render checks and the production build passed; no vehicle commands were sent.
 
+GCS startup now uses the installed image without building or pulling: `make run`
+works without a USB radio, simulator or Jetson. Field/Simulator selection and
+connection settings remain in the web app. Linux USB serial access uses a device
+directory bind and ttyUSB/ttyACM cgroup rules instead of requiring a particular
+radio at startup. Hardware-free startup and Chrome's offline planning view were
+verified; all 30 connection tests passed. Physical USB unplug/replug recovery
+with this configuration remains unverified. Older Field profiles using
+`/dev/gcs-radio` need their device changed to the radio's by-id path in Connections.
+
 The field GPS recorder now saves unlabeled coordinates only. New points import
 as unknown objects; operators set colors, object types and task roles in the GCS.
 The default output is the Git-ignored `gcs/recordings/buoys.json` in the checkout;

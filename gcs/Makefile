@@ -7,7 +7,7 @@ build:
 	../scripts/with-build-provenance.sh $(COMPOSE) build
 run:
 	mkdir -p ../simulation/logs/gcs
-	HOST_UID=$$(id -u) HOST_GID=$$(id -g) ../scripts/with-build-provenance.sh $(COMPOSE) up --build
+	HOST_UID=$$(id -u) HOST_GID=$$(id -g) GCS_SERIAL_GID=$${GCS_SERIAL_GID:-$$(getent group dialout | cut -d: -f3)} $(COMPOSE) up --no-build --pull never
 down:
 	$(COMPOSE) down
 validate:
