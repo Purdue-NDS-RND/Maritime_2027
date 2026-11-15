@@ -1,5 +1,13 @@
 # Milestone 1: camera-free slalom through the web GCS
 
+Field map recorder (2026-11-15): R/B/U selects persistent red/blue/unknown
+mode before Space captures; Backspace undoes this session. Default launches
+reserve a fresh `gcs/recordings/buoy_N.json` using the highest existing number
+plus one; explicit `--output` retains resume support. Eight recorder tests
+passed, including terminal/HTTP interaction, color import, numbering and prior
+freshness/write safeguards. No physical GPS capture was performed. See the
+GCS guide for usage.
+
 GCS cleanup controls (2026-11-15): all object types can be dragged during Clean up,
 including towers, docks and polygons with their complete footprints. Right-click placement and labeling set buoy color/type
 together. Delete/Backspace removes any selected map object outside text

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record unlabeled GPS points; configure their colors and types in the GCS."""
+"""Record GPS buoy points using a selected red, blue or unknown mode."""
 import argparse
 from contextlib import contextmanager
 from copy import deepcopy
@@ -7,6 +7,7 @@ import fcntl
 import json
 import math
 import os
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -19,7 +20,25 @@ from urllib.request import Request, urlopen
 
 
 MAX_AGE_S = 3
-DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / 'recordings' / 'buoys.json'
+DEFAULT_DIRECTORY = Path(__file__).resolve().parents[1] / 'recordings'
+COLOR_KEYS = {'r': 'red', 'b': 'blue', 'u': 'unknown'}
+
+
+def new_output(directory=DEFAULT_DIRECTORY):
+    """Reserve a fresh numbered map without overwriting another session."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    numbers = [int(match.group(1)) for path in directory.iterdir()
+               if (match := re.fullmatch(r'buoy_(\d+)\.json', path.name))]
+    index = max(numbers, default=0) + 1
+    while True:
+        path = directory / f'buoy_{index}.json'
+        try:
+            with path.open('x') as stream:
+                stream.write('{"points": []}\n')
+            return path
+        except FileExistsError:
+            index += 1
 
 
 def number(value, low, high, name):
@@ -117,8 +136,12 @@ class PointFile:
         self.document = document
         self.points = points
 
-    def append(self, position):
+    def append(self, position, color='unknown'):
+        if color not in COLOR_KEYS.values():
+            raise ValueError('Select red, blue or unknown')
         point = coordinates(position)
+        if color != 'unknown':
+            point.update(color=color, object_type='buoy')
         # Explicit imported IDs must not collide with the importer's generated IDs.
         names = {str(p.get('id') or f'point_{i}') for i, p in enumerate(self.points, 1)}
         if f'point_{len(self.points) + 1}' in names:
@@ -159,12 +182,15 @@ def keyboard():
 
 
 def run(args):
+    if args.output is None:
+        args.output = new_output()
     with output_lock(args.output):
         output = PointFile(args.output)
         print(f'Output: {output.path} ({len(output.points)} existing points)')
         print(f'GPS source: {args.gcs_url}/api/telemetry (GCS Connections selects the vehicle)')
-        print('SPACE save | u undo this session | q quit | Ctrl-C quit')
-        print('All new points import as unknown objects. Set colors and types in the GCS.')
+        print('r red | b blue | u unknown | SPACE save | Backspace undo | q quit | Ctrl-C quit')
+        print('Select r, b or u before capturing. Selection stays active until changed.')
+        color = None
         print('Place the GPS antenna at the intended map position; alongside is an offset.')
         last_space = -math.inf
         with keyboard() as fd:
@@ -173,13 +199,19 @@ def run(args):
                 key = os.read(fd, 1).decode(errors='replace').lower()
                 if not key or key == 'q':
                     break
-                if key == 'u':
+                if key in COLOR_KEYS:
+                    color = COLOR_KEYS[key]
+                    print(f'Mode: {color}', flush=True)
+                elif key in ('\x7f', '\x08'):
                     try:
                         output.undo()
                         print(f'Undid last capture. {len(output.points)} points saved.', flush=True)
                     except (ValueError, OSError) as error:
                         print(f'Undo refused: {error}', flush=True)
                 elif key == ' ':
+                    if color is None:
+                        print('Select r, b or u before pressing Space.', flush=True)
+                        continue
                     now = time.monotonic()
                     # Ignore key repeat. Flush queued keys after the bounded request
                     # so a held Space cannot capture a backlog of unwanted points.
@@ -189,8 +221,8 @@ def run(args):
                     last_space = now
                     try:
                         position, snapshot = fetch_position(args.gcs_url)
-                        output.append(position)
-                        message = (f'Saved #{len(output.points)} unknown: '
+                        output.append(position, color)
+                        message = (f'Saved #{len(output.points)} {color}: '
                                    f'{position["latitude"]:.8f}, {position["longitude"]:.8f} '
                                    f'(GPS fix {snapshot["gps_fix"]}, '
                                    f'vehicle {snapshot.get("system_id")}/{snapshot.get("component_id")})')
@@ -205,9 +237,9 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT,
+    parser.add_argument('--output', type=Path, default=None,
                         help='New or existing simple GPS points JSON; saved after each capture '
-                             '(default: gcs/recordings/buoys.json in this checkout)')
+                             '(default: next gcs/recordings/buoy_N.json in this checkout)')
     parser.add_argument('--gcs-url', default='http://127.0.0.1:8080',
                         help='Running GCS origin (default: http://127.0.0.1:8080)')
     args = parser.parse_args()

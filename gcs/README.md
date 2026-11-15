@@ -168,8 +168,9 @@ that still begin with a gate must be corrected and reviewed before generation.
 
 The Linux terminal helper `gcs/scripts/record_buoys.py` saves the boat's current
 GPS position into the same simple points JSON accepted by **Import JSON / CSV**.
-New captures contain coordinates only and import as gray unknown objects;
-choose their colors, types and task roles later in the GCS.
+Select red, blue or unknown in the terminal before capturing. Red/blue captures
+import as labeled buoys; unknown captures import as gray unknown objects.
+Review colors, types and task roles later in the GCS.
 It needs only Python 3 on the desktop and a running GCS with live passive
 telemetry. The boat mission API can be offline; the helper only makes
 `GET /api/telemetry` requests and writes the selected local file.
@@ -185,29 +186,31 @@ telemetry. The boat mission API can be offline; the helper only makes
    python3 gcs/scripts/record_buoys.py
    ```
 
-   Captures default to `gcs/recordings/buoys.json` in this checkout, regardless
-   of the terminal's working directory. The directory is ignored by Git.
+   Each launch creates a new `gcs/recordings/buoy_N.json` in this checkout,
+   regardless of the terminal's working directory. It scans existing numbered
+   JSON names and uses the highest number plus one (starting at `buoy_1.json`).
+   The terminal prints the chosen path. Older files are preserved, including
+   `buoys.json`. The directory is ignored by Git.
    Use `--output PATH` to select another file; relative overrides use the
    terminal's working directory. Existing files at the old
    `simulation/logs/field-survey/buoys.json` path remain untouched.
    The default GCS is `http://127.0.0.1:8080`. Use `--gcs-url http://HOST:PORT`
    for another running GCS. Focus this terminal while recording; Space does not
    need Enter. No GCS rebuild is needed for this standalone helper.
-3. Drive to the intended observation position, settle, then tap **Space** once.
-   No color or type selection is needed in the terminal. Each successful capture
-   prints its count, coordinates, GPS fix and vehicle IDs and immediately saves
-   the file.
-4. Press **u** to undo the last capture from this invocation. Press **q** or
-   **Ctrl-C** to exit. Restart with the same output path to append more points;
-   undo never removes points that existed when this invocation started.
-5. In the browser's Map step, import `gcs/recordings/buoys.json`.
-   Click each gray point, choose its **Color** and **Object type** (for example,
-   **Navigation buoy**), then click **Apply object correction**. Review/correct
-   positions, then use **Find course** and review task suggestions through the
-   normal full-map workflow, or assign tasks manually. The helper
-   does not modify an already-open GCS map; reimport the file after more captures.
-   Resuming an existing recorder file preserves earlier labels and adds only
-   unknown points; it does not erase previously captured data.
+3. Press **r** for red, **b** for blue or **u** for unknown. You must select
+   a mode before the first capture; it stays selected until you change it.
+   Drive to the intended observation position, settle, then tap **Space** once.
+   Each successful capture prints its count, color, coordinates, GPS fix and
+   vehicle IDs and immediately saves the file.
+4. Press **Backspace** to undo the last capture from this invocation. Press **q**
+   or **Ctrl-C** to exit. To append to an earlier file, restart with
+   `--output gcs/recordings/buoy_1.json` (using your actual filename).
+   Undo never removes points that existed when this invocation started.
+5. In the browser's Map step, import the numbered file printed by the helper.
+   Review/correct positions, colors and object types, then use **Find course**
+   and review task suggestions or assign tasks manually. The helper does not
+   modify an already-open GCS map; reimport the file after more captures.
+   Resuming an existing recorder file preserves earlier points and labels.
 
 Space requests the latest GCS position and requires live telemetry, a 3D GPS
 fix or better, and heartbeat/position/GPS ages within three seconds including

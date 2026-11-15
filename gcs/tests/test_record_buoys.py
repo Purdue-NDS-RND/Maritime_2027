@@ -17,7 +17,7 @@ import unittest
 from unittest.mock import patch
 
 from gcs.app.imports import import_points
-from gcs.scripts.record_buoys import PointFile, capture_position, output_lock
+from gcs.scripts.record_buoys import PointFile, capture_position, new_output, output_lock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +32,30 @@ def telemetry():
 
 
 class RecorderTests(unittest.TestCase):
+    def test_numbered_sessions_preserve_existing_maps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = new_output(root)
+            self.assertEqual(first.name, 'buoy_1.json')
+            (root / 'buoy_8.json').write_text('retained')
+            (root / 'buoy_99.json.lock').touch()
+            (root / 'buoys.json').write_text('legacy')
+            second = new_output(root)
+            self.assertEqual(second.name, 'buoy_9.json')
+            self.assertEqual(new_output(root).name, 'buoy_10.json')
+            self.assertEqual(json.loads(second.read_text()), {'points': []})
+            self.assertEqual((root / 'buoy_8.json').read_text(), 'retained')
+            self.assertEqual((root / 'buoys.json').read_text(), 'legacy')
+
+    def test_color_modes_import_as_labeled_buoys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = PointFile(Path(directory) / 'map.json')
+            for color in ('red', 'blue', 'unknown'):
+                output.append(POSITION, color)
+            imported = import_points(output.path.read_text())['buoys']
+            self.assertEqual([p['category'] for p in imported], ['red', 'blue', 'unknown'])
+            self.assertEqual([p['object_type'] for p in imported], ['buoy', 'buoy', 'unknown'])
+
     def test_capture_rejects_stale_missing_and_invalid_gps(self):
         self.assertEqual(capture_position(telemetry()), POSITION)
         for field, value in [('stale', True), ('connection_state', 'error'),
@@ -174,18 +198,27 @@ class RecorderTests(unittest.TestCase):
             try:
                 expect('Ready;')
                 os.write(master, b' ')
-                expect('Saved #1 unknown')
-                os.write(master, b'g')
-                # Former color hotkeys must not label subsequent captures.
+                expect('Select r, b or u before pressing Space.')
+                self.assertFalse(path.exists())
+                self.assertEqual(requests, [])
+                os.write(master, b'r ')
+                expect('Saved #1 red')
+                os.write(master, b'b')
+                expect('Mode: blue')
                 # The helper intentionally ignores repeat Space within 0.75 s.
                 time.sleep(0.8)
                 os.write(master, b' ')
-                expect('Saved #2 unknown')
+                expect('Saved #2 blue')
                 imported = import_points(path.read_text())
                 self.assertEqual(len(imported['buoys']), 2)
-                self.assertTrue(all(p['category'] == 'unknown' and p['object_type'] == 'unknown'
-                                    for p in imported['buoys']))
-                os.write(master, b'u')
+                self.assertEqual([p['category'] for p in imported['buoys']], ['red', 'blue'])
+                time.sleep(0.8)
+                os.write(master, b'u ')
+                expect('Saved #3 unknown')
+                time.sleep(0.8)
+                os.write(master, b' ')
+                expect('Saved #4 unknown')
+                os.write(master, b'\x7f')
                 expect('Undid last capture')
                 before = path.read_bytes()
                 sample['gps_fix'] = 2
@@ -202,7 +235,7 @@ class RecorderTests(unittest.TestCase):
                 process.wait(timeout=3)
                 self.assertEqual(process.returncode, 0)
                 self.assertEqual(termios.tcgetattr(slave), previous_terminal)
-                self.assertEqual(requests, [('GET', '/api/telemetry')] * 4)
+                self.assertEqual(requests, [('GET', '/api/telemetry')] * 6)
             finally:
                 if process.poll() is None:
                     process.kill()
