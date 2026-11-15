@@ -3,17 +3,34 @@ from copy import deepcopy
 import importlib.util
 import json
 import threading
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 from test_course_compiler import competition
 from gcs.app.sessions import SessionWorkspace
 from gcs.app.course_compiler import compile_course
-from gcs.app.course_files import load_course, save_course
+from gcs.app.course_files import load_course, save_course, save_labeled_recording
 from gcs.app.course_setup import prepare_task
 from shared.geometry import to_gps, to_local
 
 
 class CleanupTests(unittest.TestCase):
+    def test_labeled_recordings_preserve_objects_without_execution_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = self.w.read()
+            state['map']['buoys'][0]['category'] = 'green'
+            before = deepcopy(state)
+            first = save_labeled_recording(state, directory)
+            second = save_labeled_recording(state, directory)
+            self.assertNotEqual(first['filename'], second['filename'])
+            raw = (Path(directory)/first['filename']).read_text()
+            self.assertEqual(json.loads(raw), state['map'])
+            imported = load_course(raw)['map']
+            for key in ('buoys', 'obstacles', 'geographic_reference'):
+                self.assertEqual(imported[key], state['map'][key])
+            self.assertEqual(state, before)
+
     def setUp(self):
         self.w=SessionWorkspace()
         self.original=competition()
@@ -192,6 +209,17 @@ class CompilerApiTests(unittest.TestCase):
         self.client.post('/api/import',json={'revision':0,'content':json.dumps(competition())})
 
     def tearDown(self):self.client.close()
+
+    def test_recording_api_exports_current_session_and_checks_revision(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'GCS_RECORDINGS': directory}):
+            before = self.w.read()
+            response = self.client.post('/api/map/recordings', json={'revision': before['revision']})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(json.loads((Path(directory)/response.json()['filename']).read_text()), before['map'])
+            stale = self.client.post('/api/map/recordings', json={'revision': before['revision']-1})
+            self.assertEqual(stale.status_code, 422)
+            self.assertEqual(len(list(Path(directory).glob('*.json'))), 1)
+            self.assertEqual(self.w.read(), before)
 
     def test_api_compile_select_roundtrip_and_session_scope(self):
         response=self.client.post('/api/course/compile',json={'revision':1});self.assertEqual(response.status_code,200,response.text)

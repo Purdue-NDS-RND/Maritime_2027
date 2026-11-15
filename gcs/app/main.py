@@ -22,7 +22,7 @@ from .sessions import SessionWorkspace, return_inputs
 from .planner import generate
 from .course_setup import prepare_task
 from .course_compiler import compile_course
-from .course_files import load_course, save_course
+from .course_files import load_course, save_course, save_labeled_recording
 from .attempts import capture_start
 from .run_builder import generate_run
 from .connections import Connections
@@ -218,6 +218,17 @@ def select_course(request: IncomingRequest, data: dict):
 @app.get('/api/course/file')
 def course_file(request: IncomingRequest):
     return checked(save_course, session(request).read())
+
+
+@app.post('/api/map/recordings')
+def export_labeled_map(request: IncomingRequest, data: dict):
+    w = session(request)
+    with w.lock:
+        checked(w.check_revision, data.get('revision'))
+        try:
+            return checked(save_labeled_recording, w.read())
+        except OSError as error:
+            raise HTTPException(503, 'Could not save GPS recording; check recording directory access') from error
 
 
 @app.get('/api/examples/competition')

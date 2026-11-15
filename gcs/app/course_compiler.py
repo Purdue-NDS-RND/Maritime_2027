@@ -114,6 +114,20 @@ def _measure(object_map, task, roles, points):
             end = pair(*SLALOM[-2:], compact=True)
             if end is not None:
                 anchors.append(end)
+            # Gate segments are part of the course topology too. Checking only
+            # the midpoint progression admits diagonal pairs spanning the whole
+            # slalom, even when the two openings cross each other.
+            if entry is not None and end is not None:
+                if intersects(point(GATE[0]), point(GATE[1]),
+                              point(SLALOM[-2]), point(SLALOM[-1])):
+                    raise ValueError('Slalom entrance and exit gates cross')
+            for keys, centre, segments in (
+                    (GATE, entry, list(zip(anchors[1:], anchors[2:]))),
+                    (SLALOM[-2:], end, list(zip(anchors[:-2], anchors[1:-1])))):
+                if centre is not None and any(
+                        intersects(point(keys[0]), point(keys[1]), a, b)
+                        for a, b in segments):
+                    raise ValueError('Slalom gate crosses interior progression')
             for i, (a, b) in enumerate(zip(anchors, anchors[1:])):
                 if math.dist(a, b) < 1e-6:
                     raise ValueError('Degenerate slalom progression')
@@ -123,13 +137,16 @@ def _measure(object_map, task, roles, points):
                 if any(intersects(a, b, c, d) for c, d in zip(anchors[:max(0, i-1)], anchors[1:i])):
                     raise ValueError('Slalom progression crosses itself')
             for a, b, c in zip(anchors, anchors[1:], anchors[2:]):
-                components['heading'] += .15 * (1 - dot(unit(sub(b, a)), unit(sub(c, b))))
+                components['heading'] += 1 - dot(unit(sub(b, a)), unit(sub(c, b)))
             for keys, centre, near in ((GATE, entry, anchors[1] if len(anchors)>1 else None),
                                        (SLALOM[-2:], end, anchors[-2] if end and len(anchors)>1 else None)):
                 if centre is not None and near is not None:
                     tangent = unit(sub(point(keys[1]), point(keys[0])))
                     if abs(dot(tangent, unit(sub(near, centre)))) > .995:
                         raise ValueError('Gate does not open across local progression')
+                    # Prefer openings across the local travel direction. This
+                    # uses each endpoint's own tangent, not a global straight row.
+                    components['heading'] += dot(tangent, unit(sub(near, centre))) ** 2
     else:
         centres = []
         for i in range(1, 4):

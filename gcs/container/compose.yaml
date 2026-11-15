@@ -20,6 +20,7 @@ services:
       - 'c 166:* rw'
     environment:
       GCS_DATA: /data
+      GCS_RECORDINGS: /recordings
       GCS_ORIGIN: ${GCS_ORIGIN:-http://localhost:8080}
       GCS_BOAT_URL: ${GCS_BOAT_URL:-http://127.0.0.1:8091}
       GCS_MAVLINK_CONNECTION: ${GCS_MAVLINK_CONNECTION:-udpin:127.0.0.1:14550}
@@ -28,6 +29,7 @@ services:
       GCS_MAVLINK_COMPONENT_ID: ${GCS_MAVLINK_COMPONENT_ID:-1}
     volumes:
       - ../../simulation/logs/gcs:/data
+      - ../recordings:/recordings
       - type: bind
         source: /dev
         target: /dev

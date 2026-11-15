@@ -15,6 +15,76 @@ def competition():
 
 
 class CompilerTests(unittest.TestCase):
+    def test_compact_slalom_does_not_pair_opposite_ends(self):
+        m = competition()
+        m['buoys'] = [o for o in m['buoys'] if o['id'].startswith('dodge')]
+        m['obstacles'] = []
+        positions = {
+            'dodge_gate_a_red': (27, 2), 'dodge_gate_a_green': (27, -2),
+            'dodge_turn_1': (23, 0), 'dodge_turn_2': (18, 0),
+            'dodge_turn_3': (11, 0), 'dodge_turn_4': (5, 0),
+            'dodge_gate_b_red': (0, 2), 'dodge_gate_b_green': (0, -2),
+        }
+        self.assertEqual({o['id'] for o in m['buoys']}, set(positions))
+        for obj in m['buoys']:
+            obj['centre'] = to_gps(*positions[obj['id']], m['geographic_reference'])
+        result = compile_course(m)
+        expected = dict(zip(SLALOM, (
+            'dodge_gate_a_red', 'dodge_gate_a_green',
+            'dodge_turn_1', 'dodge_turn_2', 'dodge_turn_3', 'dodge_turn_4',
+            'dodge_gate_b_red', 'dodge_gate_b_green')))
+        self.assertTrue(any(c['tasks'].get('slalom') == expected
+                            for c in result['candidates']))
+        self.assertEqual(result['candidates'][0]['tasks']['slalom'], expected)
+        for candidate in result['candidates']:
+            validate_assignments(m, candidate['tasks'])
+            roles = candidate['tasks'].get('slalom', {})
+            self.assertNotEqual(
+                {roles.get(SLALOM[0]), roles.get(SLALOM[1])},
+                {'dodge_gate_b_red', 'dodge_gate_a_green'})
+
+    def test_gate_segments_cannot_cross_each_other_or_interior_progression(self):
+        m = competition()
+        roles = dict(zip(SLALOM, (
+            'dodge_gate_a_red', 'dodge_gate_a_green',
+            'dodge_turn_1', 'dodge_turn_2', 'dodge_turn_3', 'dodge_turn_4',
+            'dodge_gate_b_red', 'dodge_gate_b_green')))
+        for entrance, exit, message in (
+                (((0, 2), (27, -2)), ((27, 2), (0, -2)), 'gates cross'),
+                (((13, 5), (13, -5)), ((0, 2), (0, -2)), 'interior progression'),
+                (((27, 2), (27, -2)), ((13, 5), (13, -5)), 'interior progression')):
+            positions = [*entrance, (23, 0), (18, 0), (11, 0), (5, 0), *exit]
+            by_id = dict(zip(roles.values(), positions))
+            for obj in m['buoys']:
+                if obj['id'] in by_id:
+                    obj['centre'] = to_gps(*by_id[obj['id']], m['geographic_reference'])
+            with self.assertRaisesRegex(ValueError, message):
+                validate_assignments(m, {'slalom': roles})
+
+    def test_measured_uneven_practice_layout_ranks_local_progression_first(self):
+        # Relative measured geometry only; private GPS and observation IDs are
+        # excluded. Rotations and input ordering must not change the assignment.
+        positions = [(0, 0), (-.211882, 4.308064), (4.559709, 2.137334),
+                     (10.602595, 1.714320), (17.391306, 1.803376),
+                     (22.518860, 1.870167), (26.264944, -.244903),
+                     (26.628542, 3.870788)]
+        for angle in (0, .7, 2.3):
+            m = competition()
+            m['obstacles'] = []
+            m['buoys'] = [dict(id=f'obs_{i}', type='point', object_type='buoy',
+                               category='green' if i % 2 == 0 else 'red',
+                               centre=to_gps(math.cos(angle)*x-math.sin(angle)*y,
+                                             math.sin(angle)*x+math.cos(angle)*y,
+                                             m['geographic_reference']))
+                          for i, (x, y) in enumerate(positions)]
+            random.Random(17).shuffle(m['buoys'])
+            before = deepcopy(m)
+            roles = compile_course(m)['candidates'][0]['tasks']['slalom']
+            self.assertEqual([roles[r] for r in SLALOM],
+                             ['obs_7', 'obs_6', 'obs_5', 'obs_4',
+                              'obs_3', 'obs_2', 'obs_1', 'obs_0'])
+            self.assertEqual(m, before)
+
     def test_full_map_and_identity_independence(self):
         m = competition()
         before = deepcopy(m)

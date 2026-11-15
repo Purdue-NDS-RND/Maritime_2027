@@ -1,5 +1,20 @@
 # Milestone 1: camera-free slalom through the web GCS
 
+Course-recognition follow-up (2026-11-14): the compiler rejects intersecting
+slalom gates and gates crossing nonadjacent interior progression. Ranking now
+balances reference spacing with local heading continuity and transverse gate
+orientation, without requiring collinear turns. The measured eight-buoy practice
+layout and rotated copies rank the expected assignment first; existing curved,
+skewed and full-map regressions pass. All 181 container backend tests, nine
+frontend test files, render check, production build and Compose validation passed.
+The rebuilt GCS was deployed. Chrome imported the preserved labeled survey,
+compiled the expected right-to-left assignment and used the new Save labeled map
+to GPS recordings control. Disk comparison confirmed all eight labeled objects
+were retained. Recognition remains a proposal requiring review; no vehicle
+commands, route execution or physical accuracy acceptance were performed.
+Raw test output is under ignored `simulation/logs/gcs/compiler-tests-20261114.log`;
+operator exports remain ignored under `gcs/recordings/`.
+
 Status: complete for the selected simulator acceptance on 2026-10-28. Three
 consecutive browser-started full slaloms passed at a commanded 2.0 m/s target
 with frozen scene, map, mission, profile and settings. Minimum independent

@@ -341,6 +341,19 @@ restored. Map edits invalidate recognition and routes; settings changes preserve
 recognition while invalidating routes. **Measurements & search details** reports
 bounded-search limits and costs, which are not probabilities.
 
+Recognition rejects slalom entrance/exit segments that intersect each other or
+nonadjacent interior progression segments. Ranking balances reference spacing
+with local travel direction and gates opening across that direction. It does
+not require a straight row: curved, staggered and uneven courses remain supported.
+Scores compare proposals, not probabilities; inspect assignments before confirming.
+Recognition is not route validation.
+
+**Save course → Save labeled map to GPS recordings** writes the current object
+map, including corrected colors, types and positions, to a new JSON file under
+`gcs/recordings/`. It preserves existing recordings and does not save routes or
+execution approval. Import that file normally to reuse the labels. Compose mounts
+this directory at `/recordings`; custom deployments can set `GCS_RECORDINGS`.
+
 See [map compiling](../docs/map_compiling.md) for the complete workflow, profile
 measurements, scoring assumptions, file format and session APIs.
 
