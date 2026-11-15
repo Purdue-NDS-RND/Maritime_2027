@@ -34,6 +34,7 @@ export default function MapReview(props){
     const assignments=workspace.course_assignments||{};
     const hasReview=!!result?.candidates.length||Object.keys(assignments).length>0;
     const [phase,setPhase]=useState(()=>hasReview&&draft.sizes_confirmed?'review':'cleanup');
+    useEffect(()=>{props.onCleanupChange?.(phase==='cleanup');return ()=>props.onCleanupChange?.(false);},[phase,props.onCleanupChange]);
     const [objectEdit,setObjectEdit]=useState(null),[bulk,setBulk]=useState([]),[hintRole,setHintRole]=useState(COURSE_ROLES[0]);
     useEffect(()=>setObjectEdit(object?structuredClone(object):null),[object]);
     useEffect(()=>setBulk(ids=>ids.filter(id=>objects.some(o=>o.id===id))),[workspace.map]);

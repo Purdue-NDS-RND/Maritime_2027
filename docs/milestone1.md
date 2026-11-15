@@ -1,5 +1,23 @@
 # Milestone 1: camera-free slalom through the web GCS
 
+GCS cleanup controls (2026-11-15): all object types can be dragged during Clean up,
+including towers, docks and polygons with their complete footprints. Right-click placement and labeling set buoy color/type
+together. Delete/Backspace removes any selected map object outside text
+fields, with Undo support. These controls use the existing map history, original-observation preservation and
+route invalidation. All 43 frontend tests, render check and production build
+passed. Separate Chrome preview checks covered drag/save/undo, quick placement,
+quick labeling and map-edge menu layout. The normal GCS was subsequently rebuilt
+and restarted; Chrome at `127.0.0.1:8080` verified placement, dragging, relabeling,
+Undo and Redo. A follow-up deployed check verified both Delete and Backspace
+remove the selected buoy and Undo restores it. The all-object extension was
+rebuilt/deployed and Chrome verified dragging Finish Dock and a detector tower,
+deleting the dock with Delete and the tower with Backspace, and Undo restoration.
+Polygon translation and dimension preservation have unit-test coverage; browser
+checks used the current point-map representation. Test edits were undone. The running image ID matches the rebuilt
+image and served frontend asset. Screenshot evidence is under ignored
+`simulation/logs/gcs/cleanup-controls/`. No vehicle commands were issued; physical
+accuracy remains unverified.
+
 Compact-course planner follow-up (2026-11-15): intermediate Gate cards now
 complete at their last required crossing instead of visiting their standalone
 stopping centre. A full-task return approach can cross passage lines backward

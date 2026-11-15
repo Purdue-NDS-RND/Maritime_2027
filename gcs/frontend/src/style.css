@@ -63,3 +63,14 @@ main{max-width:1920px;padding:24px 32px}header h1{font-size:28px}.workspace-navi
 .assignment-review article,.selected-assignments>div {border-top:1px solid #555;padding:10px 0;}
 .assignment-review details p {font-size:12px;overflow-wrap:anywhere;}
 .unusual-measurement {color:#efc16a;}
+
+.cleanup-drag-marker { display:flex; align-items:center; justify-content:center; cursor:grab; }
+.cleanup-drag-marker:active { cursor:grabbing; }
+.cleanup-drag-marker span { width:12px; height:12px; border:2px solid #dfe7f2; border-radius:50%; box-shadow:0 1px 4px #0009; pointer-events:none; }
+.cleanup-menu { display:grid; grid-template-columns:1fr 1fr; gap:5px; min-width:240px; }
+.cleanup-menu strong { grid-column:1 / -1; padding:4px; color:#dfe7f2; }
+.cleanup-menu button { display:flex; align-items:center; gap:7px; text-align:left; margin:0; min-height:34px; }
+.cleanup-menu button:focus-visible { outline:2px solid #6ea9ff; }
+.cleanup-swatch { width:13px; height:13px; border:1px solid #aaa; border-radius:50%; flex-shrink:0; }
+.cleanup-popup .leaflet-popup-content-wrapper, .cleanup-popup .leaflet-popup-tip { background:#20252b; }
+.cleanup-popup .leaflet-popup-content { margin:12px 20px 12px 12px; }

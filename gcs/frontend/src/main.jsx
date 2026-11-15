@@ -18,8 +18,8 @@ import {configuration,heading,friendly,gateContinues} from './workflow';
 import {boundaryBands,local,gps,expandedFootprint,insetBoundary,crossingWindow} from './buffers';
 import {api,newSession,setConnectionGeneration} from './api';
 import {useOperationPolling} from './useOperationPolling';
-import {addedObject} from './MapReview';
-import {displayColour,isUnknownObject} from './mapReviewState';
+import {addedObject,removeObject} from './MapReview';
+import {displayColour,isUnknownObject,BUOY_COLOURS,canQuickEdit,moveMapObject,labelMapBuoy} from './mapReviewState';
 import {courseOverlay} from './courseOverlay';
 import {suggestBoundary,DEFAULT_BOUNDARY_PADDING_M} from './planningBoundary';
 
@@ -58,6 +58,7 @@ function App() {
     const [step,setStep]=useState(1), [selected,setSelected]=useState('');
     const [mode,setMode]=useState('inspect'), [labels,setLabels]=useState(false), [stations,setStations]=useState(false), [overlays,setOverlays]=useState(true);
     const [buffers,setBuffers]=useState(false);
+    const [cleanupActive,setCleanupActive]=useState(false);
     const [panelWidth,setPanelWidth]=useState(440);
     const [boundaryPadding,setBoundaryPadding]=useState(DEFAULT_BOUNDARY_PADDING_M);
     const [activeTask,setActiveTask]=useState(null),[generatedTasks,setGeneratedTasks]=useState([]);
@@ -110,7 +111,7 @@ function App() {
         if(mapEdit){invalidateRoute();mapChanged.current=true;for(const config of Object.values(w.course||{})){config.sizes_confirmed=false;config.course_confirmed=false;}if(w.draft){w.draft.sizes_confirmed=false;w.draft.course_confirmed=false;}if(w.run_draft){w.run_draft.generation_identity=null;w.run_draft.waypoints=[];}}
         setWorkspace(w);setDirty(isDirty);setValidation(null);
     }
-    current.current={workspace,draft,activeTask,edit,mode,changeWorkspace,setMode,setSelected,busy,selectObject,addObservation,changeBoundary};
+    current.current={workspace,draft,activeTask,edit,mode,changeWorkspace,setMode,setSelected,busy,selected,selectObject,addObservation,changeBoundary,cleanupActive:cleanupActive&&step===1,quickMenu,commitMapEdit};
     function changeBoundary(planning_area){
         const latest=current.current.draft;
         edit({...latest,planning_area,shared_crossings:[],waypoints:[],generation_identity:null});
@@ -134,6 +135,58 @@ function App() {
         invalidateRoute();setSelected(object.id);setMode('inspect');
         setMessage('Object added at the clicked GPS position. Set its color and type, then compile again.');
     });}
+    async function commitMapEdit(map,selectedId) {
+        if(current.current.busy||!current.current.cleanupActive)return;
+        await run(async()=>{
+            await save({...current.current.workspace,map},true);
+            invalidateRoute();setValidation(null);setSelected(selectedId);setMode('inspect');
+            setMessage('Map updated. Undo map edit can reverse this change.');
+        });
+    }
+    function quickMenu(position,object=null) {
+        if(current.current.busy||!current.current.cleanupActive)return;
+        const map=mapRef.current,content=document.createElement('div');
+        content.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();map.closePopup();}});
+        content.className='cleanup-menu';content.setAttribute('aria-label',object?'Label object':'Place buoy');
+        const title=document.createElement('strong');title.textContent=object?'Label as buoy':'Place buoy here';content.append(title);
+        if(!object||canQuickEdit(object))for(const category of BUOY_COLOURS){
+            const button=document.createElement('button');button.type='button';
+            const swatch=document.createElement('span');swatch.className='cleanup-swatch';swatch.style.background=category==='zebra'?'repeating-linear-gradient(45deg,white 0 3px,black 3px 6px)':category;
+            button.append(swatch,document.createTextNode(`${category[0].toUpperCase()+category.slice(1)} buoy`));
+            button.onclick=()=>{
+                map.closePopup();const state=current.current;
+                if(state.busy||!state.cleanupActive)return;
+                if(object)state.commitMapEdit(labelMapBuoy(state.workspace.map,object.id,category),object.id);
+                else {
+                    const buoy={...addedObject(position,'observed_'+crypto.randomUUID().replaceAll('-','')),category,object_type:'buoy'};
+                    state.commitMapEdit({...state.workspace.map,buoys:[...state.workspace.map.buoys,buoy]},buoy.id);
+                }
+            };content.append(button);
+        }
+        if(object){const button=document.createElement('button');button.type='button';button.textContent='Edit details';button.onclick=()=>{map.closePopup();current.current.selectObject(object);};content.append(button);}
+        L.DomEvent.disableClickPropagation(content);L.DomEvent.disableScrollPropagation(content);
+        const size=map.getSize(),anchor=map.latLngToContainerPoint(latlng(position));
+        anchor.x=Math.max(155,Math.min(size.x-155,anchor.x));
+        anchor.y=Math.max(Math.min(340,size.y-15),Math.min(size.y-15,anchor.y));
+        L.popup({className:'cleanup-popup',autoPan:false,maxHeight:Math.min(300,size.y-65),keepInView:false}).setLatLng(map.containerPointToLatLng(anchor)).setContent(content).openOn(map);
+        content.querySelector('button')?.focus();
+    }
+    useEffect(()=>{if(busy||!cleanupActive||step!==1)mapRef.current?.closePopup();},[busy,cleanupActive,step]);
+    useEffect(()=>{
+        function deleteSelected(event) {
+            const state=current.current;
+            if(!['Backspace','Delete'].includes(event.key)||event.defaultPrevented||event.repeat||event.ctrlKey||event.metaKey||event.altKey||event.shiftKey)return;
+            if(event.target instanceof Element && (event.target.closest('input,textarea,select,[role="textbox"],[role="combobox"],[role="spinbutton"]')||event.target.isContentEditable))return;
+            if(!state.cleanupActive||state.busy||!state.selected)return;
+            const object=[...state.workspace.map.buoys,...(state.workspace.map.obstacles||[])].find(o=>o.id===state.selected);
+            if(!object)return;
+            event.preventDefault();mapRef.current?.closePopup();
+            state.commitMapEdit(removeObject(state.workspace.map,object.id),'');
+        }
+        window.addEventListener('keydown',deleteSelected);
+        return ()=>window.removeEventListener('keydown',deleteSelected);
+    },[]);
+
     function edit(next) {
         if(competition&&['start','planning_area','settings','steps','shared_crossings'].some(key=>next[key]!==draft[key]))invalidateRoute();
         setWorkspace(w=>{
@@ -166,6 +219,8 @@ function App() {
     useEffect(()=>{
         const map=L.map('course-map',{attributionControl:true,maxZoom:24}).setView([51.566151,-4.034345],20);
         mapRef.current=map; layers.current=L.layerGroup().addTo(map); vehicleLayer.current=L.layerGroup().addTo(map);
+        map.on('contextmenu',e=>{if(current.current.cleanupActive&&!current.current.busy){L.DomEvent.preventDefault(e.originalEvent);current.current.quickMenu(point(e.latlng));}});
+        map.on('movestart zoomstart',()=>map.closePopup());
         map.on('click',e=>{const {draft,edit,workspace,activeTask,mode,changeWorkspace,setMode}=current.current;
             if(current.current.busy||mode==='inspect'||mode==='boundary-corners'||mode.startsWith('replace:'))return;
             if(mode==='add-object'){current.current.addObservation(point(e.latlng));return;}
@@ -271,16 +326,52 @@ function App() {
         if(originalOverlay&&workspace.original_map)for(const obj of [...workspace.original_map.buoys,...(workspace.original_map.obstacles||[])]){
             L.circleMarker(latlng(obj.centre),{radius:10,color:'#b3bac6',weight:1.5,dashArray:'3 3',fillOpacity:0,interactive:false}).addTo(group).bindTooltip(document.createTextNode('Original: '+obj.id));
         }
+        function editableShape(object,shape,colour) {
+            if(cleanupActive&&step===1){
+                if(object.type==='point'&&!(shape instanceof L.Marker))shape=L.marker(latlng(object.centre),{icon:L.divIcon({className:'cleanup-drag-marker',iconSize:[28,28],iconAnchor:[14,14],html:`<span style="background:${colour}"></span>`})});
+                function finishMove(moved) {
+                    const state=current.current;
+                    if(!state.busy&&state.cleanupActive&&(moved.latitude!==object.centre.latitude||moved.longitude!==object.centre.longitude))state.commitMapEdit(moveMapObject(state.workspace.map,object.id,moved),object.id);
+                }
+                if(shape instanceof L.Marker){
+                    shape.options.draggable=!busy;
+                    shape.on('dragend',()=>{
+                        const moved=point(shape.getLatLng());shape.setLatLng(latlng(object.centre));finishMove(moved);
+                    });
+                }else if(!busy){
+                    // Leaflet paths keep their physical footprint while dragged.
+                    let draggable,origin;
+                    shape.on('add',()=>{
+                        const element=shape.getElement();element.style.cursor='grab';
+                        L.DomEvent.on(element,'mousedown touchstart',L.DomEvent.stopPropagation);
+                        draggable=new L.Draggable(element);
+                        draggable.on('dragstart',()=>{origin=L.DomUtil.getPosition(element).clone();mapRef.current.closePopup();});
+                        draggable.on('dragend',()=>{
+                            const delta=L.DomUtil.getPosition(element).subtract(origin);
+                            const moved=point(mapRef.current.layerPointToLatLng(mapRef.current.latLngToLayerPoint(latlng(object.centre)).add(delta)));
+                            L.DomUtil.setPosition(element,origin);finishMove(moved);
+                        });
+                        draggable.enable();
+                    });
+                    shape.on('remove',()=>{draggable?.disable();});
+                }
+            }
+            return shape.on('contextmenu',e=>{
+                if(!current.current.cleanupActive||current.current.busy)return;
+                L.DomEvent.stopPropagation(e);if(e.originalEvent)L.DomEvent.preventDefault(e.originalEvent);
+                current.current.quickMenu(object.centre,object);
+            });
+        }
         if(map) for(const [i,b] of map.buoys.entries()){
             const colour=displayColour(b,{red:'#e74b50',green:'#35c78b',white:'#dfe7f2',blue:'#4e9feb',orange:'#fa8b24',purple:'#b15ce5',yellow:'#eed831',cyan:'#25d9df',black:'#151515',zebra:'#ffffff'}[b.category]||'#999');
-            (b.type==='point'?(b.object_type==='detector'?L.marker(latlng(b.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(b.centre),{radius:6,color:colour,fillOpacity:0.8})):L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7})).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(b);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
+            editableShape(b,(b.type==='point'?(b.object_type==='detector'?L.marker(latlng(b.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(b.centre),{radius:6,color:colour,fillOpacity:0.8})):L.circle(latlng(b.centre),{radius:b.radius_m,color:colour,fillOpacity:0.7})),colour).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(b);}).bindTooltip(document.createTextNode(friendly(b.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
             if(b.category==='zebra'&&!isUnknownObject(b))L.marker(latlng(b.centre),{interactive:false,icon:L.divIcon({className:'zebra-marker',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(group);
 
         }
         if(map)for(const obj of map.obstacles||[]){
             const style={color:displayColour(obj,obj.task==='launch'?'#20252b':obj.task==='recover'?'#edcc35':obj.task==='evade'?'#bd79e4':'#99724d'),fillOpacity:0.65,weight:2};
             const shape=obj.type==='point'?(obj.object_type==='detector'?L.marker(latlng(obj.centre),{icon:L.divIcon({className:'tower-point-marker',iconSize:[14,14],iconAnchor:[7,7]})}):L.circleMarker(latlng(obj.centre),{...style,radius:6})):obj.type==='polygon'?L.polygon(obj.footprint.map(latlng),style):L.circle(latlng(obj.centre),{...style,radius:obj.radius_m});
-            shape.addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(obj);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
+            editableShape(obj,shape,style.color).addTo(group).on('click',e=>{L.DomEvent.stopPropagation(e);current.current.selectObject(obj);}).bindTooltip(document.createTextNode(friendly(obj.id)),{permanent:labels,direction:'top',className:'buoy-tooltip'});
 
         }
         if(map&&step===1&&overlays&&(workspace.compilation||Object.keys(workspace.course_assignments||{}).length)){
@@ -400,7 +491,7 @@ function App() {
         if(workspace.return_target)L.circle(latlng(workspace.return_target),{radius:1,color:'#43e5d3',fillOpacity:.2}).addTo(group).bindTooltip('Frozen run start · return stopping area (1 m)',{permanent:true});
 
         for(const failure of [...(validation?.errors||[]),...(draft.generation_errors||[]),...(focusedFailure?[focusedFailure]:[])])if(failure.location&&map){const [x,y]=failure.location;const ref=map.geographic_reference;const lat=ref.latitude+y/111319.49079327357;const lon=ref.longitude+x/(111319.49079327357*Math.cos(lat*Math.PI/180));L.circleMarker([lat,lon],{radius:10,color:'#ff5d68',failureReason:failure.reason}).addTo(group).bindTooltip(failure.reason,{permanent:failure===focusedFailure,direction:'top',className:'failure-tooltip'});}
-    },[workspace,validation,ready,labels,stations,overlays,buffers,mode,step,activeTask,routeVisible,selected,focusedFailure,busy,focusedPassage,originalOverlay,candidateId]);
+    },[workspace,validation,ready,labels,stations,overlays,buffers,mode,step,activeTask,routeVisible,selected,focusedFailure,busy,focusedPassage,originalOverlay,candidateId,cleanupActive]);
     useEffect(()=>{
         if(!ready)return;
         if(!telemetry?.position){if(boatMarker.current){boatMarker.current.remove();boatMarker.current=null;}return;}
@@ -488,10 +579,10 @@ function App() {
           {(buffers||step===2)&&<div className="buffer-legend"><strong>Buffer preview · required {previewSettings.clearance_m} m · preferred {previewSettings.preferred_buffer_m??previewSettings.clearance_m} m</strong><details className="buffer-help"><summary>Clearance key</summary><p>Amber: required clearance. Blue: preferred room. Purple: tower hard exclusion and fading soft avoidance. Tower distances follow each GPS point. Shared settings apply to every card. Preview updates before validation; Validate checks the route.</p></details>{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],previewSettings.clearance_m,workspace.map.geographic_reference)===null)&&<span>Boundary clearance bands follow every edge. Validate checks exact segment containment.</span>}{['planning_area','channel'].some(key=>draft[key]?.length>=3&&insetBoundary(draft[key],previewSettings.clearance_m,workspace.map.geographic_reference)?.length===0)&&<span>No room remains inside a boundary at this required buffer.</span>}</div>}
           <div id="course-map"/>
           {step===3&&selected&&<div className="selected-object-info"><strong>{friendly(selected)}</strong><span>{selectedCard?.setup.passages?.filter(p=>[p.red,p.green,p.buoy].includes(selected)).map(p=>p.kind==='gate'?`Gate ${selectedCard.setup.passages.indexOf(p)+1} · ${p.red===selected?'first':'second'} buoy`:'Turn buoy').join(' · ')||'Not assigned to the selected task'}</span></div>}
-          <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode.startsWith('replace:')?'Choose a replacement buoy · click its point on the map.':mode==='boundary-corners'?'Drag numbered boundary corners to adjust the outline.':mode==='add-object'?'Add observation · click its GPS position, then set color and type.':mode==='inspect'?(step===2?'Configuration · click a purple tower to adjust its zones.':'Inspect mode · click an object for details.'):mode==='card:waypoint'?'Manual task · click to append exact waypoints.':mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel','card:channel'].includes(mode)?`Drawing ${mode.includes('channel')?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
+          <div className={'map-instruction '+(mode!=='inspect'?'drawing':'')}><span>{mode.startsWith('replace:')?'Choose a replacement buoy · click its point on the map.':mode==='boundary-corners'?'Drag numbered boundary corners to adjust the outline.':mode==='add-object'?'Add observation · click its GPS position, then set color and type.':mode==='inspect'?(step===2?'Configuration · click a purple tower to adjust its zones.':(cleanupActive?'Clean up · drag any object to move; select an object and press Delete / Backspace to remove; right-click to place or label a buoy.':'Inspect mode · click an object for details.')):mode==='card:waypoint'?'Manual task · click to append exact waypoints.':mode==='waypoint'?'Route editing · click to add a waypoint, drag a numbered waypoint to move it.':['planning_area','channel','card:channel'].includes(mode)?`Drawing ${mode.includes('channel')?'channel':'planning area'} · click corners in order.`:`Choose ${mode} · click its new position on the map.`}</span>{mode!=='inspect'&&<button onClick={()=>setMode('inspect')}>Done / cancel tool</button>}</div>
           <div className="map-caption"><span>{routeVisible?'Blue: generated route · amber: approach · L/R: reviewed passing sides':'No route displayed · Build your run, then generate'}</span>{boatPosition&&boatLocationNote&&<span>{boatLocationNote}</span>}{tileError&&<span>Street background unavailable; planning still works.</span>}</div>
         </section>
-        <aside aria-label="Mission workflow"><Planner knownBoundaryStart={boundaryStart()} {...{boundaryPadding,setBoundaryPadding,onRegenerateBoundary:regenerateBoundary,onBoundaryChange:changeBoundary}} originalOverlay={originalOverlay} setOriginalOverlay={setOriginalOverlay} candidateId={candidateId} setCandidateId={setCandidateId} sequenceHost={sequenceHost} onPassageSelected={focusPassage} focusedPassage={focusedPassage} showMap={()=>{setMapPreview(true);fitMap(true);}} selectedCard={activeTask} workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>{if(task!=='run')setActiveTask(task);setGeneratedTasks(tasks=>[...new Set([...tasks,task])]);}} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={{...status,identity_mismatch:identityMismatch}} dirty={dirty} operations={operations} results={results}/></aside>
+        <aside aria-label="Mission workflow"><Planner onCleanupChange={setCleanupActive} knownBoundaryStart={boundaryStart()} {...{boundaryPadding,setBoundaryPadding,onRegenerateBoundary:regenerateBoundary,onBoundaryChange:changeBoundary}} originalOverlay={originalOverlay} setOriginalOverlay={setOriginalOverlay} candidateId={candidateId} setCandidateId={setCandidateId} sequenceHost={sequenceHost} onPassageSelected={focusPassage} focusedPassage={focusedPassage} showMap={()=>{setMapPreview(true);fitMap(true);}} selectedCard={activeTask} workspace={workspace} draft={draft} edit={edit} changeWorkspace={changeWorkspace} mode={mode} setMode={setMode} save={save} notify={setMessage} load={load} onFocusFailure={focusFailure} workLabel={workLabel} step={step} setStep={setStep} selected={selected} setSelected={setSelected} routeVisible={routeVisible} taskSelected={!!activeTask} onTaskSelected={setActiveTask} onGenerated={task=>{if(task!=='run')setActiveTask(task);setGeneratedTasks(tasks=>[...new Set([...tasks,task])]);}} invalidateRoute={invalidateRoute} updateSettings={updateSettings} saveSettings={saveSettings} onImport={importMap} loadCompetition={loadCompetition} validation={validation} action={action} busy={busy} run={run} stale={stale} status={{...status,identity_mismatch:identityMismatch}} dirty={dirty} operations={operations} results={results}/></aside>
       </div>
       <Feedback notice={notice} busy={busy} label={workLabel} elapsed={Math.max(0,Math.floor((now-startedAt)/1000))} onDismiss={()=>{setNotice(null);setFocusedFailure(null);}} onReview={step=>{setStep(step);setMode('inspect');setNotice(null);if(step===4)requestAnimationFrame(()=>{const details=document.getElementById('command-results');if(details){details.open=true;details.scrollIntoView({block:'center'});}});}} onFocus={focusFailure}/>
       <section className="feedback" aria-live="polite"><p title={message}>{message}</p><details><summary>Connection details</summary><div className="connection-popover"><ConnectionDetails connections={{...connections,identity_mismatch:identityMismatch}} status={status} apiOnline={!!status&&!status.connection_lost&&now-received<=3500} vehicleStale={stale} telemetry={telemetry} telemetryStale={telemetryStale}/><p>{workspace.map?.schema_version===3?'GPS map · unverified':workspace.map?'Simulator map · alignment required':'No map loaded'}</p><code>{workspace.map?.scene_id||''}</code></div></details></section>

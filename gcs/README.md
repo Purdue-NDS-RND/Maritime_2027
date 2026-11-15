@@ -357,6 +357,17 @@ not require a straight row: curved, staggered and uneven courses remain supporte
 Scores compare proposals, not probabilities; inspect assignments before confirming.
 Recognition is not route validation.
 
+During **Clean up**, drag any object to correct its GPS position, including towers, docks and
+polygon obstacles. Polygon moves translate the entire footprint without resizing. Right-click empty map space and choose a colored buoy to place it with
+both color and type already set. Right-click an existing buoy or unknown point to
+relabel it, or choose **Edit details**. Red and green appear first; other buoy
+colors are also available. Escape, clicking outside, or moving the map closes the
+menu. Click any object and press **Delete** or **Backspace** to
+remove it; typing in an editor field never deletes the selected object. These shortcuts are available only during Clean up. Each saved change can
+be reversed with **Undo map edit** or reapplied with **Redo map edit**. Original
+observations remain available for comparison; edited maps need fresh task/route
+review. The existing Add object and detailed editor remain available.
+
 **Save course → Save labeled map to GPS recordings** writes the current object
 map, including corrected colors, types and positions, to a new JSON file under
 `gcs/recordings/`. It preserves existing recordings and does not save routes or
