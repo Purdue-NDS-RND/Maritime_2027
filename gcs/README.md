@@ -368,6 +368,13 @@ does not establish movement or physical-boat acceptance. See
 
 ## Live map telemetry
 
+**Go to boat** in the map toolbar centers the map on the most recently reported
+boat position while keeping the current zoom. It works without a course map and
+does not enable automatic following. The button is disabled until usable
+coordinates arrive. Stale telemetry and unavailable/stale GPS fixes are labeled
+below the map; centering on a reported position does not establish its accuracy
+or authorize a vehicle command. **Full course** restores the course overview.
+
 ### Field connections: RFD telemetry and Jetson mission API
 
 The selected field topology uses two independent links:

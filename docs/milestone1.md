@@ -63,6 +63,18 @@ Evidence: `simulation/logs/boat/startup-diagnostics-tests.log`,
 Different physical controller models and unplug/replug recovery were not tested;
 device changes still require container recreation. GCS behavior is unchanged.
 
+A later read-only RFD bench check exposed the shore FTDI device to the GCS as
+`/dev/gcs-radio` at 115200 baud. Thirty samples over approximately 30 seconds
+all reported live passive telemetry without reader errors; maximum heartbeat
+and position ages were 1.045 s and 0.950 s. The controller reported system/component
+1/1, disarmed, and GPS fix 3 during this interval. This confirms received bench
+telemetry, not GPS accuracy, RF packet-loss rate, radio range, bidirectional
+commands or disconnect/recovery behavior. Raw samples are in
+`simulation/logs/rfd/link-health-20261114T235528Z.jsonl`.
+The GCS map toolbar now provides **Go to boat** to center the view once without
+changing zoom, including labeled last-known/no-fix positions. Frontend tests
+(40), render checks and the production build passed; no vehicle commands were sent.
+
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
 GCS until after boat-only development. Boat-only testing remains the first
