@@ -168,7 +168,7 @@ that still begin with a gate must be corrected and reviewed before generation.
 
 The Linux terminal helper `gcs/scripts/record_buoys.py` saves the boat's current
 GPS position into the same simple points JSON accepted by **Import JSON / CSV**.
-Select red, blue or unknown in the terminal before capturing. Red/blue captures
+Select red, green or unknown in the terminal before capturing. Red/green captures
 import as labeled buoys; unknown captures import as gray unknown objects.
 Review colors, types and task roles later in the GCS.
 It needs only Python 3 on the desktop and a running GCS with live passive
@@ -197,7 +197,7 @@ telemetry. The boat mission API can be offline; the helper only makes
    The default GCS is `http://127.0.0.1:8080`. Use `--gcs-url http://HOST:PORT`
    for another running GCS. Focus this terminal while recording; Space does not
    need Enter. No GCS rebuild is needed for this standalone helper.
-3. Press **r** for red, **b** for blue or **u** for unknown. You must select
+3. Press **r** for red, **g** for green or **u** for unknown. You must select
    a mode before the first capture; it stays selected until you change it.
    Drive to the intended observation position, settle, then tap **Space** once.
    Each successful capture prints its count, color, coordinates, GPS fix and

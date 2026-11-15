@@ -50,10 +50,10 @@ class RecorderTests(unittest.TestCase):
     def test_color_modes_import_as_labeled_buoys(self):
         with tempfile.TemporaryDirectory() as directory:
             output = PointFile(Path(directory) / 'map.json')
-            for color in ('red', 'blue', 'unknown'):
+            for color in ('red', 'green', 'unknown'):
                 output.append(POSITION, color)
             imported = import_points(output.path.read_text())['buoys']
-            self.assertEqual([p['category'] for p in imported], ['red', 'blue', 'unknown'])
+            self.assertEqual([p['category'] for p in imported], ['red', 'green', 'unknown'])
             self.assertEqual([p['object_type'] for p in imported], ['buoy', 'buoy', 'unknown'])
 
     def test_capture_rejects_stale_missing_and_invalid_gps(self):
@@ -198,20 +198,20 @@ class RecorderTests(unittest.TestCase):
             try:
                 expect('Ready;')
                 os.write(master, b' ')
-                expect('Select r, b or u before pressing Space.')
+                expect('Select r, g or u before pressing Space.')
                 self.assertFalse(path.exists())
                 self.assertEqual(requests, [])
                 os.write(master, b'r ')
                 expect('Saved #1 red')
-                os.write(master, b'b')
-                expect('Mode: blue')
+                os.write(master, b'g')
+                expect('Mode: green')
                 # The helper intentionally ignores repeat Space within 0.75 s.
                 time.sleep(0.8)
                 os.write(master, b' ')
-                expect('Saved #2 blue')
+                expect('Saved #2 green')
                 imported = import_points(path.read_text())
                 self.assertEqual(len(imported['buoys']), 2)
-                self.assertEqual([p['category'] for p in imported['buoys']], ['red', 'blue'])
+                self.assertEqual([p['category'] for p in imported['buoys']], ['red', 'green'])
                 time.sleep(0.8)
                 os.write(master, b'u ')
                 expect('Saved #3 unknown')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record GPS buoy points using a selected red, blue or unknown mode."""
+"""Record GPS buoy points using a selected red, green or unknown mode."""
 import argparse
 from contextlib import contextmanager
 from copy import deepcopy
@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 
 MAX_AGE_S = 3
 DEFAULT_DIRECTORY = Path(__file__).resolve().parents[1] / 'recordings'
-COLOR_KEYS = {'r': 'red', 'b': 'blue', 'u': 'unknown'}
+COLOR_KEYS = {'r': 'red', 'g': 'green', 'u': 'unknown'}
 
 
 def new_output(directory=DEFAULT_DIRECTORY):
@@ -138,7 +138,7 @@ class PointFile:
 
     def append(self, position, color='unknown'):
         if color not in COLOR_KEYS.values():
-            raise ValueError('Select red, blue or unknown')
+            raise ValueError('Select red, green or unknown')
         point = coordinates(position)
         if color != 'unknown':
             point.update(color=color, object_type='buoy')
@@ -188,8 +188,8 @@ def run(args):
         output = PointFile(args.output)
         print(f'Output: {output.path} ({len(output.points)} existing points)')
         print(f'GPS source: {args.gcs_url}/api/telemetry (GCS Connections selects the vehicle)')
-        print('r red | b blue | u unknown | SPACE save | Backspace undo | q quit | Ctrl-C quit')
-        print('Select r, b or u before capturing. Selection stays active until changed.')
+        print('r red | g green | u unknown | SPACE save | Backspace undo | q quit | Ctrl-C quit')
+        print('Select r, g or u before capturing. Selection stays active until changed.')
         color = None
         print('Place the GPS antenna at the intended map position; alongside is an offset.')
         last_space = -math.inf
@@ -210,7 +210,7 @@ def run(args):
                         print(f'Undo refused: {error}', flush=True)
                 elif key == ' ':
                     if color is None:
-                        print('Select r, b or u before pressing Space.', flush=True)
+                        print('Select r, g or u before pressing Space.', flush=True)
                         continue
                     now = time.monotonic()
                     # Ignore key repeat. Flush queued keys after the bounded request
