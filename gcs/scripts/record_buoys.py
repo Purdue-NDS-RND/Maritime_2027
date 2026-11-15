@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record operator-selected GPS points through the GCS's passive telemetry API."""
+"""Record unlabeled GPS points; configure their colors and types in the GCS."""
 import argparse
 from contextlib import contextmanager
 from copy import deepcopy
@@ -18,12 +18,8 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 
-COLORS = {
-    'r': 'red', 'g': 'green', 'b': 'blue', 'y': 'yellow', 'o': 'orange',
-    'p': 'purple', 'c': 'cyan', 'k': 'black', 'w': 'white', 'z': 'zebra',
-    'n': 'brown', '?': 'unknown',
-}
 MAX_AGE_S = 3
+DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / 'recordings' / 'buoys.json'
 
 
 def number(value, low, high, name):
@@ -121,8 +117,8 @@ class PointFile:
         self.document = document
         self.points = points
 
-    def append(self, position, color):
-        point = {**coordinates(position), 'color': color}
+    def append(self, position):
+        point = coordinates(position)
         # Explicit imported IDs must not collide with the importer's generated IDs.
         names = {str(p.get('id') or f'point_{i}') for i, p in enumerate(self.points, 1)}
         if f'point_{len(self.points) + 1}' in names:
@@ -165,23 +161,19 @@ def keyboard():
 def run(args):
     with output_lock(args.output):
         output = PointFile(args.output)
-        color = args.color
         print(f'Output: {output.path} ({len(output.points)} existing points)')
         print(f'GPS source: {args.gcs_url}/api/telemetry (GCS Connections selects the vehicle)')
         print('SPACE save | u undo this session | q quit | Ctrl-C quit')
-        print('Colors: ' + '  '.join(f'{key}={value}' for key, value in COLORS.items()))
+        print('All new points import as unknown objects. Set colors and types in the GCS.')
         print('Place the GPS antenna at the intended map position; alongside is an offset.')
         last_space = -math.inf
         with keyboard() as fd:
-            print(f'Selected color: {color}. Ready; each Space requests fresh GPS.', flush=True)
+            print('Ready; each Space requests fresh GPS.', flush=True)
             while True:
                 key = os.read(fd, 1).decode(errors='replace').lower()
                 if not key or key == 'q':
                     break
-                if key in COLORS:
-                    color = COLORS[key]
-                    print(f'Selected color: {color}', flush=True)
-                elif key == 'u':
+                if key == 'u':
                     try:
                         output.undo()
                         print(f'Undid last capture. {len(output.points)} points saved.', flush=True)
@@ -197,8 +189,8 @@ def run(args):
                     last_space = now
                     try:
                         position, snapshot = fetch_position(args.gcs_url)
-                        output.append(position, color)
-                        message = (f'Saved #{len(output.points)} {color}: '
+                        output.append(position)
+                        message = (f'Saved #{len(output.points)} unknown: '
                                    f'{position["latitude"]:.8f}, {position["longitude"]:.8f} '
                                    f'(GPS fix {snapshot["gps_fix"]}, '
                                    f'vehicle {snapshot.get("system_id")}/{snapshot.get("component_id")})')
@@ -213,11 +205,11 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, required=True,
-                        help='New or existing simple GPS points JSON; saved after each capture')
+    parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT,
+                        help='New or existing simple GPS points JSON; saved after each capture '
+                             '(default: gcs/recordings/buoys.json in this checkout)')
     parser.add_argument('--gcs-url', default='http://127.0.0.1:8080',
                         help='Running GCS origin (default: http://127.0.0.1:8080)')
-    parser.add_argument('--color', choices=tuple(COLORS.values()), default='red')
     args = parser.parse_args()
     origin = urlsplit(args.gcs_url)
     if (origin.scheme not in ('http', 'https') or not origin.hostname

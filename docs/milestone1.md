@@ -75,6 +75,13 @@ The GCS map toolbar now provides **Go to boat** to center the view once without
 changing zoom, including labeled last-known/no-fix positions. Frontend tests
 (40), render checks and the production build passed; no vehicle commands were sent.
 
+The field GPS recorder now saves unlabeled coordinates only. New points import
+as unknown objects; operators set colors, object types and task roles in the GCS.
+The default output is the Git-ignored `gcs/recordings/buoys.json` in the checkout;
+`--output` remains available for other files, and existing recordings are untouched.
+Existing points/labels survive resume. All 12 recorder/point-import tests passed,
+including real terminal/HTTP capture, unknown imports, undo and stale-GPS refusal.
+
 Read this alongside the [system design](design.md). This document defines the
 current first milestone and supersedes the earlier plan to defer the custom
 GCS until after boat-only development. Boat-only testing remains the first

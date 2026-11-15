@@ -153,6 +153,8 @@ that still begin with a gate must be corrected and reviewed before generation.
 
 The Linux terminal helper `gcs/scripts/record_buoys.py` saves the boat's current
 GPS position into the same simple points JSON accepted by **Import JSON / CSV**.
+New captures contain coordinates only and import as gray unknown objects;
+choose their colors, types and task roles later in the GCS.
 It needs only Python 3 on the desktop and a running GCS with live passive
 telemetry. The boat mission API can be offline; the helper only makes
 `GET /api/telemetry` requests and writes the selected local file.
@@ -165,27 +167,32 @@ telemetry. The boat mission API can be offline; the helper only makes
 2. In a separate terminal, from the repository root, run:
 
    ```bash
-   python3 gcs/scripts/record_buoys.py \
-     --output simulation/logs/field-survey/buoys.json
+   python3 gcs/scripts/record_buoys.py
    ```
 
+   Captures default to `gcs/recordings/buoys.json` in this checkout, regardless
+   of the terminal's working directory. The directory is ignored by Git.
+   Use `--output PATH` to select another file; relative overrides use the
+   terminal's working directory. Existing files at the old
+   `simulation/logs/field-survey/buoys.json` path remain untouched.
    The default GCS is `http://127.0.0.1:8080`. Use `--gcs-url http://HOST:PORT`
    for another running GCS. Focus this terminal while recording; Space does not
    need Enter. No GCS rebuild is needed for this standalone helper.
-3. Drive to the intended observation position, settle, select the buoy color,
-   then tap **Space** once. `r` = red, `g` = green, `b` = blue, `y` = yellow,
-   `o` = orange, `p` = purple, `c` = cyan, `k` = black, `w` = white,
-   `z` = zebra, `n` = brown, `?` = unknown. Red is initially selected;
-   `--color green` changes the initial choice. The color remains selected until
-   changed. Each successful capture prints its count, coordinates, GPS fix and
-   vehicle IDs and immediately saves the file.
+3. Drive to the intended observation position, settle, then tap **Space** once.
+   No color or type selection is needed in the terminal. Each successful capture
+   prints its count, coordinates, GPS fix and vehicle IDs and immediately saves
+   the file.
 4. Press **u** to undo the last capture from this invocation. Press **q** or
-   **Ctrl-C** to exit. Restart with the same `--output` to append more points;
+   **Ctrl-C** to exit. Restart with the same output path to append more points;
    undo never removes points that existed when this invocation started.
-5. In the browser's Map step, import `simulation/logs/field-survey/buoys.json`.
-   Review/correct positions and classify objects, then use **Find course** and
-   review task suggestions through the normal full-map workflow. The helper
+5. In the browser's Map step, import `gcs/recordings/buoys.json`.
+   Click each gray point, choose its **Color** and **Object type** (for example,
+   **Navigation buoy**), then click **Apply object correction**. Review/correct
+   positions, then use **Find course** and review task suggestions through the
+   normal full-map workflow, or assign tasks manually. The helper
    does not modify an already-open GCS map; reimport the file after more captures.
+   Resuming an existing recorder file preserves earlier labels and adds only
+   unknown points; it does not erase previously captured data.
 
 Space requests the latest GCS position and requires live telemetry, a 3D GPS
 fix or better, and heartbeat/position/GPS ages within three seconds including

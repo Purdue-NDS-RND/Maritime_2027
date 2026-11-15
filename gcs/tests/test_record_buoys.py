@@ -59,14 +59,15 @@ class RecorderTests(unittest.TestCase):
             path = Path(directory) / 'map.json'
             output = PointFile(path)
             self.assertFalse(path.exists())
-            output.append(POSITION, 'red')
-            self.assertEqual(json.loads(path.read_text())['points'][0]['color'], 'red')
+            output.append(POSITION)
+            self.assertEqual(json.loads(path.read_text())['points'][0], POSITION)
             resumed = PointFile(path)
             with self.assertRaises(ValueError):
                 resumed.undo()
-            resumed.append({**POSITION, 'longitude': -4.035}, 'green')
+            resumed.append({**POSITION, 'longitude': -4.035})
             imported = import_points(path.read_text())
-            self.assertEqual([p['category'] for p in imported['buoys']], ['red', 'green'])
+            self.assertEqual([p['category'] for p in imported['buoys']], ['unknown', 'unknown'])
+            self.assertEqual([p['object_type'] for p in imported['buoys']], ['unknown', 'unknown'])
             resumed.undo()
             self.assertEqual(len(json.loads(path.read_text())['points']), 1)
             with self.assertRaises(ValueError):
@@ -80,7 +81,7 @@ class RecorderTests(unittest.TestCase):
             path.write_text(json.dumps(fixture))
             original = deepcopy(fixture)
             output = PointFile(path)
-            output.append(POSITION, 'blue')
+            output.append(POSITION)
             saved = json.loads(path.read_text())
             self.assertEqual(saved['points'][:-1], original['points'])
             self.assertEqual(saved['operator_note'], original['operator_note'])
@@ -94,7 +95,7 @@ class RecorderTests(unittest.TestCase):
             path = Path(directory) / 'map.json'
             path.write_text(json.dumps([{**POSITION, 'id': 'point_2'}]))
             output = PointFile(path)
-            output.append(POSITION, 'red')
+            output.append(POSITION)
             self.assertIsInstance(json.loads(path.read_text()), list)
             self.assertEqual(len(import_points(path.read_text())['buoys']), 2)
             for content in ('broken', '{"schema_version": 3}', '{"points": [null]}',
@@ -108,24 +109,24 @@ class RecorderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'map.json'
             output = PointFile(path)
-            output.append(POSITION, 'red')
+            output.append(POSITION)
             original = path.read_bytes()
             with patch('gcs.scripts.record_buoys.os.replace', side_effect=OSError('disk failure')):
                 with self.assertRaises(OSError):
-                    output.append(POSITION, 'green')
+                    output.append(POSITION)
             self.assertEqual(path.read_bytes(), original)
             self.assertEqual(len(output.points), 1)
             self.assertEqual(list(Path(directory).glob('.map.json*')), [])
             path.write_text('{"points": []}')
             with self.assertRaisesRegex(ValueError, 'changed outside'):
-                output.append(POSITION, 'green')
+                output.append(POSITION)
             self.assertEqual(path.read_text(), '{"points": []}')
             with output_lock(path):
                 with self.assertRaisesRegex(ValueError, 'Another recorder'):
                     with output_lock(path):
                         self.fail('second writer acquired lock')
 
-    def test_real_terminal_space_color_undo_and_http_failure(self):
+    def test_real_terminal_space_unknown_import_undo_and_http_failure(self):
         sample = telemetry()
         requests = []
         response_status = [200]
@@ -173,14 +174,17 @@ class RecorderTests(unittest.TestCase):
             try:
                 expect('Ready;')
                 os.write(master, b' ')
-                expect('Saved #1 red')
+                expect('Saved #1 unknown')
                 os.write(master, b'g')
-                expect('Selected color: green')
+                # Former color hotkeys must not label subsequent captures.
                 # The helper intentionally ignores repeat Space within 0.75 s.
                 time.sleep(0.8)
                 os.write(master, b' ')
-                expect('Saved #2 green')
-                self.assertEqual(len(import_points(path.read_text())['buoys']), 2)
+                expect('Saved #2 unknown')
+                imported = import_points(path.read_text())
+                self.assertEqual(len(imported['buoys']), 2)
+                self.assertTrue(all(p['category'] == 'unknown' and p['object_type'] == 'unknown'
+                                    for p in imported['buoys']))
                 os.write(master, b'u')
                 expect('Undid last capture')
                 before = path.read_bytes()
