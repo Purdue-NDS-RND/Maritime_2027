@@ -1,5 +1,37 @@
 # Milestone 1: camera-free slalom through the web GCS
 
+Boat boot startup (2026-11-15): `make field-up` adds detached field launch;
+`make field-boot-install` installs/enables a host systemd service using the
+existing launcher and operator account. Startup failures retry every 10 seconds;
+successful launch has no subsequent automatic crash recovery. Upload, arming
+and mission Start remain explicit. All 22 host tests, Bash/Python checks,
+Compose validation and generated systemd unit verification passed. The service
+was installed/enabled on the Orin Nano and missing-USB startup failure/retry was
+observed without opening serial ports or sending vehicle commands. No controller
+was attached; successful service-managed controller connection and actual
+power-cycle acceptance remain unverified. Commands and lifecycle limits are in
+the [boat guide](../boat/README.md#field-startup-at-power-on).
+Runtime evidence: `simulation/logs/boat/field-boot-startup.log`.
+
+Power-cycle follow-up: the enabled service launched the application, but the
+container exited with serial `EBUSY` while ModemManager was probing the Pixhawk.
+Detached Compose had returned success before that exit, leaving the oneshot
+service active without retrying. Field detached startup now waits up to 45 seconds
+for a read-only API health check, constructed after serial open. Early process
+exit propagates startup failure to systemd; subsequent runtime crashes still
+require operator recovery. All 23 host tests and configuration checks passed.
+An isolated container crash check exercised Compose failure propagation without
+hardware access. Restarting the corrected service on the Jetson reached healthy
+API status with the Pixhawk6C connected, HOLD, disarmed and GPS fix 1. No vehicle
+commands were sent. Another physical power-cycle with this correction remains
+unverified. Evidence: `simulation/logs/boat/field-boot-busy-port.log` and
+`simulation/logs/boat/field-boot-readiness.log`.
+
+The boot service additionally waits 10 seconds before each launch attempt to
+allow flight-controller/USB initialization. The generated unit was verified,
+reinstalled and reloaded without restarting the running boat container. The
+delay and readiness gate together still need a physical power-cycle check.
+
 Field map recorder (2026-11-15): R/B/U selects persistent red/blue/unknown
 mode before Space captures; Backspace undoes this session. Default launches
 reserve a fresh `gcs/recordings/buoy_N.json` using the highest existing number

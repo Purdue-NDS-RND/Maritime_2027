@@ -1,9 +1,10 @@
 .DEFAULT_GOAL := validate
 COMPOSE = docker compose -p maritime-boat --env-file sim.env -f container/compose.yaml
-.PHONY: help validate test build sim field run down status scan upload start stop disarm
+.PHONY: help validate test build sim field field-up field-boot-install run down status scan upload start stop disarm
 
 help:
 	@printf '%s\n' 'make build   Build the image for this computer' 'make sim     Start the boat app for simulation' 'make field   Start with field.env and the physical Pixhawk' 'make scan    List USB flight controller candidates on this computer' 'make status  Watch the running boat status' 'make stop    Request HOLD' 'make down    Shut down the boat container' 'make test    Run tests without a vehicle'
+	@printf '%s\n' 'make field-up            Start field mode in the background' 'make field-boot-install  Install and enable field startup for the next host boot'
 
 validate:
 	python3 -m unittest discover -s tests -p 'test_mission.py' -v
@@ -11,7 +12,7 @@ validate:
 	python3 -m unittest discover -s tests -p 'test_serial_devices.py' -v
 	python3 -m unittest discover -s tests -p 'test_console_status.py' -v
 	python3 -m compileall -q boat_app tests
-	bash -n container/entrypoint.sh container/launch.sh
+	bash -n container/entrypoint.sh container/launch.sh container/install-field-boot.sh
 	docker compose -p maritime-boat --env-file sim.env config --quiet
 	BOAT_SERIAL_DEVICE=/dev/null BOAT_SERIAL_GID=0 BOAT_BAUD=115200 BOAT_HTTP_HOST=127.0.0.1 docker compose -p maritime-boat --env-file field.env.example config --quiet
 
@@ -25,6 +26,12 @@ run: sim
 
 sim field:
 	bash container/launch.sh $@
+
+field-up:
+	bash container/launch.sh field --detach
+
+field-boot-install:
+	bash container/install-field-boot.sh
 
 down:
 	$(COMPOSE) down

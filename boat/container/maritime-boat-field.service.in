@@ -1,0 +1,23 @@
+[Unit]
+Description=Maritime boat field application
+Requires=docker.service
+After=docker.service
+RequiresMountsFor="@BOAT_DIR@"
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=@USER@
+WorkingDirectory=@BOAT_DIR@
+# Allow the flight controller and host USB services to initialize.
+ExecStartPre=/usr/bin/sleep 10
+ExecStart=/usr/bin/make field-up
+ExecStop=/usr/bin/make down
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=120s
+TimeoutStopSec=60s
+
+[Install]
+WantedBy=multi-user.target

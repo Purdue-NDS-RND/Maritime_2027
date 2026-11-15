@@ -34,6 +34,7 @@ Run these from `boat/`:
 make build    # build the image; repeat after application/dependency changes
 make sim      # connect using sim.env (make run remains an alias)
 make field    # connect to physical hardware using field.env
+make field-up # same field launch, in the background
 make scan     # list USB controller candidates on this computer; no serial probing
 make status   # watch status; Ctrl-C exits the viewer
 make stop     # request and confirm HOLD
@@ -142,7 +143,64 @@ place a physically appropriate `mission.json` under
 `simulation/logs/boat/field-missions/`, or set `MISSION_DIR` to an absolute
 mission directory in `field.env`. GCS uploads need no local mission file. Logs
 and journals retain the existing `simulation/logs/boat/` location. Neither launch
-adds boot startup or an automatic restart policy.
+adds boot startup or an automatic restart policy by itself.
+
+## Field startup at power-on
+
+On the Jetson, as the normal boat operator (with Docker access), run from `boat/`:
+
+```bash
+make build                   # once, or after application/dependency changes
+make field-boot-install      # uses sudo to install/enable the system service
+sudo systemctl start maritime-boat-field  # optional: launch now without rebooting
+systemctl status maritime-boat-field --no-pager
+journalctl -u maritime-boat-field -b
+docker compose -p maritime-boat --env-file sim.env -f container/compose.yaml logs --tail 50 boat
+```
+
+Installation enables the service for subsequent boots without starting a container.
+The service waits 10 seconds before running `make field-up` from this checkout as
+the installing user, after Docker and the checkout's filesystem are available.
+This gives the flight controller and USB services time to initialize; it does
+not establish controller readiness. Keep this checkout at its
+installed path; reinstall the service after moving it. Build the image beforehand:
+boot does not build images. Configure `field.env` rather than relying on terminal
+environment overrides, which systemd does not inherit. The service uses the normal
+`maritime-boat:latest` image. No GCS, login, network-online wait or GPS fix is needed
+to launch the application; configured network endpoints must still be available
+for a connection. Startup does not upload, arm or start a mission.
+
+Detached launch waits up to 45 seconds for a read-only `/status` health check.
+The API starts after the MAVLink transport opens, so an early application crash
+(for example, a serial port busy during boot) fails startup and permits a retry.
+This check does not require or establish a controller heartbeat or usable GPS.
+Failed startup retries every 10 seconds, including absent or ambiguous USB selection.
+Each service activation also includes the 10-second initialization delay.
+Use the journal to diagnose repeated failures and `make scan` to inspect candidates.
+After successful detached launch and API check, the service reports `active (exited)`; it does
+not monitor application health or restart after a later container crash, Docker
+restart or USB disconnect. Check `make status` and container logs for actual
+controller readiness. `docker ps` also shows the current API health. If startup
+times out while a container remains running, the launcher refuses to replace it;
+inspect its logs and deliberately stop/start the service. Reboot/late-USB behavior
+with the readiness gate still needs physical verification.
+
+For a deliberate shutdown or relaunch, first use `make stop` and confirm the
+vehicle outcome when controlling a boat, then:
+
+```bash
+sudo systemctl stop maritime-boat-field     # cancels retries and runs make down
+sudo systemctl start maritime-boat-field    # recreates using current field.env/USB
+sudo systemctl disable maritime-boat-field  # turn off future boot startup
+```
+
+`make down` alone removes the container but leaves the successful oneshot service
+marked active; it will not restart it automatically. Use systemctl stop/start for
+service-managed operation. Host shutdown also removes the container; this is not
+a vehicle HOLD/disarm command and does not guarantee a physical stop.
+
+Inspect the generated unit without installing it with
+`bash container/install-field-boot.sh --print-unit`.
 
 The 2026-11-14 bench check reached `http://boat-jetson:8091` through the GCS
 backend and received MAVLink heartbeats from a USB-connected CubeOrange+.

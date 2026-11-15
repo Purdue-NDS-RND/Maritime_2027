@@ -3,6 +3,13 @@ set -Eeuo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 deployment=${1:?Choose sim or field}
+launch_options=()
+if [[ "${2:-}" == --detach && "$#" == 2 && "$deployment" == field ]]; then
+    launch_options=(--detach --wait --wait-timeout 45)
+elif [[ "$#" != 1 ]]; then
+    printf '%s\n' 'Usage: launch.sh sim|field [--detach (field only)]' >&2
+    exit 1
+fi
 if [[ "$deployment" != sim && "$deployment" != field ]]; then
     printf 'Unknown deployment: %s (choose sim or field)\n' "$deployment" >&2
     exit 1
@@ -42,4 +49,4 @@ fi
 "${compose[@]}" config --quiet
 printf '%s\n' '[boat] Starting application; a listening API does not confirm a flight-controller heartbeat.'
 mkdir -p ../simulation/logs/boat/field-missions
-exec "${compose[@]}" up --no-build
+exec "${compose[@]}" up --no-build "${launch_options[@]}"

@@ -38,14 +38,16 @@ elif '--format' in sys.argv and 'json' in sys.argv:
 elif 'up' in sys.argv and 'EXPECTED_DEVICE' in os.environ:
     assert os.environ['BOAT_SERIAL_DEVICE'] == os.environ['EXPECTED_DEVICE']
     assert os.environ['BOAT_SERIAL_GID'] == os.environ['EXPECTED_GID']
+if 'up' in sys.argv:
+    sys.exit(int(os.environ.get('FAKE_UP_EXIT', '0')))
 """)
         docker.chmod(0o755)
         self.calls_path = root / "docker-calls.jsonl"
         self.env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
                     "DOCKER_CALLS": str(self.calls_path), "FAKE_RUNNING": ""}
 
-    def launch(self, deployment):
-        return subprocess.run(["bash", "container/launch.sh", deployment], cwd=self.boat,
+    def launch(self, deployment, *options):
+        return subprocess.run(["bash", "container/launch.sh", deployment, *options], cwd=self.boat,
                               env=self.env, capture_output=True, text=True)
 
     def calls(self):
@@ -80,6 +82,37 @@ elif 'up' in sys.argv and 'EXPECTED_DEVICE' in os.environ:
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Missing sim.env", result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_detached_field_resolves_serial_and_preserves_running_guard(self):
+        (self.boat / "field.env").write_text("# local settings\n")
+        self.env.update(FAKE_CONFIG=json.dumps({'services': {'boat': {
+            'devices': [{'source': '/dev/null', 'target': '/dev/boat-fcu'}],
+            'group_add': ['auto'],
+        }}}), EXPECTED_DEVICE='/dev/null', EXPECTED_GID=str(Path('/dev/null').stat().st_gid))
+        result = self.launch('field', '--detach')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls()[-1], ['compose', '-p', 'maritime-boat', '--env-file',
+                                           'field.env', 'up', '--no-build', '--detach',
+                                           '--wait', '--wait-timeout', '45'])
+        self.env['FAKE_RUNNING'] = 'existing-boat'
+        self.calls_path.unlink()
+        result = self.launch('field', '--detach')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any('up' in call for call in self.calls()))
+
+    def test_invalid_launch_options_never_touch_docker(self):
+        for deployment, option in [('sim', '--detach'), ('field', '--unknown')]:
+            with self.subTest(deployment=deployment, option=option):
+                result = self.launch(deployment, option)
+                self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), [])
+
+    def test_detached_startup_failure_reaches_service_for_retry(self):
+        (self.boat / 'field.env').write_text('# local settings\n')
+        self.env['FAKE_UP_EXIT'] = '1'
+        result = self.launch('field', '--detach')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('--wait', self.calls()[-1])
 
     def test_serial_selection_exports_resolved_device_and_group(self):
         (self.boat / "field.env").write_text("# local settings\n")

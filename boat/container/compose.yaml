@@ -21,3 +21,11 @@ services:
       - ../../simulation/logs/boat:/logs
     command: ["python3", "-m", "boat_app.node", "--ros-args", "-p", "connection:=${BOAT_CONNECTION:?Set BOAT_CONNECTION in the selected env file}", "-p", "baud:=${BOAT_BAUD:?Set BOAT_BAUD in the selected env file}", "-p", "http_host:=${BOAT_HTTP_HOST:?Set BOAT_HTTP_HOST in the selected env file}", "-p", "http_port:=${BOAT_HTTP_PORT:?Set BOAT_HTTP_PORT in the selected env file}"]
     stop_grace_period: 20s
+    healthcheck:
+      # The API is constructed only after opening MAVLink. Read-only readiness
+      # keeps detached startup from succeeding before serial-open failures.
+      test: ["CMD", "python3", "-c", "import sys, urllib.request; host = '127.0.0.1' if sys.argv[1] == '0.0.0.0' else sys.argv[1]; urllib.request.urlopen('http://' + host + ':' + sys.argv[2] + '/status', timeout=2).close()", "${BOAT_HTTP_HOST:?Set BOAT_HTTP_HOST in the selected env file}", "${BOAT_HTTP_PORT:?Set BOAT_HTTP_PORT in the selected env file}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
