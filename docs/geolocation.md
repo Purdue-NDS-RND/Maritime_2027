@@ -175,30 +175,41 @@ Measure water elevation and lens/antenna/body offsets in the same reference. A d
 range sensor is an option to evaluate on water, not an assumed reliable source.
 Do not treat the Google Earth view's camera altitude as water elevation.
 
-## The visible buoy is not a water-plane point
+## Initial buoy pixel reference
 
-An upright fender can protrude substantially above water. At an oblique viewing angle,
-projecting a top/body-centre pixel onto water biases its horizontal location away from
-the camera's vertical projection. Reflection, shape and occlusion shift a box centre too.
-Near nadir reduces this effect; flying lower does not eliminate it.
+Use a pixel inside the detection box that lies on the visible buoy body. Project its
+ray to the water plane for the initial implementation, even when the point is near
+the top. A project decision accepts this approximation. Use a repeatable selection
+rule and exclude reflected pixels. Keep the reference policy in observation provenance.
 
-Define desired output as a consistent horizontal object centre/footprint, with a chosen
-reference height. Compare: box centre baseline, visible waterline/keypoint, mask/shape fit,
-or an elevated-point height model. No universal bottom-centre-of-box rule is justified for
-an overhead view. Store the reference method and uncertainty per observation.
+If field localization misses the accuracy budget, check for bias that grows with
+viewing angle or buoy height. For a point height h and ray angle theta from vertical,
+the horizontal shift from projecting that point down to the water plane along the
+ray is h * tan(theta). Test a waterline/keypoint, mask-based reference or height
+correction if this term is material.
 
 ## Timing and interpolation
 
-The time required for a raycast is the exposure time, not detector completion.
-Preserve frame ID and original capture timestamp through inference. Map sensor/FCU/host
-clocks with measured offset and drift. If sensor timing is unavailable, measure host-stamp
-delay and jitter and label the approximation. Exposure midpoint is useful for a frame;
-rolling shutter can require a row-dependent correction if measured motion error warrants it.
+The raycast uses image exposure time. Preserve frame ID, camera PTS/running time,
+host arrival time and ROS header separately through inference. Map actual exposure to
+the time basis of the fused navigation samples.
 
-Interpolate position between valid bracketing samples and attitude by quaternion SLERP.
-Require bounded gaps; explicitly reject or flag extrapolation/stale data. Do not return the
-latest pose on an interpolation failure. Buffer a bounded amount to obtain the after-sample.
-Record both pose sample times, interpolation gap and timing uncertainty.
+Proposed bench measurement for SP-06: film a coded LED signal and independently
+timestamp the physical transitions on a reference clock aligned to the navigation
+timebase. Log how those clocks are aligned and its uncertainty. Capture enough
+transitions across the start, middle and end of the run and repeat after a restart.
+Record each frame's original timestamps, capture mode and exposure settings, matched
+LED event or bracket, and nearby fused pose timestamps and time-sync diagnostics.
+Use a signal and capture cadence that allow unambiguous matching. If an event only
+bounds exposure time, retain that interval. Check top/middle/bottom image rows if
+sensor readout across rows could matter.
+
+Fit offset and drift, then quantify the residual timing error on held-out events
+under representative capture and recording load. Derive the allowable error and pose
+gap from the position-error budget and expected motion. Interpolate position between
+valid bracketing samples and attitude by quaternion SLERP. Require bounded gaps;
+reject stale data and reset crossings. Record both pose sample times, interpolation
+gap and timing uncertainty.
 
 ## Error sensitivity
 

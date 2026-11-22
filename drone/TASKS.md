@@ -27,7 +27,7 @@ limits must be set with boat/GCS owners before declaring deployment readiness.
 | SP-02 | Define ENU origin, global datum, vertical datum, body reference, quaternion direction/order, heading convention and reset policy | A frame contract names every transform, units, source and authority; camera/antenna lever arms are measured | SP-01 |
 | SP-03 | Agree location/coverage/freshness requirements from boat geometry and course clearances | Numeric limits for horizontal p95, bias, map completeness, false objects, age and latency are recorded with rationale | Boat/GCS input |
 | SP-04 | Build a recording/replay specification and first dataset | Frames, capture times, raw pose/attitude samples, GNSS/estimator health, origins, calibration and versions can be replayed deterministically | SP-01, SP-02 |
-| SP-05 | Establish camera intrinsics/extrinsics and water elevation | Held-out reprojection/ground-target residuals are measured across the image; calibrated mode/focus is fixed; water and camera use one vertical reference | SP-01, SP-02 |
+| SP-05 | Camera geometry and water elevation. **Intrinsics accepted for the current setup** | Use the effective model from `arducam_info.yaml` for the current image stream. Measure mount and water elevation in the pose datum, and score held-out ground targets across the image. | SP-01, SP-02 |
 | SP-06 | Measure camera-FCU clock relationship and capture delay | Offset, drift, jitter, timestamp meaning and allowed interpolation gaps are quantified; invalid timing is observable | SP-04 |
 | SP-07 | Obtain surveyed object ground truth | Repeated reference measurements have uncertainty; stationary targets and buoy water-centres are distinguishable | Independent measured reference; RTK is not a deployment dependency |
 
@@ -74,8 +74,10 @@ SP-09 through SP-12 requires SP-02, SP-04 through SP-07.
 - [ ] SP-16: Evaluate full-frame resize versus tiles at the real operating geometry.
   Report missed small objects, localization pixel error, duplicate boxes and runtime.
   Validate inverse crop/resize/letterbox transforms back to calibrated pixels.
-- [ ] SP-17: Evaluate bounding-box centre versus waterline/keypoint/mask/elevation-aware
-  location references. Start with the simplest method meeting the measured error budget.
+- [ ] SP-17: Use a pixel on the visible buoy body inside the bounding box and project it
+  to the water plane as the accepted initial policy. Validate the selection and image
+  coordinate mapping on real data. If localization misses the error budget, revisit the
+  elevated-point assumption and compare waterline/keypoint, mask or height-aware methods.
 - [ ] SP-18: Compare a thin Ultralytics/TensorRT adapter with a pinned yolo_ros wrapper
   on the actual aarch64 GPU stack, then integrate capture/detection in a ROS 2
   drone app. Declare dependencies; build TensorRT for the actual deployment stack;

@@ -97,7 +97,7 @@ arrival headers. Verified exposure timestamps remain absent.
 
 Student A completed the indoor annotation exercise with six rectified-frame entries
 for one corner. Five repeated clicks returned identical coordinates. Pixel uncertainty
-and applicability of the historical calibration remain explicit checks. A6 was
+remains an explicit check. Samuel later accepted the supplied intrinsics for the current setup. A6 was
 exercised as a requested-settings dry run. Keep that indoor capture together with its
 CSV and joined records.
 
@@ -184,8 +184,10 @@ The user specified the IMX519 16 MP module with M12 wide-angle lens. CUASC_2026
 `src/vision_pipeline/vision_pipeline/image_grabber.py`, the compressed grabber/detector,
 launch/config and both intrinsic YAMLs were reviewed at `e50d6e2`. The two YAMLs contain
 the same 3840x2160 model and are preserved byte-for-byte in the installed drone config,
-with full commit/blob provenance. They remain historical candidates; applicability to
-the actual M12 lens/focus/mode and reprojection accuracy is unverified.
+with full commit/blob provenance. On 2026-11-22 Samuel accepted `arducam_info.yaml`
+for the current lens, focus and capture mode. Use the effective rectified image model.
+He also accepted the initial buoy reference policy: cast a pixel on the buoy body to
+water and revisit the approximation if field accuracy is insufficient. See [geolocation](../docs/geolocation.md).
 
 The installed `image_grabber` CLI now uses native GStreamer GI/Argus, bounded appsink,
 source PTS/running time and stride-aware BGR extraction. Sensor/output resolution, FPS,
@@ -207,7 +209,7 @@ Camera/GStreamer/ROS cases use structural doubles; no native GStreamer/GI, Argus
 Jetson, camera or physical accuracy trial ran. The existing Python >=3.11 pins require a
 compatible host GI/ROS ABI; stock Python 3.10/Humble is not supported by this dependency set.
 See [capture commands, controls and limits](README.md#arducam-imx519-image-capture).
-SP-01/SP-05/SP-06/SP-18/SP-19 remain open for actual runtime, lens/mode calibration,
+SP-01/SP-05/SP-06/SP-18/SP-19 remain open for runtime, mount and water geometry,
 timing/rolling-shutter and sustained onboard performance. Capture is an implemented
 source/recording boundary, not complete asynchronous live sensor fusion.
 
@@ -255,7 +257,7 @@ Use its sourced system interpreter with --system-site-packages; do not replace
 1. A drone launches from the boat and surveys buoys/objects in the water.
 2. Each vehicle is planned to carry a Jetson Orin Nano 8GB.
 3. Drone camera: fixed Arducam IMX519; downward-looking is the working orientation,
-   with exact mounting rotation and lens/focus still to be measured.
+   with exact mounting rotation still to be measured.
 4. Desired survey altitude: below 5 m above water, subject to coverage and accuracy tests.
 5. Ordinary GNSS replaces RTK by explicit user direction on 2026-11-04. Receiver,
    antenna, covariance semantics, vertical datum, heading source, attitude accuracy and

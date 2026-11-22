@@ -110,8 +110,11 @@ The two imported [calibration files](maritime_perception/config) are preserved b
 `arducam_info.yaml` contains raw 3840x2160 K/D and a different rectified P;
 `kalibr.yaml` converts the same K/D to pinhole/radtan with k3=0. They are one historical
 calibration, not two independent measurements. Their provenance is recorded in
-`calibration_provenance.json`. Lens, focus and sensor-mode applicability to the selected
-M12 camera remains unverified. No mount, covariance or timing calibration is inferred.
+`calibration_provenance.json`. Samuel accepts `arducam_info.yaml` for the current lens,
+focus and capture mode. The bench preset uses its effective rectified model at
+1280x720. Use the image's matching CameraInfo and map any detector preprocessing back
+into those image coordinates. Revisit calibration if the optical setup or sensor mode
+changes. Mount, covariance and timing are separate measurements.
 
 ### Host requirements and first capture
 
