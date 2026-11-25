@@ -7,7 +7,15 @@ if [[ -f ${XAUTHORITY:-${HOME}/.Xauthority} ]]; then
 fi
 compose=(docker compose -f drone/compose.yaml)
 case "${1:-run}" in
-    build) ../scripts/with-build-provenance.sh "${compose[@]}" build ;;
+    build)
+        export MARITIME_SOURCE_REVISION=$(git rev-parse HEAD)
+        export MARITIME_SOURCE_BRANCH=$(git branch --show-current)
+        export MARITIME_SOURCE_DIRTY=false
+        if [[ -n $(git status --porcelain --untracked-files=normal) ]]; then
+            export MARITIME_SOURCE_DIRTY=true
+        fi
+        "${compose[@]}" build
+        ;;
     validate) "${compose[@]}" config --quiet ;;
     run)
         mkdir -p logs/drone-sitl
