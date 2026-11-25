@@ -31,3 +31,8 @@ The approximate BlueBoat model does not establish real-boat dynamics or clearanc
 
 For rotated, uneven and curved full-course layouts, see
 [random course testing](docs/USING_THE_SIM.md#random-full-course-layouts).
+
+For aerial survey simulation, see the [SAM drone simulator guide](../docs/SAM_Drone_Sim_Usage.md).
+Build it with `make drone-build`, then start it in the background with
+`make drone-run`. After **Drone ready**, open the Gazebo window with
+`make drone-gui` in a separate terminal.
