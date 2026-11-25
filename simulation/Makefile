@@ -52,3 +52,10 @@ down:
 
 logs:
 	docker compose -f container/compose.yaml logs -f
+
+.PHONY: drone-build drone-run drone-down drone-logs drone-gui drone-console drone-camera drone-validate
+drone-build drone-run drone-down drone-logs drone-gui drone-console drone-validate:
+	./drone/run.sh $(patsubst drone-%,%,$@)
+
+drone-camera:
+	./drone/run.sh camera $(if $(MARKER_ID),--expect "$(MARKER_ID)")

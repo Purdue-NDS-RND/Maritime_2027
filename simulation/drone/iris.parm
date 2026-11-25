@@ -1,0 +1,4 @@
+# Stock Iris Quad X. Leave marker-based flight control disabled.
+FRAME_CLASS 1
+FRAME_TYPE 1
+SERIAL1_PROTOCOL 2

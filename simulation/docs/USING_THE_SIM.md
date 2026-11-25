@@ -439,3 +439,10 @@ space and chosen loopback HTTP port. It never attaches to host/operator vehicle
 ports or changes the operator stack. Use distinct output paths/ports. The test
 cleans up only the containers it created. No controller gains, source pins,
 calibration, firmware parameters or normal `make run` defaults change.
+
+## Iris drone over the full course
+
+The standalone Iris simulator runs the full competition course with ground
+ArUco tags and roof tags on the Evade towers. See the
+[SAM drone simulator guide](../../docs/SAM_Drone_Sim_Usage.md) for startup,
+flight controls, marker sizes and camera topics.

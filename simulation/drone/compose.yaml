@@ -1,0 +1,26 @@
+name: maritime-drone-sitl
+services:
+  drone:
+    image: maritime-drone-sitl:latest
+    build:
+      context: ..
+      dockerfile: drone/Dockerfile
+      args:
+        BASE_IMAGE: ${DRONE_BASE_IMAGE:-maritime-sim:latest}
+        MARITIME_SOURCE_REVISION: ${MARITIME_SOURCE_REVISION:-unknown}
+        MARITIME_SOURCE_BRANCH: ${MARITIME_SOURCE_BRANCH:-unknown}
+        MARITIME_SOURCE_DIRTY: ${MARITIME_SOURCE_DIRTY:-unknown}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    ports:
+      - "127.0.0.1:${DRONE_MAVLINK_PORT:-5764}:5762/tcp"
+    environment:
+      DISPLAY: ${DISPLAY:-}
+      XAUTHORITY: /tmp/drone.xauth
+      QT_X11_NO_MITSHM: "1"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      LP_NUM_THREADS: "4"
+    volumes:
+      - ../logs/drone-sitl:/sim
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${DRONE_XAUTH:-/dev/null}:/tmp/drone.xauth:ro
+    stop_grace_period: 15s

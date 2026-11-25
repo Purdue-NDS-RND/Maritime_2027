@@ -1587,3 +1587,30 @@ review still required and no console errors. The prior operator tab and running
 simulator were retained. No new motion or physical-boat acceptance is claimed.
 Raw logs, generated examples, DOM and screenshot are under ignored
 `simulation/logs/random-courses/`.
+
+## Standalone Iris survey simulator
+
+The Gazebo Harmonic scene uses ArduCopter SITL, a stock Iris with a fixed downward
+camera, and the full-course buoy coordinates as ground ArUco tags. All 24 generated
+textures decoded in OpenCV, and all tag placements matched the source coordinates.
+The six competition props are present. In a headless flight, the Iris climbed 4.94 m
+above its initial ground estimate, and its Gazebo camera decoded takeoff ID 0 and
+course ID 1. After flying 10.61 m west and 1.97 m north by SITL's local odometry,
+it decoded course IDs 2 and 3, then landed and disarmed. The final image repeated
+the flight with the X11 viewer connected, reaching 10.59 m west and 1.96 m north
+and decoding the same IDs. The camera published 1280×960 intrinsics, and a host
+MAVLink client received the Iris heartbeat on TCP 5764. Compose, generated SDF,
+and all 64 existing simulator tests passed. Flight evidence is in ignored
+`simulation/logs/drone-sitl/20261125T193954Z-xrRMP4/` and
+`simulation/logs/drone-sitl/20261125T194213Z-cGEHMK/`.
+
+This flight covered the takeoff area and first Dodge gate. Full-course survey
+flight, marker-based landing, and physical camera or navigation accuracy remain
+unverified. See the [SAM drone simulator guide](SAM_Drone_Sim_Usage.md).
+
+The course markers were resized to the simulated buoy diameter (0.48 m with
+the white margin). Both Evade detector towers now carry roof tags. The generated
+world and all 26 tag textures passed placement and decoding checks. In a
+separate SITL flight at 5 m above takeoff, the downward camera decoded the
+resized Dodge gate tags and both tower IDs (24 and 25). All 64 existing simulator
+tests passed. Evidence is in ignored `simulation/logs/drone-sitl/tower-marker-check/`.

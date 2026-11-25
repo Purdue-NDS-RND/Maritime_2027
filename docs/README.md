@@ -12,6 +12,8 @@
   UDP/serial setup, filtering and validation limits.
 - [Simulator guide](../simulation/README.md): setup, operation, manual GCS tracking,
   performance, optional cameras, troubleshooting and maintenance.
+- [SAM drone simulator usage](SAM_Drone_Sim_Usage.md) for the Iris, course
+  markers, camera feed and flight commands.
 - [Hardware knowledge](hardware.md): retained configuration and hardware notes.
 - [Competition course](<competition_docs/Course and Competition Details.pdf>)
   and [rules](<competition_docs/Rules and Regulations _ AIMM ICC.pdf>): source documents.
