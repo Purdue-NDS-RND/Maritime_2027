@@ -5,9 +5,15 @@ ArduCopter software-in-the-loop (SITL). The Iris has a fixed downward-facing
 RGB camera. Its view points straight down in level flight and tilts with the
 airframe. The simulator runs independently of the boat and GCS.
 
-## Start the simulator
+## Quick start
 
-**Terminal 1**, from the repository root:
+**Run both commands to see the simulation.** `make drone-run` starts it in the
+background. After it says **Drone ready**, run `make drone-gui` in a separate
+terminal to open the Gazebo window and see the drone and course.
+
+### 1. Start the simulator in Terminal 1
+
+Start in the repository root.
 
 ```bash
 cd simulation
@@ -15,16 +21,15 @@ make drone-build
 make drone-run
 ```
 
-The build uses the pinned Gazebo and ArduPilot sources in the local
-`maritime-sim:latest` image. If that image is missing, build it with
-`make build` from `simulation/` first. Rebuild the drone image after changing
-the world or camera. Otherwise, `make drone-run` is enough.
+Run `make drone-build` the first time and after changing the world or camera.
+If the build reports a missing `maritime-sim:latest` image, run `make build`
+from `simulation/` first. Wait for **Drone ready** before continuing.
 
-Startup runs headless and waits for advancing camera frames and an
-ArduCopter heartbeat. The launcher prints the run directory and MAVLink address.
+### 2. Open the Gazebo window in Terminal 2
 
-**Optional Gazebo window**, in another terminal from the repository root on a
-local X11 desktop:
+Open another terminal in the repository root on a local X11 desktop. Leave it
+open while using the Gazebo window. You can skip this step if you only need
+the flight console or saved camera images.
 
 ```bash
 cd simulation
@@ -34,9 +39,9 @@ make drone-gui
 Open **Image Display** in Gazebo and select `/iris/down_camera/image` to see the
 Iris camera feed.
 
-## Fly and capture a frame
+### 3. Fly from Terminal 3
 
-**Terminal 2**, from the repository root:
+Open a separate terminal in the repository root.
 
 ```bash
 cd simulation
@@ -52,6 +57,10 @@ arm throttle
 takeoff 5
 ```
 
+The Iris will climb to 5 m. You can watch it in the Gazebo window opened in step 2.
+
+### 4. Save a camera image from Terminal 1
+
 While the Iris is hovering above takeoff, use **Terminal 1** to save a PNG and
 check that marker ID 0 is visible:
 
@@ -62,12 +71,10 @@ make drone-camera MARKER_ID=0
 Omit `MARKER_ID` to save the next frame and print any IDs detected. You can
 request IDs 24 or 25 when flying over the corresponding tower.
 
-An external MAVLink client can connect to TCP `127.0.0.1:5764`. Use one client
-at a time. Set `DRONE_MAVLINK_PORT` when starting the simulator to override the
-host port.
+### 5. Land and stop
 
-To finish, enter `mode land` in MAVProxy and wait for disarm, then run
-`make drone-down` in Terminal 1. Landing uses ArduCopter's ordinary LAND mode.
+Enter `mode land` in the flight console and wait for the Iris to land and disarm.
+Then run `make drone-down` in Terminal 1. Landing uses ArduCopter's ordinary LAND mode.
 The takeoff tag is available as a visual reference.
 
 ## Course layout and marker sizes
@@ -89,6 +96,10 @@ the simulated buoy's 0.48 m diameter. The tower roofs are 1.50 m above the
 ground.
 
 ## Camera data and logs
+
+An external MAVLink client can connect to TCP `127.0.0.1:5764`. Use one client
+at a time. Set `DRONE_MAVLINK_PORT` when starting the simulator to override the
+host port.
 
 - `/iris/down_camera/image` publishes 1280 × 960 RGB at 15 Hz in Gazebo
   simulation time.
